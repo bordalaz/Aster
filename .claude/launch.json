@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "grid-proto",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "proto/grid", "run", "dev"],
+      "port": 5199
+    }
+  ]
+}
