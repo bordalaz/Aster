@@ -23,6 +23,7 @@ _TYPES = {
 LINK, ATTACH = "multipleRecordLinks", "multipleAttachments"
 COMPUTED = {"formula", "rollup", "multipleLookupValues", "lookup", "count"}
 VIRTUAL = COMPUTED | {LINK, ATTACH, "button"}
+_PG_NAME = {"timestamptz": "timestamp with time zone"}
 # считает сам Airtable — у нас не правится руками
 READONLY = {"autoNumber", "createdTime", "lastModifiedTime", "createdBy", "lastModifiedBy"}
 
@@ -67,6 +68,15 @@ def apply_schema(conn, schema: list[dict]) -> list[str]:
                 continue
             if f["type"] not in _TYPES:
                 warnings.append(f"Неизвестный тип {f['type']!r} у поля {f['id']} ({t['name']}.{f['name']}) — jsonb")
+            have = conn.execute(text(
+                "select format_type(atttypid, atttypmod) from pg_attribute "
+                "where attrelid = cast(:t as regclass) and attname = :c and not attisdropped"
+            ), {"t": tn, "c": column_name(f["id"])}).scalar()
+            want = _PG_NAME.get(pt.split(" ")[0], pt.split(" ")[0])
+            if have and have != want:
+                # ponytail: громкая ошибка вместо авто-переделки колонки; переделку — когда случится
+                raise RuntimeError(f"У поля {t['name']}.{f['name']} ({f['id']}) сменился тип в Airtable: "
+                                   f"колонка {have}, нужно {want}")
             conn.execute(text(f"alter table {tn} add column if not exists {column_name(f['id'])} {pt}"))
 
     for fld, (lt, side) in sides.items():
@@ -106,4 +116,7 @@ def apply_schema(conn, schema: list[dict]) -> list[str]:
             ), {"t": tid, "c": column_name(f["id"]), "ti": f["name"], "k": f["type"],
                 "e": pg_type(f) is not None and f["type"] not in READONLY, "o": fo,
                 "op": json.dumps(opts, ensure_ascii=False), "a": f["id"]})
+        # поле удалили в Airtable — убираем из метаданных (колонка с данными остаётся)
+        conn.execute(text("delete from app_field where table_id = :t and airtable_id <> all(:ids)"),
+                     {"t": tid, "ids": [f["id"] for f in t["fields"]]})
     return warnings

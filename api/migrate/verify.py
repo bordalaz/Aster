@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlalchemy import text
 
-from .load import read_records
+from .load import read_records, require_complete
 from .names import column_name, table_name
 from .schema import ATTACH, LINK, link_sides, pg_type
 
@@ -33,6 +33,7 @@ def _show(v):
 
 
 def verify(conn, snap: Path) -> dict:
+    require_complete(snap)
     schema = json.loads((snap / "schema.json").read_text(encoding="utf-8"))
     recs = {t["id"]: read_records(snap, t["id"]) for t in schema}
     rep = {"tables": {}, "links": {}, "attachments": {}}

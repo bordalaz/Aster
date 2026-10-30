@@ -95,3 +95,17 @@ def test_records_skip_virtual_fields(logged, loaded_fixture):
     assert column_name("fldBinv0000000000") in keys
     assert column_name("fldBformula000000") not in keys
     assert column_name("fldBnom0000000000") not in keys
+
+
+def test_records_skip_virtual_even_if_column_exists(logged, loaded_fixture):
+    # поле стало вычисляемым в Airtable, а старая колонка осталась — старые значения не отдаём
+    from sqlalchemy import text as sql
+
+    from app.db import engine
+    from migrate.names import column_name, table_name
+
+    col = column_name("fldBformula000000")
+    with engine.begin() as c:
+        c.execute(sql(f"alter table {table_name('tblBBBBBBBBBBBBBB')} add column {col} text"))
+    r = logged.get(f"/api/tables/{loaded_fixture['tblBBBBBBBBBBBBBB']}/records")
+    assert col not in r.json()[0]

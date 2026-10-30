@@ -8,12 +8,18 @@ from .names import column_name, table_name
 from .schema import ATTACH, COMPUTED, LINK, link_sides, pg_type
 
 
+def require_complete(snap: Path) -> None:
+    if not (snap / "complete").exists():
+        raise RuntimeError(f"Снимок {snap} не завершён (fetch прервался) — запустите fetch ещё раз")
+
+
 def read_records(snap: Path, tbl_id: str) -> list[dict]:
     p = snap / "records" / f"{tbl_id}.jsonl"
     return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x]
 
 
 def load_snapshot(conn, snap: Path) -> dict:
+    require_complete(snap)
     schema = json.loads((snap / "schema.json").read_text(encoding="utf-8"))
     recs = {t["id"]: read_records(snap, t["id"]) for t in schema}
     result = {"records": {}, "links": 0, "dangling_links": 0, "attachments": 0}

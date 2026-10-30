@@ -17,6 +17,9 @@ def att_path(files: Path, att_id: str) -> Path:
 
 def fetch_snapshot(client, out: Path, workers: int = WORKERS, files: bool = True) -> dict[str, int]:
     """files=False — только записи; файлы докачает следующий fetch (ссылки берёт свежие)."""
+    # маркер: снимок целый. Нет маркера — load/verify откажутся (полуснимок затёр бы связи и вложения)
+    done = out / "complete"
+    done.unlink(missing_ok=True)
     tables = client.schema()
     (out / "records").mkdir(parents=True, exist_ok=True)
     fdir = out / "files"
@@ -24,6 +27,7 @@ def fetch_snapshot(client, out: Path, workers: int = WORKERS, files: bool = True
     (out / "schema.json").write_text(json.dumps(tables, ensure_ascii=False, indent=1), encoding="utf-8")
     counts = {}
     pool = ThreadPoolExecutor(workers)
+    queued = set()  # одно вложение бывает в нескольких записях — качаем один раз
     for t in tables:
         att_fields = [f["id"] for f in t["fields"] if files and f["type"] == "multipleAttachments"]
         n = 0
@@ -35,12 +39,15 @@ def fetch_snapshot(client, out: Path, workers: int = WORKERS, files: bool = True
                     for fld in att_fields:
                         for a in r["fields"].get(fld, []):
                             dest = att_path(fdir, a["id"])
-                            if not (dest.exists() and dest.stat().st_size == a.get("size")):
-                                jobs.append(pool.submit(client.download, a["url"], dest))
+                            if a["id"] in queued or (dest.exists() and dest.stat().st_size == a.get("size")):
+                                continue
+                            queued.add(a["id"])
+                            jobs.append(pool.submit(client.download, a["url"], dest))
                 # ссылки на вложения живут ~2 ч — докачиваем страницу до запроса следующей
                 for j in jobs:
                     j.result()
                 n += len(page)
         counts[t["id"]] = n
     pool.shutdown()
+    done.touch()
     return counts

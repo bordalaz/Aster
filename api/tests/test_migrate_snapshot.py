@@ -82,3 +82,37 @@ def test_no_files_skips_download(tmp_path):
     counts = fetch_snapshot(c, tmp_path, files=False)
     assert counts["tblBBBBBBBBBBBBBB"] == 2
     assert not [e for e in c.log if e[0] == "download"]
+
+
+def test_interrupted_fetch_not_loadable(tmp_path):
+    import pytest
+    from migrate.load import load_snapshot
+
+    fetch_snapshot(StubClient(), tmp_path)
+    assert (tmp_path / "complete").exists()
+
+    class Dies(StubClient):
+        def pages(self, table_id):
+            if table_id == "tblBBBBBBBBBBBBBB":
+                raise RuntimeError("обрыв")
+            yield from super().pages(table_id)
+
+    with pytest.raises(RuntimeError):
+        fetch_snapshot(Dies(), tmp_path)
+    assert not (tmp_path / "complete").exists()
+    with pytest.raises(RuntimeError, match="не завершён"):
+        load_snapshot(None, tmp_path)
+
+
+def test_same_attachment_twice_on_page_downloaded_once(tmp_path):
+    class Dup(StubClient):
+        def schema(self):
+            return [{"id": "tblBBBBBBBBBBBBBB", "fields": [{"id": "fldBphoto00000000", "type": "multipleAttachments"}]}]
+
+        def pages(self, table_id):
+            att = {"id": "attDUP00000000000", "url": "u", "size": 3}
+            yield [{"id": f"recD{i}000000000000", "fields": {"fldBphoto00000000": [att]}} for i in (1, 2)]
+
+    c = Dup()
+    fetch_snapshot(c, tmp_path)
+    assert len([e for e in c.log if e[0] == "download"]) == 1

@@ -18,7 +18,7 @@ def load_table(c, table_id: int):
     if not row:
         raise HTTPException(404, "Нет такой таблицы")
     fields = c.execute(
-        text("select column_name, editable from app_field where table_id = :t order by sort_order, id"),
+        text("select column_name, editable, options from app_field where table_id = :t order by sort_order, id"),
         {"t": table_id},
     ).all()
     # ponytail: отражение на каждый запрос (~мс); кешировать, если станет заметно
@@ -30,7 +30,7 @@ def load_table(c, table_id: int):
 def list_records(table_id: int):
     with engine.connect() as c:
         t, fields = load_table(c, table_id)
-        cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields if f.column_name in t.c]
+        cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields if f.column_name in t.c and not f.options.get("virtual")]
         return [dict(r) for r in c.execute(select(*cols).order_by(t.c.id)).mappings()]
 
 

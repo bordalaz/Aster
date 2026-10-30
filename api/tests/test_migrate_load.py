@@ -157,3 +157,19 @@ def test_same_attachment_in_two_records(tmp_path):
     load(snap)
     assert [r.record_airtable_id for r in q("select record_airtable_id from attachment order by 1")] == [
         rid("B1"), rid("B2")]
+
+
+def test_type_change_fails_loudly(loaded_fixture):
+    schema = json.loads((FIXTURE / "schema.json").read_text(encoding="utf-8"))
+    schema[0]["fields"][0]["type"] = "number"  # Наименование: текст → число
+    with pytest.raises(RuntimeError, match="тип"):
+        with engine.begin() as c:
+            apply_schema(c, schema)
+
+
+def test_removed_field_dropped_from_metadata(loaded_fixture):
+    schema = json.loads((FIXTURE / "schema.json").read_text(encoding="utf-8"))
+    schema[0]["fields"] = [f for f in schema[0]["fields"] if f["id"] != fid("Aprice")]
+    with engine.begin() as c:
+        apply_schema(c, schema)
+    assert q("select count(*) from app_field where airtable_id = :f", f=fid("Aprice"))[0][0] == 0
