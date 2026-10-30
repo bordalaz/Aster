@@ -56,3 +56,26 @@ def logged(client, user):
     r = client.post("/api/auth/login", json={"login": "ivan", "password": "secret"})
     assert r.status_code == 200
     return client
+
+
+@pytest.fixture
+def zip_table():
+    """Мини-«Ведомость ЗИП»: таблица данных + её метаданные. Возвращает id из app_table."""
+    with engine.begin() as c:
+        c.execute(text(
+            "create table zip_test (id serial primary key, name text, qty int, note text, "
+            "created_at timestamptz not null default now(), created_by int, "
+            "updated_at timestamptz not null default now(), updated_by int)"
+        ))
+        c.execute(text("insert into zip_test (name, qty, note) values ('Кольцо', 5, 'a'), ('Втулка', 7, 'b')"))
+        tid = c.execute(text(
+            "insert into app_table (pg_name, title, primary_field) "
+            "values ('zip_test', 'Ведомость ЗИП', 'name') returning id"
+        )).scalar()
+        c.execute(text(
+            "insert into app_field (table_id, column_name, title, kind, editable, sort_order) values "
+            "(:t, 'name', 'Наименование', 'text', true, 1), "
+            "(:t, 'qty', 'Кол-во', 'number', true, 2), "
+            "(:t, 'note', 'Примечание', 'text', false, 3)"
+        ), {"t": tid})
+    return tid
