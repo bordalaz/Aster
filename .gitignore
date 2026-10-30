@@ -3,3 +3,4 @@ rea/
 .env
 __pycache__/
 proto/grid/node_modules/
+data/
