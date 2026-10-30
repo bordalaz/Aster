@@ -17,12 +17,12 @@ BASE = "appPaeBP8t3Ri5Lfn"
 SNAP = Path("/data/snapshot")
 
 
-def cmd_fetch() -> int:
+def cmd_fetch(files: bool = True) -> int:
     token = os.environ.get("AIRTABLE_TOKEN")
     if not token:
         print("Не задан AIRTABLE_TOKEN в .env")
         return 2
-    counts = fetch_snapshot(AirtableClient(token, BASE), SNAP)
+    counts = fetch_snapshot(AirtableClient(token, BASE), SNAP, files=files)
     print(f"Снимок: таблиц {len(counts)}, записей {sum(counts.values())} → {SNAP}")
     return 0
 
@@ -57,9 +57,11 @@ def cmd_verify() -> int:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m migrate", description=__doc__)
     p.add_argument("command", choices=["fetch", "load", "verify", "all"])
-    cmd = p.parse_args(argv).command
-    steps = {"fetch": [cmd_fetch], "load": [cmd_load], "verify": [cmd_verify],
-             "all": [cmd_fetch, cmd_load, cmd_verify]}[cmd]
+    p.add_argument("--no-files", action="store_true", help="без вложений; докачать — тот же fetch без флага")
+    a = p.parse_args(argv)
+    fetch = lambda: cmd_fetch(files=not a.no_files)  # noqa: E731
+    steps = {"fetch": [fetch], "load": [cmd_load], "verify": [cmd_verify],
+             "all": [fetch, cmd_load, cmd_verify]}[a.command]
     for step in steps:
         code = step()
         if code:

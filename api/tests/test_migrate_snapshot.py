@@ -75,3 +75,10 @@ def test_page_attachments_downloaded_in_parallel(tmp_path):
 
     fetch_snapshot(TwoAtt(), tmp_path)
     assert len(list((tmp_path / "files").iterdir())) == 2
+
+
+def test_no_files_skips_download(tmp_path):
+    c = StubClient()
+    counts = fetch_snapshot(c, tmp_path, files=False)
+    assert counts["tblBBBBBBBBBBBBBB"] == 2
+    assert not [e for e in c.log if e[0] == "download"]

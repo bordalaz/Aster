@@ -63,3 +63,14 @@ def test_cli_without_token(capsys, monkeypatch):
     monkeypatch.delenv("AIRTABLE_TOKEN", raising=False)
     assert main(["fetch"]) == 2
     assert "Не задан AIRTABLE_TOKEN" in capsys.readouterr().out
+
+
+def test_cli_no_files_flag(monkeypatch):
+    import migrate.__main__ as m
+
+    seen = {}
+    monkeypatch.setattr(m, "cmd_fetch", lambda files: seen.setdefault("files", files) and 0)
+    monkeypatch.setattr(m, "cmd_load", lambda: 0)
+    monkeypatch.setattr(m, "cmd_verify", lambda: 0)
+    assert m.main(["all", "--no-files"]) == 0
+    assert seen == {"files": False}

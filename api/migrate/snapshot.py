@@ -15,16 +15,17 @@ def att_path(files: Path, att_id: str) -> Path:
     return files / att_id
 
 
-def fetch_snapshot(client, out: Path, workers: int = WORKERS) -> dict[str, int]:
+def fetch_snapshot(client, out: Path, workers: int = WORKERS, files: bool = True) -> dict[str, int]:
+    """files=False — только записи; файлы докачает следующий fetch (ссылки берёт свежие)."""
     tables = client.schema()
     (out / "records").mkdir(parents=True, exist_ok=True)
-    files = out / "files"
-    files.mkdir(exist_ok=True)
+    fdir = out / "files"
+    fdir.mkdir(exist_ok=True)
     (out / "schema.json").write_text(json.dumps(tables, ensure_ascii=False, indent=1), encoding="utf-8")
     counts = {}
     pool = ThreadPoolExecutor(workers)
     for t in tables:
-        att_fields = [f["id"] for f in t["fields"] if f["type"] == "multipleAttachments"]
+        att_fields = [f["id"] for f in t["fields"] if files and f["type"] == "multipleAttachments"]
         n = 0
         with open(out / "records" / f"{t['id']}.jsonl", "w", encoding="utf-8") as fh:
             for page in client.pages(t["id"]):
@@ -33,7 +34,7 @@ def fetch_snapshot(client, out: Path, workers: int = WORKERS) -> dict[str, int]:
                     fh.write(json.dumps(r, ensure_ascii=False) + "\n")
                     for fld in att_fields:
                         for a in r["fields"].get(fld, []):
-                            dest = att_path(files, a["id"])
+                            dest = att_path(fdir, a["id"])
                             if not (dest.exists() and dest.stat().st_size == a.get("size")):
                                 jobs.append(pool.submit(client.download, a["url"], dest))
                 # ссылки на вложения живут ~2 ч — докачиваем страницу до запроса следующей
