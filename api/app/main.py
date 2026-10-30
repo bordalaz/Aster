@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from . import auth, meta
+from . import auth, meta, records
 from .db import engine
 
 app = FastAPI(title="БД гидроканал")
 app.include_router(auth.router)
 app.include_router(meta.router)
+app.include_router(records.router)
 
 
 @app.get("/api/health")
