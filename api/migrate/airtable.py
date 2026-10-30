@@ -20,14 +20,14 @@ class AirtableClient:
         self.auth = {"Authorization": f"Bearer {token}"}
         self.http = httpx.Client(transport=transport, timeout=60)
 
-    def _get(self, url: str, params: dict | None = None, auth: bool = True) -> httpx.Response:
+    def _get(self, url: str, params: dict | None = None) -> httpx.Response:
         while True:
             if self.last is not None:
                 wait = self.last + self.interval - self.clock()
                 if wait > 0:
                     self.sleep(wait)
             self.last = self.clock()
-            r = self.http.get(url, params=params, headers=self.auth if auth else None)
+            r = self.http.get(url, params=params, headers=self.auth)
             if r.status_code == 429:
                 self.sleep(RETRY_429)
                 continue
@@ -49,7 +49,15 @@ class AirtableClient:
             params = {**params, "offset": data["offset"]}
 
     def download(self, url: str, dest: Path) -> int:
-        body = self._get(url, auth=False).content  # токен только для api.airtable.com
+        """Вызывается из нескольких потоков: лимит 5/с — для API, на файлы не действует; токен не шлём."""
+        while True:
+            r = self.http.get(url)
+            if r.status_code != 429:
+                break
+            self.sleep(RETRY_429)
+        if not r.is_success:
+            raise RuntimeError(f"Airtable ответил {r.status_code} на скачивание вложения")
+        body = r.content
         tmp = dest.with_name(dest.name + ".part")
         tmp.write_bytes(body)
         os.replace(tmp, dest)

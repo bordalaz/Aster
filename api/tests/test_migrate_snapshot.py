@@ -54,3 +54,24 @@ def test_attachment_downloaded_per_page(tmp_path):
     b = [e for e in c.log if e[0] == "download" or e[1] == "tblBBBBBBBBBBBBBB"]
     assert b[:3] == [("page", "tblBBBBBBBBBBBBBB"), ("download", "https://v5.airtableusercontent.com/x/photo.jpg"),
                      ("page", "tblBBBBBBBBBBBBBB")]
+
+
+def test_page_attachments_downloaded_in_parallel(tmp_path):
+    import threading
+
+    barrier = threading.Barrier(2, timeout=5)  # пройдёт, только если два скачивания идут одновременно
+
+    class TwoAtt(StubClient):
+        def schema(self):
+            return [{"id": "tblBBBBBBBBBBBBBB", "fields": [{"id": "fldBphoto00000000", "type": "multipleAttachments"}]}]
+
+        def pages(self, table_id):
+            yield [{"id": f"recP{i}000000000000", "fields": {"fldBphoto00000000": [
+                {"id": f"attP{i}000000000000", "url": f"u{i}", "size": 3}]}} for i in (1, 2)]
+
+        def download(self, url, dest):
+            barrier.wait()
+            return super().download(url, dest)
+
+    fetch_snapshot(TwoAtt(), tmp_path)
+    assert len(list((tmp_path / "files").iterdir())) == 2
