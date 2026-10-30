@@ -1,0 +1,238 @@
+[
+ {
+  "id": "tblAAAAAAAAAAAAAA",
+  "name": "Номенклатура",
+  "primaryFieldId": "fldAname000000000",
+  "views": [
+   {
+    "id": "viwAAAAAAAAAAAAAA",
+    "name": "Grid view",
+    "type": "grid"
+   }
+  ],
+  "fields": [
+   {
+    "id": "fldAname000000000",
+    "name": "Наименование",
+    "type": "singleLineText"
+   },
+   {
+    "id": "fldAprice00000000",
+    "name": "Цена",
+    "type": "number",
+    "options": {
+     "precision": 2
+    }
+   },
+   {
+    "id": "fldAtype000000000",
+    "name": "Тип",
+    "type": "singleSelect",
+    "options": {
+     "choices": [
+      {
+       "id": "selAAAAAAAAAAAAA1",
+       "name": "трубное",
+       "color": "blueLight2"
+      },
+      {
+       "id": "selAAAAAAAAAAAAA2",
+       "name": "скважинное",
+       "color": "redLight2"
+      }
+     ]
+    }
+   },
+   {
+    "id": "fldAequip00000000",
+    "name": "Оборудование",
+    "type": "multipleRecordLinks",
+    "options": {
+     "linkedTableId": "tblBBBBBBBBBBBBBB",
+     "inverseLinkFieldId": "fldBnom0000000000",
+     "isReversed": false,
+     "prefersSingleRecordLink": false
+    }
+   }
+  ]
+ },
+ {
+  "id": "tblBBBBBBBBBBBBBB",
+  "name": "Оборудование",
+  "primaryFieldId": "fldBinv0000000000",
+  "views": [
+   {
+    "id": "viwBBBBBBBBBBBBBB",
+    "name": "Grid view",
+    "type": "grid"
+   }
+  ],
+  "fields": [
+   {
+    "id": "fldBinv0000000000",
+    "name": "Инвентарный номер",
+    "type": "singleLineText"
+   },
+   {
+    "id": "fldBnom0000000000",
+    "name": "Номенклатура",
+    "type": "multipleRecordLinks",
+    "options": {
+     "linkedTableId": "tblAAAAAAAAAAAAAA",
+     "inverseLinkFieldId": "fldAequip00000000",
+     "isReversed": false,
+     "prefersSingleRecordLink": true
+    }
+   },
+   {
+    "id": "fldBformula000000",
+    "name": "Формула",
+    "type": "formula",
+    "options": {
+     "formula": "{fldBinv0000000000} & \"!\"",
+     "isValid": true,
+     "referencedFieldIds": [
+      "fldBinv0000000000"
+     ],
+     "result": {
+      "type": "singleLineText"
+     }
+    }
+   },
+   {
+    "id": "fldBwork000000000",
+    "name": "В работе",
+    "type": "checkbox",
+    "options": {
+     "icon": "check",
+     "color": "greenBright"
+    }
+   },
+   {
+    "id": "fldBdate000000000",
+    "name": "Дата",
+    "type": "date",
+    "options": {
+     "dateFormat": {
+      "name": "european",
+      "format": "D/M/YYYY"
+     }
+    }
+   },
+   {
+    "id": "fldBtime000000000",
+    "name": "Время",
+    "type": "dateTime",
+    "options": {
+     "timeZone": "Asia/Tomsk",
+     "dateFormat": {
+      "name": "european",
+      "format": "D/M/YYYY"
+     },
+     "timeFormat": {
+      "name": "24hour",
+      "format": "HH:mm"
+     }
+    }
+   },
+   {
+    "id": "fldBtags000000000",
+    "name": "Метки",
+    "type": "multipleSelects",
+    "options": {
+     "choices": [
+      {
+       "id": "selBBBBBBBBBBBBB1",
+       "name": "новое",
+       "color": "greenLight2"
+      },
+      {
+       "id": "selBBBBBBBBBBBBB2",
+       "name": "аренда",
+       "color": "grayLight2"
+      }
+     ]
+    }
+   },
+   {
+    "id": "fldBphoto00000000",
+    "name": "Фото",
+    "type": "multipleAttachments",
+    "options": {
+     "isReversed": false
+    }
+   },
+   {
+    "id": "fldBmod0000000000",
+    "name": "Изменил",
+    "type": "lastModifiedBy"
+   },
+   {
+    "id": "fldBrollup0000000",
+    "name": "Цена из номенклатуры",
+    "type": "rollup",
+    "options": {
+     "isValid": true,
+     "recordLinkFieldId": "fldBnom0000000000",
+     "fieldIdInLinkedTable": "fldAprice00000000",
+     "referencedFieldIds": [],
+     "result": {
+      "type": "number",
+      "options": {
+       "precision": 2
+      }
+     }
+    }
+   },
+   {
+    "id": "fldBtrips00000000",
+    "name": "Рейсы",
+    "type": "multipleRecordLinks",
+    "options": {
+     "linkedTableId": "tblCCCCCCCCCCCCCC",
+     "inverseLinkFieldId": "fldCequip00000000",
+     "isReversed": false,
+     "prefersSingleRecordLink": false
+    }
+   }
+  ]
+ },
+ {
+  "id": "tblCCCCCCCCCCCCCC",
+  "name": "Рейсы",
+  "primaryFieldId": "fldCnum0000000000",
+  "views": [
+   {
+    "id": "viwCCCCCCCCCCCCCC",
+    "name": "Grid view",
+    "type": "grid"
+   }
+  ],
+  "fields": [
+   {
+    "id": "fldCnum0000000000",
+    "name": "№ рейса",
+    "type": "number",
+    "options": {
+     "precision": 0
+    }
+   },
+   {
+    "id": "fldCequip00000000",
+    "name": "Оборудование",
+    "type": "multipleRecordLinks",
+    "options": {
+     "linkedTableId": "tblBBBBBBBBBBBBBB",
+     "inverseLinkFieldId": "fldBtrips00000000",
+     "isReversed": false,
+     "prefersSingleRecordLink": false
+    }
+   },
+   {
+    "id": "fldCbutton0000000",
+    "name": "Открыть",
+    "type": "button"
+   }
+  ]
+ }
+]

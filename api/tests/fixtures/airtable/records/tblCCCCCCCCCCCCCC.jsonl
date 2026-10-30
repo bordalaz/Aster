@@ -1,0 +1,2 @@
+{"id": "recC1000000000000", "createdTime": "2023-03-01T00:00:00.000Z", "fields": {"fldCnum0000000000": 1, "fldCequip00000000": ["recB1000000000000"], "fldCbutton0000000": {"label": "Открыть", "url": null}}}
+{"id": "recC2000000000000", "createdTime": "2023-03-02T00:00:00.000Z", "fields": {"fldCnum0000000000": 2}}
