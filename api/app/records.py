@@ -1,5 +1,10 @@
+from datetime import datetime
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import MetaData, Table, select, text
+from pydantic import BaseModel
+from sqlalchemy import MetaData, Table, func, select, text, update
+from sqlalchemy.exc import DataError, IntegrityError
 
 from .auth import current_user
 from .db import engine
@@ -27,3 +32,31 @@ def list_records(table_id: int):
         t, fields = load_table(c, table_id)
         cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields]
         return [dict(r) for r in c.execute(select(*cols).order_by(t.c.id)).mappings()]
+
+
+class PatchBody(BaseModel):
+    updated_at: datetime  # какое значение видел клиент
+    values: dict[str, Any]
+
+
+@router.patch("/{table_id}/records/{record_id}")
+def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = Depends(current_user)):
+    try:
+        with engine.begin() as c:
+            t, fields = load_table(c, table_id)
+            bad = set(body.values) - {f.column_name for f in fields if f.editable}
+            if bad:
+                raise HTTPException(422, "Нельзя менять поля: " + ", ".join(sorted(bad)))
+            row = c.execute(
+                update(t)
+                .where(t.c.id == record_id, t.c.updated_at == body.updated_at)
+                .values(**body.values, updated_at=func.now(), updated_by=user["id"])
+                .returning(t.c.id, t.c.updated_at)
+            ).first()
+            if not row:
+                if c.execute(select(t.c.id).where(t.c.id == record_id)).first():
+                    raise HTTPException(409, "Запись уже изменили — обновите и повторите")
+                raise HTTPException(404, "Нет такой записи")
+            return dict(row._mapping)
+    except (DataError, IntegrityError) as e:
+        raise HTTPException(422, "Неверное значение: " + str(e.orig).splitlines()[0])
