@@ -80,5 +80,6 @@ def verify(conn, snap: Path) -> dict:
     # extra — только предупреждение: удалённое в Airtable у нас молча не удаляем
     rep["ok"] = (all(not v["missing"] and not v["value_mismatches"] for v in rep["tables"].values())
                  and rep["links"]["airtable"] == rep["links"]["db"]
+                 and rep["attachments"]["airtable"] == rep["attachments"]["db"]
                  and rep["attachments"]["missing_files"] == 0)
     return rep

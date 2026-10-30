@@ -70,24 +70,23 @@ def load_snapshot(conn, snap: Path) -> dict:
                          [{"s": s, "d": d, **v} for (s, d), v in acc.items()])
         result["links"] += len(acc)
 
-    # 3. вложения и 4. ожидаемые вычисляемые значения
+    # 3. вложения: одно вложение Airtable бывает в нескольких записях — пересобираем целиком, как связи
+    rows = [{"t": t["id"], "r": r["id"], "f": f["id"], "pos": i, "a": a["id"], "fn": a.get("filename"),
+             "m": a.get("type"), "sz": a.get("size"), "p": f"files/{a['id']}"}
+            for t in schema for f in t["fields"] if f["type"] == ATTACH
+            for r in recs[t["id"]] for i, a in enumerate(r["fields"].get(f["id"], []))]
+    conn.execute(text("delete from attachment"))
+    if rows:
+        conn.execute(text(
+            "insert into attachment (table_id, record_airtable_id, field_id, pos, airtable_att_id, "
+            "filename, mime, size, path) values (:t, :r, :f, :pos, :a, :fn, :m, :sz, :p)"
+        ), rows)
+    result["attachments"] = len(rows)
+
+    # 4. ожидаемые вычисляемые значения
     for t in schema:
         for f in t["fields"]:
-            if f["type"] == ATTACH:
-                rows = [{"t": t["id"], "r": r["id"], "f": f["id"], "pos": i, "a": a["id"], "fn": a.get("filename"),
-                         "m": a.get("type"), "sz": a.get("size"), "p": f"files/{a['id']}"}
-                        for r in recs[t["id"]] for i, a in enumerate(r["fields"].get(f["id"], []))]
-                if rows:
-                    conn.execute(text(
-                        "insert into attachment (table_id, record_airtable_id, field_id, pos, airtable_att_id, "
-                        "filename, mime, size, path) values (:t, :r, :f, :pos, :a, :fn, :m, :sz, :p) "
-                        "on conflict (airtable_att_id) do update set table_id = excluded.table_id, "
-                        "record_airtable_id = excluded.record_airtable_id, field_id = excluded.field_id, "
-                        "pos = excluded.pos, filename = excluded.filename, mime = excluded.mime, "
-                        "size = excluded.size, path = excluded.path"
-                    ), rows)
-                result["attachments"] += len(rows)
-            elif f["type"] in COMPUTED:
+            if f["type"] in COMPUTED:
                 # пустое значение Airtable не присылает — храним null: «ожидаем пусто»
                 rows = [{"t": t["id"], "r": r["id"], "f": f["id"],
                          "v": json.dumps(r["fields"].get(f["id"]), ensure_ascii=False)}

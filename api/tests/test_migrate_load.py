@@ -143,3 +143,17 @@ def test_bad_id_in_schema_rejected():
         with engine.begin() as c:
             apply_schema(c, bad)
     assert q("select count(*) from app_table")[0][0] == 0
+
+
+def test_same_attachment_in_two_records(tmp_path):
+    # в базе одно и то же вложение скопировано в несколько записей (AddDataToZIP → ЗИП APS)
+    snap = tmp_path / "snap"
+    shutil.copytree(FIXTURE, snap)
+    pb = snap / "records" / f"{B}.jsonl"
+    recs = [json.loads(x) for x in pb.read_text(encoding="utf-8").splitlines()]
+    recs[1]["fields"][fid("Bphoto")] = recs[0]["fields"][fid("Bphoto")]
+    pb.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in recs), encoding="utf-8")
+    assert load(snap)["attachments"] == 2
+    load(snap)
+    assert [r.record_airtable_id for r in q("select record_airtable_id from attachment order by 1")] == [
+        rid("B1"), rid("B2")]

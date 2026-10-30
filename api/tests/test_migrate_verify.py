@@ -74,3 +74,12 @@ def test_cli_no_files_flag(monkeypatch):
     monkeypatch.setattr(m, "cmd_verify", lambda: 0)
     assert m.main(["all", "--no-files"]) == 0
     assert seen == {"files": False}
+
+
+def test_verify_lost_attachment_row():
+    load()
+    with engine.begin() as c:
+        c.execute(text("delete from attachment"))
+    rep = run_verify()
+    assert rep["attachments"]["db"] == 0
+    assert rep["ok"] is False
