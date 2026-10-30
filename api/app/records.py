@@ -3,8 +3,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import MetaData, Table, func, select, text, update
-from sqlalchemy.exc import DataError, IntegrityError
+from sqlalchemy import Boolean, MetaData, Table, func, select, text, update
+from sqlalchemy.exc import DBAPIError
 
 from .auth import current_user
 from .db import engine
@@ -47,6 +47,10 @@ def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = De
             bad = set(body.values) - {f.column_name for f in fields if f.editable}
             if bad:
                 raise HTTPException(422, "Нельзя менять поля: " + ", ".join(sorted(bad)))
+            # Postgres молча кладёт true в int как 1 — отсекаем сами
+            bad = {k for k, v in body.values.items() if isinstance(v, bool) and not isinstance(t.c[k].type, Boolean)}
+            if bad:
+                raise HTTPException(422, "Неверное значение: " + ", ".join(sorted(bad)))
             row = c.execute(
                 update(t)
                 .where(t.c.id == record_id, t.c.updated_at == body.updated_at)
@@ -58,5 +62,5 @@ def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = De
                     raise HTTPException(409, "Запись уже изменили — обновите и повторите")
                 raise HTTPException(404, "Нет такой записи")
             return dict(row._mapping)
-    except (DataError, IntegrityError) as e:
+    except DBAPIError as e:
         raise HTTPException(422, "Неверное значение: " + str(e.orig).splitlines()[0])

@@ -74,3 +74,13 @@ def test_patch_missing_record(logged, zip_table):
         json={"updated_at": rec["updated_at"], "values": {"qty": 1}},
     )
     assert r.status_code == 404
+
+
+def test_patch_wrong_kind_values(logged, zip_table):
+    for bad in (True, {"a": 1}, [1]):
+        rec = _first(logged, zip_table)
+        r = logged.patch(
+            f"/api/tables/{zip_table}/records/{rec['id']}",
+            json={"updated_at": rec["updated_at"], "values": {"qty": bad}},
+        )
+        assert r.status_code == 422, bad
