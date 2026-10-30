@@ -84,3 +84,14 @@ def test_patch_wrong_kind_values(logged, zip_table):
             json={"updated_at": rec["updated_at"], "values": {"qty": bad}},
         )
         assert r.status_code == 422, bad
+
+
+def test_records_skip_virtual_fields(logged, loaded_fixture):
+    from migrate.names import column_name
+
+    r = logged.get(f"/api/tables/{loaded_fixture['tblBBBBBBBBBBBBBB']}/records")
+    assert r.status_code == 200
+    keys = set(r.json()[0])
+    assert column_name("fldBinv0000000000") in keys
+    assert column_name("fldBformula000000") not in keys
+    assert column_name("fldBnom0000000000") not in keys

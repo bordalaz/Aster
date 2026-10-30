@@ -30,7 +30,7 @@ def load_table(c, table_id: int):
 def list_records(table_id: int):
     with engine.connect() as c:
         t, fields = load_table(c, table_id)
-        cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields]
+        cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields if f.column_name in t.c]
         return [dict(r) for r in c.execute(select(*cols).order_by(t.c.id)).mappings()]
 
 

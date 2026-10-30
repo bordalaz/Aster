@@ -1,4 +1,6 @@
+import json
 import os
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -38,6 +40,13 @@ def clean():
     with engine.begin() as c:
         c.execute(text("truncate app_user, app_session, app_table, app_field, app_view restart identity cascade"))
         c.execute(text("drop table if exists zip_test"))
+        c.execute(text("truncate attachment, at_computed, at_link_meta"))
+        names = c.execute(text(
+            "select tablename from pg_tables where schemaname = 'public' "
+            "and (tablename like :a or tablename like :l)"
+        ), {"a": r"at\_tbl%", "l": r"l\_fld%"}).scalars().all()
+        for t in names:
+            c.execute(text(f'drop table if exists "{t}" cascade'))
 
 
 @pytest.fixture
@@ -79,3 +88,18 @@ def zip_table():
             "(:t, 'note', 'Примечание', 'text', false, 3)"
         ), {"t": tid})
     return tid
+
+
+FIXTURE = Path(__file__).parent / "fixtures" / "airtable"
+
+
+@pytest.fixture
+def loaded_fixture():
+    """Фикстура снимка Airtable, загруженная в БД. Возвращает {tbl_id: app_table.id}."""
+    from migrate.load import load_snapshot
+    from migrate.schema import apply_schema
+
+    with engine.begin() as c:
+        apply_schema(c, json.loads((FIXTURE / "schema.json").read_text(encoding="utf-8")))
+        load_snapshot(c, FIXTURE)
+        return dict(c.execute(text("select airtable_id, id from app_table")).all())
