@@ -28,3 +28,31 @@ from app.main import app  # noqa: E402
 @pytest.fixture
 def client():
     return TestClient(app)
+
+from app.db import engine  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def clean():
+    yield
+    with engine.begin() as c:
+        c.execute(text("truncate app_user, app_session, app_table, app_field, app_view restart identity cascade"))
+        c.execute(text("drop table if exists zip_test"))
+
+
+@pytest.fixture
+def user():
+    from app.auth import hash_password
+
+    with engine.begin() as c:
+        c.execute(
+            text("insert into app_user (login, name, password_hash) values ('ivan', 'Иван', :h)"),
+            {"h": hash_password("secret")},
+        )
+
+
+@pytest.fixture
+def logged(client, user):
+    r = client.post("/api/auth/login", json={"login": "ivan", "password": "secret"})
+    assert r.status_code == 200
+    return client
