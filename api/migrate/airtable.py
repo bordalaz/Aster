@@ -37,7 +37,8 @@ class AirtableClient:
             return r
 
     def schema(self) -> list[dict]:
-        return self._get(f"{API}/meta/bases/{self.base}/tables").json()["tables"]
+        # visibleFieldIds — видимые колонки grid-видов по порядку (для переноса видов)
+        return self._get(f"{API}/meta/bases/{self.base}/tables", {"include": "visibleFieldIds"}).json()["tables"]
 
     def pages(self, table_id: str) -> Iterator[list[dict]]:
         params = {"pageSize": 100, "returnFieldsByFieldId": "true", "cellFormat": "json"}
