@@ -9,7 +9,7 @@ from sqlalchemy import text
 from .compute import _field_config, compute_field
 from .load import read_records, require_complete
 from .names import column_name, table_name
-from .rollup_aggs import AGG
+from .rollup_aggs import AGG, KNOWN_DIFF
 from .schema import ATTACH, LINK, link_sides, pg_type
 
 
@@ -88,10 +88,11 @@ def verify(conn, snap: Path) -> dict:
     return rep
 
 
-def verify_computed(conn, only: dict | None = None) -> dict:
+def verify_computed(conn, only: dict | None = None, known: dict | None = None) -> dict:
     """Сверить вычисленные агрегаты с at_computed. only — карта {ключ: функция} (для тестов);
     по умолчанию берём rollup_aggs.AGG. FORMULA_DEFER/INVALID не считаем."""
     agg = only if only is not None else AGG
+    known = KNOWN_DIFF if known is None else known
     rep = {"fields": {}, "skipped": {"formula": [], "invalid": [], "missing": []}}
     for key, func in agg.items():
         if func == "FORMULA_DEFER":
@@ -121,9 +122,11 @@ def verify_computed(conn, only: dict | None = None) -> dict:
                 mism += 1
                 if len(examples) < 20:
                     examples.append({"record": rec_at, "got": g, "want": w})
-        rep["fields"][key] = {"status": "ok" if mism == 0 else "mismatch",
-                              "checked": checked, "mismatches": mism, "examples": examples}
-    rep["ok"] = all(f["status"] in ("ok", "invalid") for f in rep["fields"].values())
+        status = "ok" if mism == 0 else "known" if key in known else "mismatch"
+        rep["fields"][key] = {"status": status, "checked": checked, "mismatches": mism, "examples": examples}
+        if status == "known":
+            rep["fields"][key]["reason"] = known[key]
+    rep["ok"] = all(f["status"] in ("ok", "invalid", "known") for f in rep["fields"].values())
     return rep
 
 
