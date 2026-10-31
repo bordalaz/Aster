@@ -15,7 +15,7 @@ services:
     build: ./api
     environment:
       DATABASE_URL: postgresql+psycopg://bd:${POSTGRES_PASSWORD}@db/bd
-      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
       AIRTABLE_TOKEN: ${AIRTABLE_TOKEN:-}
     depends_on:
       db: { condition: service_healthy }

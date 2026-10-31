@@ -25,6 +25,11 @@ def check_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(actual, digest)
 
 
+# Хеш для несуществующего логина: scrypt считается всегда, чтобы ответ был
+# за то же время, что и при реальном пользователе — иначе логины перебираются по таймингу.
+_DUMMY_HASH = hash_password(secrets.token_hex(16))
+
+
 def current_user(request: Request) -> dict:
     token = request.cookies.get(COOKIE)
     if token:
@@ -57,7 +62,9 @@ def login(body: LoginBody, response: Response):
         u = c.execute(
             text("select id, password_hash from app_user where login = :l"), {"l": body.login}
         ).first()
-        if not u or not check_password(body.password, u.password_hash):
+        # scrypt гоняем в обеих ветках (константное время против энумерации логинов)
+        ok = check_password(body.password, u.password_hash if u else _DUMMY_HASH)
+        if not u or not ok:
             raise HTTPException(401, "Неверный логин или пароль")
         token = secrets.token_urlsafe(32)
         c.execute(text("delete from app_session where expires_at < now()"))
@@ -67,7 +74,7 @@ def login(body: LoginBody, response: Response):
         )
     response.set_cookie(
         COOKIE, token, httponly=True, samesite="lax",
-        secure=os.environ.get("COOKIE_SECURE") == "1", max_age=SESSION_DAYS * 86400,
+        secure=os.environ.get("COOKIE_SECURE", "1") != "0", max_age=SESSION_DAYS * 86400,
     )
     return {"ok": True}
 
