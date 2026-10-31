@@ -1,14 +1,28 @@
 import { expect, test } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { useRecords } from './useRecords.js'
+import { server } from '../test/server.js'
+import { records1 } from '../test/fixtures.js'
 
-test('грузит невиртуальные поля и записи', async () => {
+test('грузит поля (связь отсеяна, формула — нет) и записи', async () => {
   const { result } = renderHook(() => useRecords(1))
   await waitFor(() => expect(result.current.loading).toBe(false))
-  // из 6 полей фикстуры одно виртуальное (связь) — должно отсеяться → 5
-  expect(result.current.fields).toHaveLength(5)
-  expect(result.current.fields.some(f => f.options.virtual)).toBe(false)
+  const kinds = result.current.fields.map(f => f.kind)
+  expect(kinds).toContain('formula')
+  expect(kinds).not.toContain('multipleRecordLinks')
+  expect(result.current.fields).toHaveLength(6)
   expect(result.current.rows).toHaveLength(2)
+})
+
+test('после правки строки тихо перечитываются — сервер досчитал формулы', async () => {
+  const { result } = renderHook(() => useRecords(1, 20))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  await act(() => result.current.patch(result.current.rows[0], { f_fld00000000000002: 9 }))
+  server.use(http.get('/api/tables/1/records', () =>
+    HttpResponse.json(records1.map(r => r.id === 1 ? { ...r, f_fld00000000000007: 'Кольцо_9' } : r))))
+  await waitFor(() => expect(result.current.rows[0].f_fld00000000000007).toBe('Кольцо_9'))
+  expect(result.current.loading).toBe(false)
 })
 
 test('patch обновляет строку и updated_at', async () => {
