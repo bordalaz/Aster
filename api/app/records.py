@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -62,5 +63,7 @@ def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = De
                     raise HTTPException(409, "Запись уже изменили — обновите и повторите")
                 raise HTTPException(404, "Нет такой записи")
             return dict(row._mapping)
-    except DBAPIError as e:
-        raise HTTPException(422, "Неверное значение: " + str(e.orig).splitlines()[0])
+    except DBAPIError:
+        # не отдаём текст ошибки БД наружу (раскрывает структуру) — деталь уходит в лог
+        logging.getLogger(__name__).warning("patch_record %s/%s отклонён БД", table_id, record_id, exc_info=True)
+        raise HTTPException(422, "Неверное значение поля")

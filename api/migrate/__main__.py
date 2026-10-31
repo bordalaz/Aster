@@ -54,13 +54,39 @@ def cmd_verify() -> int:
     return 0 if rep["ok"] else 1
 
 
+def cmd_compute_verify() -> int:
+    from datetime import datetime, timezone
+
+    from .verify import verify_computed, verify_formulas
+    # TODAY()/NOW() в Airtable считались в момент выгрузки — берём дату снимка
+    today = datetime.fromtimestamp((SNAP / "complete").stat().st_mtime, timezone.utc).date()
+    with engine.connect() as c:
+        rep = {"aggregates": verify_computed(c), "formulas": verify_formulas(c, today),
+               "lookups": verify_formulas(c, today, kind="multipleLookupValues"),
+               "counts": verify_formulas(c, today, kind="count"), "today": today}
+    parts = (("Агрегаты", "aggregates"), ("Формулы", "formulas"), ("Lookup", "lookups"), ("Count", "counts"))
+    rep["ok"] = all(rep[p]["ok"] for _, p in parts)
+    (SNAP / "report-computed.json").write_text(
+        json.dumps(rep, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    for title, key in parts:
+        part = rep[key]
+        st = [f["status"] for f in part["fields"].values()]
+        print(f"{title}: полей {len(st)}, совпало {st.count('ok')}, с расхождениями {st.count('mismatch')}, "
+              f"известных {st.count('known')}, битых {st.count('invalid')}, не разобрано {st.count('error')}")
+        bad = [k for k, f in part["fields"].items() if f["status"] in ("mismatch", "error")]
+        if bad:
+            print("  Расхождения:", ", ".join(bad))
+    print("Сверка вычисляемых: OK" if rep["ok"] else f"Есть расхождения, см. {SNAP / 'report-computed.json'}")
+    return 0 if rep["ok"] else 1
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m migrate", description=__doc__)
-    p.add_argument("command", choices=["fetch", "load", "verify", "all"])
+    p.add_argument("command", choices=["fetch", "load", "verify", "compute-verify", "all"])
     p.add_argument("--no-files", action="store_true", help="без вложений; докачать — тот же fetch без флага")
     a = p.parse_args(argv)
     fetch = lambda: cmd_fetch(files=not a.no_files)  # noqa: E731
-    steps = {"fetch": [fetch], "load": [cmd_load], "verify": [cmd_verify],
+    steps = {"fetch": [fetch], "load": [cmd_load], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
              "all": [fetch, cmd_load, cmd_verify]}[a.command]
     for step in steps:
         code = step()
