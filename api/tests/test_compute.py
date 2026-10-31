@@ -216,6 +216,46 @@ def test_filter_all_fail_gives_empty_aggregate(tmp_path):
     assert vals["recN1"] == 0   # владелец остаётся, агрегат пустого списка
 
 
+def test_duplicate_select_choices_merged(tmp_path):
+    # Два одноимённых варианта статуса сливаются в один: остаётся первый id, второй — в mergedIds;
+    # фильтр по второму id находит тот же статус (как «На калибровку» в Оборудовании).
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOstatus0000000", "name": "Статус", "type": "singleSelect",
+        "options": {"choices": [{"id": "selA", "name": "На калибровку", "color": "redBright"},
+                                {"id": "selW", "name": "В эксплуатации"},
+                                {"id": "selB", "name": "На калибровку", "color": "pinkBright"}]}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOstatus0000000"] = "На калибровку"
+    schema[0]["fields"].append(rollup_field(
+        "fldNcal0000000000", "НаКалибровку", "fldNequip00000000", "fldOinv0000000000", "number",
+        filters={"operator": "and", "operands": [{"operator": "=", "operands": ["fldOstatus0000000", "selB"]}]}))
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        choices = c.execute(text("select options->'choices' from app_field "
+                                 "where airtable_id = 'fldOstatus0000000'")).scalar()
+        assert [ch["name"] for ch in choices] == ["На калибровку", "В эксплуатации"]
+        assert choices[0]["id"] == "selA" and choices[0]["mergedIds"] == ["selB"]
+        assert compute_field(c, "Номенклатура.НаКалибровку", "COUNTA")["recN1"] == 1
+
+
+def test_known_divergence_not_failing(tmp_path):
+    # Поле из KNOWN_DIFF расходится с Airtable сознательно — статус known, сверка не падает.
+    schema, records = _two_tables()
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        c.execute(text("insert into at_computed values ('tblOOOOOOOOOOOOOO','recO1','fldOprice00000000', to_jsonb(99)) "
+                       "on conflict (table_id, record_airtable_id, field_id) do update set value = excluded.value"))
+        rep = verify_computed(c, only={"Оборудование.ЦенаИзНом": "SUM"},
+                              known={"Оборудование.ЦенаИзНом": "тест"})
+    assert rep["fields"]["Оборудование.ЦенаИзНом"]["status"] == "known"
+    assert rep["ok"]
+
+
 def test_verify_matches_oracle(tmp_path):
     # recO1 совпадает с ожиданием (5.5), recO2 нет (99) — сверка должна поймать второе.
     schema, records = _two_tables()

@@ -107,7 +107,8 @@ def _target(conn, fid: str, target):
         return target["exactDate"][:10]
     if isinstance(target, str) and target.startswith("sel"):
         choices = _as_dict(_field_meta(conn, fid).options).get("choices", [])
-        return next((c["name"] for c in choices if c["id"] == target), target)
+        return next((c["name"] for c in choices if target == c["id"] or target in c.get("mergedIds", ())),
+                    target)
     return target
 
 

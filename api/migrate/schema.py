@@ -104,6 +104,8 @@ def apply_schema(conn, schema: list[dict]) -> list[str]:
             "o": order, "a": t["id"]}).scalar()
         for fo, f in enumerate(t["fields"]):
             opts = dict(f.get("options") or {})
+            if "choices" in opts:
+                opts["choices"] = merge_choices(opts["choices"])
             if pg_type(f) is None:
                 opts["virtual"] = True
             if f["id"] in sides:
@@ -120,3 +122,15 @@ def apply_schema(conn, schema: list[dict]) -> list[str]:
         conn.execute(text("delete from app_field where table_id = :t and airtable_id <> all(:ids)"),
                      {"t": tid, "ids": [f["id"] for f in t["fields"]]})
     return warnings
+
+
+def merge_choices(choices: list[dict]) -> list[dict]:
+    """Одноимённые варианты select — дубли (API отдаёт ячейку по имени, различить их нельзя).
+    Оставляем первый, id остальных — в mergedIds, чтобы фильтры Airtable по ним находили тот же вариант."""
+    out: dict[str, dict] = {}
+    for ch in choices:
+        if ch["name"] in out:
+            out[ch["name"]].setdefault("mergedIds", []).append(ch["id"])
+        else:
+            out[ch["name"]] = dict(ch)
+    return list(out.values())

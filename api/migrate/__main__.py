@@ -64,8 +64,9 @@ def cmd_compute_verify() -> int:
     ok = sum(1 for f in fields.values() if f["status"] == "ok")
     mm = [k for k, f in fields.items() if f["status"] == "mismatch"]
     inv = [k for k, f in fields.items() if f["status"] == "invalid"]
+    known = [k for k, f in fields.items() if f["status"] == "known"]
     print(f"Вычисляемые (агрегаты): полей {len(fields)}, совпало {ok}, "
-          f"с расхождениями {len(mm)}, битых {len(inv)}, "
+          f"с расхождениями {len(mm)}, известных {len(known)}, битых {len(inv)}, "
           f"formula-отложено {len(rep['skipped']['formula'])}")
     if mm:
         print("Расхождения в полях:", ", ".join(mm))
