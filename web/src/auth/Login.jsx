@@ -12,12 +12,15 @@ export default function Login({ onLogin }) {
     try {
       await onLogin(login, password)
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 401 ? 'Неверный логин или пароль' : 'Ошибка входа')
+      setError(!(err instanceof ApiError) ? 'Ошибка входа'
+        : err.status === 401 ? 'Неверный логин или пароль'
+        : err.status === 403 ? err.body?.detail ?? 'Вход запрещён'   // вне офиса (R7)
+        : 'Ошибка входа')
     }
   }
 
   return (
-    <form onSubmit={submit} style={{ maxWidth: 280, margin: '80px auto', display: 'grid', gap: 10 }}>
+    <form className="stack" onSubmit={submit} style={{ maxWidth: 280, margin: '80px auto', display: 'grid', gap: 10 }}>
       <h1 style={{ fontSize: 18 }}>Вход</h1>
       <label>Логин<input value={login} onChange={e => setLogin(e.target.value)} autoFocus /></label>
       <label>Пароль<input type="password" value={password} onChange={e => setPassword(e.target.value)} /></label>
