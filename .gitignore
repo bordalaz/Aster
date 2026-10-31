@@ -4,5 +4,7 @@ rea/
 __pycache__/
 proto/grid/node_modules/
 data/
+web/node_modules/
+web/dist/
 .strix.env
 strix_runs/
