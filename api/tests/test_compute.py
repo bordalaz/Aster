@@ -333,6 +333,29 @@ def test_filter_is_any_none_of_and_attachment_equality():
     # вложения сравниваем по id: url у Airtable временный
     assert _equal(["attA", "attB"], [{"id": "attA", "url": "https://x/1"}, {"id": "attB", "url": "https://x/2"}])
     assert not _equal(["attA"], [{"id": "attB", "url": "https://x/1"}])
+    assert _equal([305277.8044], [305277.80439999996])   # список чисел — с допуском
+
+
+def test_compute_all_chains_from_raw_data(tmp_path):
+    # Цепочка без оракула: formula Оборудование.Имя ← rollup ЦенаИзНом ← число Номенклатура.Цена.
+    # Значения Airtable в at_computed намеренно неверные — compute_all их не читает.
+    from datetime import date
+    from migrate.compute import compute_all
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOname000000000", "name": "Имя", "type": "formula", "options": {
+        "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+        "formula": '{fldOnom0000000000} & "_" & {fldOprice00000000}'}})
+    for r in records["tblOOOOOOOOOOOOOO"]:
+        r["fields"]["fldOprice00000000"] = 999
+        r["fields"]["fldOname000000000"] = "мусор"
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        out = compute_all(c, date(2026, 10, 31), aggs={"Оборудование.ЦенаИзНом": "SUM"})
+    assert out["fldOprice00000000"]["recO1"] == 5.5
+    assert out["fldOname000000000"] == {"recO1": "Кольцо_5.5", "recO2": "Кольцо_5.5"}
 
 
 def test_verify_matches_oracle(tmp_path):

@@ -6,19 +6,46 @@ const INLINE = new Set([
   'singleLineText', 'multilineText', 'richText', 'email', 'url', 'phoneNumber',
   'number', 'currency', 'percent', 'rating', 'duration', 'checkbox', 'date',
 ])
+const COMPUTED = new Set(['formula', 'rollup', 'multipleLookupValues'])
+// Lookup связей и вложений API отдаёт id записей/вложений — показывать нечего до этапа 2 (связи).
+const HIDDEN_LOOKUP = new Set(['multipleRecordLinks', 'multipleAttachments'])
+const SPECIAL = { NaN: 'NaN', Infinity: '∞', '-Infinity': '−∞' }
+
+// Тип, по которому показываем: у формул/rollup/lookup — тип результата, count — число.
+function kindOf(field) {
+  if (field.kind === 'count') return 'number'
+  if (COMPUTED.has(field.kind)) return field.options?.result?.type ?? 'singleLineText'
+  return field.kind
+}
+
+// Значение → текст: NaN/Infinity и ошибка Airtable приходят объектом.
+function asText(field, value) {
+  if (value == null) return ''
+  if (field.kind === 'multipleLookupValues' && HIDDEN_LOOKUP.has(kindOf(field))) return ''
+  if (value.specialValue) return SPECIAL[value.specialValue] ?? value.specialValue
+  if (value.error) return value.error
+  if (typeof value === 'object' && !Array.isArray(value) && value.name) return value.name   // пользователь Airtable
+  if (Array.isArray(value)) return value.map(v => asText(field, v)).filter(Boolean).join(', ')
+  return String(value)
+}
+
+export function displayValue(field, value) {
+  return asText(field, value) || '—'
+}
 
 export function toCell(field, value) {
+  const kind = kindOf(field)
   const editable = field.editable && INLINE.has(field.kind)
-  if (field.kind === 'checkbox') {
+  if (kind === 'checkbox') {
     return { kind: GridCellKind.Boolean, data: !!value, allowOverlay: false, readonly: !field.editable }
   }
-  if (NUMBER.has(field.kind)) {
+  if (NUMBER.has(kind) && (value == null || typeof value === 'number')) {
     return {
       kind: GridCellKind.Number, data: value ?? undefined,
       displayData: value == null ? '' : String(value), allowOverlay: editable,
     }
   }
-  const text = value == null ? '' : Array.isArray(value) ? value.join(', ') : String(value)
+  const text = asText(field, value)
   return { kind: GridCellKind.Text, data: text, displayData: text, allowOverlay: editable }
 }
 
