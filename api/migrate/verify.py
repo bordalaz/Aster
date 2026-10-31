@@ -6,8 +6,10 @@ from pathlib import Path
 
 from sqlalchemy import text
 
+from .compute import _field_config, compute_field
 from .load import read_records, require_complete
 from .names import column_name, table_name
+from .rollup_aggs import AGG
 from .schema import ATTACH, LINK, link_sides, pg_type
 
 
@@ -84,3 +86,50 @@ def verify(conn, snap: Path) -> dict:
                  and rep["attachments"]["airtable"] == rep["attachments"]["db"]
                  and rep["attachments"]["missing_files"] == 0)
     return rep
+
+
+def verify_computed(conn, only: dict | None = None) -> dict:
+    """Сверить вычисленные агрегаты с at_computed. only — карта {ключ: функция} (для тестов);
+    по умолчанию берём rollup_aggs.AGG. FORMULA_DEFER/INVALID не считаем."""
+    agg = only if only is not None else AGG
+    rep = {"fields": {}, "skipped": {"formula": [], "invalid": [], "missing": []}}
+    for key, func in agg.items():
+        if func == "FORMULA_DEFER":
+            rep["skipped"]["formula"].append(key)
+            continue
+        try:
+            cfg = _field_config(conn, key)
+        except KeyError:
+            rep["skipped"]["missing"].append(key)
+            continue
+        if func == "INVALID" or cfg["options"].get("isValid") is False:
+            rep["fields"][key] = {"status": "invalid", "checked": 0, "mismatches": 0, "examples": []}
+            continue
+        got = compute_field(conn, key, func)
+        # at_computed.value (jsonb) psycopg отдаёт уже разобранным Python-объектом
+        want = {r.record_airtable_id: r.value for r in conn.execute(text(
+            "select record_airtable_id, value from at_computed where table_id = :t and field_id = :f"
+        ), {"t": cfg["owner_at"], "f": cfg["field_at"]})}
+        checked = mism = 0
+        examples = []
+        for rec_at, g in got.items():
+            if rec_at not in want:
+                continue
+            checked += 1
+            w = want[rec_at]
+            if not _equal(g, w):
+                mism += 1
+                if len(examples) < 20:
+                    examples.append({"record": rec_at, "got": g, "want": w})
+        rep["fields"][key] = {"status": "ok" if mism == 0 else "mismatch",
+                              "checked": checked, "mismatches": mism, "examples": examples}
+    rep["ok"] = all(f["status"] in ("ok", "invalid") for f in rep["fields"].values())
+    return rep
+
+
+def _equal(got, want) -> bool:
+    if isinstance(got, (int, float)) and isinstance(want, (int, float))             and not isinstance(got, bool) and not isinstance(want, bool):
+        return abs(got - want) < 1e-6
+    if got in (0, "", []) and want is None:   # пустой агрегат <-> Airtable прислал пусто
+        return True
+    return got == want
