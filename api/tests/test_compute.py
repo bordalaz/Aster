@@ -58,6 +58,7 @@ def test_sum_over_links(tmp_path):
         vals = compute_field(c, "Оборудование.ЦенаИзНом", "SUM")
     assert vals["recO1"] == 5.5
     assert vals["recO2"] == 5.5
+    assert type(vals["recO1"]) is float   # как в API Airtable: Decimal из numeric не сравнивается с float точно
 
 
 def test_counta_and_arrayjoin(tmp_path):
@@ -75,7 +76,7 @@ def test_counta_and_arrayjoin(tmp_path):
         cnt = compute_field(c, "Номенклатура.ЧислоОбор", "COUNTA")
         join = compute_field(c, "Номенклатура.ИнвСписок", "ARRAYJOIN")
     assert cnt["recN1"] == 2
-    assert join["recN1"] == "INV-1, INV-2"   # порядок = pos связей
+    assert join["recN1"] == "INV-1,INV-2"   # порядок = pos связей; разделитель Airtable — ","
 
 
 def test_min_max_arrayunique(tmp_path):
@@ -109,8 +110,8 @@ def test_filter_equals_select(tmp_path):
     records["tblOOOOOOOOOOOOOO"][1]["fields"]["fldOstatus0000000"] = "Брак"
     schema[0]["fields"].append(rollup_field(
         "fldNwork000000000", "ВЭксплуатации", "fldNequip00000000", "fldOinv0000000000", "number",
-        filters={"conjunction": "and", "conditions": [
-            {"fieldId": "fldOstatus0000000", "operator": "=", "value": "В эксплуатации"}]}))
+        filters={"operator": "and", "operands": [
+            {"operator": "=", "operands": ["fldOstatus0000000", "selW"]}]}))   # Airtable шлёт id варианта
     write_snapshot(tmp_path, schema, records)
     from app.db import engine
     with engine.begin() as c:
@@ -120,16 +121,18 @@ def test_filter_equals_select(tmp_path):
     assert vals["recN1"] == 1   # из двух оборудований фильтр прошло одно
 
 
-def test_filter_year_ge(tmp_path):
+def test_filter_year_ge_on_formula(tmp_path):
+    # фильтр «Год >= 2021», где Год — formula-поле связанной таблицы (значение приходит в at_computed)
     schema, records = _two_tables()
-    schema[1]["fields"].append({"id": "fldOdate000000000", "name": "Дата", "type": "date",
-        "options": {"dateFormat": {"name": "iso", "format": "YYYY-MM-DD"}}})
-    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOdate000000000"] = "2020-06-01"
-    records["tblOOOOOOOOOOOOOO"][1]["fields"]["fldOdate000000000"] = "2022-06-01"
+    schema[1]["fields"].append({"id": "fldOyear000000000", "name": "Год", "type": "formula",
+        "options": {"isValid": True, "formula": "YEAR(x)", "referencedFieldIds": [],
+                    "result": {"type": "number", "options": {"precision": 0}}}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOyear000000000"] = 2020
+    records["tblOOOOOOOOOOOOOO"][1]["fields"]["fldOyear000000000"] = 2022
     schema[0]["fields"].append(rollup_field(
         "fldNfresh00000000", "СвежихОбор", "fldNequip00000000", "fldOinv0000000000", "number",
-        filters={"conjunction": "and", "conditions": [
-            {"fieldId": "fldOdate000000000", "operator": ">=", "value": 2021, "valueKind": "year"}]}))
+        filters={"operator": "and", "operands": [
+            {"operator": ">=", "operands": ["fldOyear000000000", 2021]}]}))
     write_snapshot(tmp_path, schema, records)
     from app.db import engine
     with engine.begin() as c:
@@ -139,12 +142,71 @@ def test_filter_year_ge(tmp_path):
     assert vals["recN1"] == 1   # только запись 2022 года
 
 
+def test_filter_exact_date_and_does_not_contain(tmp_path):
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOdate000000000", "name": "Дата", "type": "date",
+        "options": {"dateFormat": {"name": "iso", "format": "YYYY-MM-DD"}}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOdate000000000"] = "2020-06-01"
+    records["tblOOOOOOOOOOOOOO"][1]["fields"]["fldOdate000000000"] = "2022-06-01"
+    schema[0]["fields"] += [
+        rollup_field("fldNafter00000000", "После2021", "fldNequip00000000", "fldOinv0000000000", "number",
+            filters={"operator": "and", "operands": [{"operator": ">", "operands": ["fldOdate000000000",
+                {"mode": "exactDate", "timeZone": "Asia/Tomsk", "exactDate": "2021-01-01T00:00:00.000Z"}]}]}),
+        rollup_field("fldNnot1000000000", "БезИнв1", "fldNequip00000000", "fldOinv0000000000", "number",
+            filters={"operator": "and", "operands": [
+                {"operator": "doesNotContain", "operands": ["fldOinv0000000000", "inv-1"]}]}),  # без учёта регистра
+    ]
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        assert compute_field(c, "Номенклатура.После2021", "COUNTA")["recN1"] == 1
+        assert compute_field(c, "Номенклатура.БезИнв1", "COUNTA")["recN1"] == 1
+
+
+def test_link_source_gives_primary_names(tmp_path):
+    # источник — поле-связь: Номенклатура → Оборудование → его связь «Номенклатура» → первичные имена второго звена
+    schema, records = _two_tables()
+    schema[0]["fields"].append(rollup_field(
+        "fldNback000000000", "НазадИмена", "fldNequip00000000", "fldOnom0000000000", "text"))
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        assert compute_field(c, "Номенклатура.НазадИмена", "ARRAYJOIN")["recN1"] == "Кольцо,Кольцо"
+        assert compute_field(c, "Номенклатура.НазадИмена", "COUNTA")["recN1"] == 2
+
+
+def test_rollup_items_are_cells(tmp_path):
+    # Элемент rollup — ячейка связанной записи: ARRAYJOIN оставляет пустые («a,»),
+    # COUNTA по полю-связи считает ячейки, а не имена в них (у recO1 две номенклатуры — одна ячейка).
+    schema, records = _two_tables()
+    records["tblNNNNNNNNNNNNNN"].append({"id": "recN2", "createdTime": "2023-01-01T00:00:00.000Z",
+        "fields": {"fldNnm00000000000": "Втулка", "fldNequip00000000": ["recO1"]}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOnom0000000000"] = ["recN1", "recN2"]
+    schema[1]["fields"].append({"id": "fldOnote000000000", "name": "Прим", "type": "singleLineText"})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOnote000000000"] = "x"
+    schema[0]["fields"] += [
+        rollup_field("fldNback000000000", "НазадИмена", "fldNequip00000000", "fldOnom0000000000", "text"),
+        rollup_field("fldNnote000000000", "Примечания", "fldNequip00000000", "fldOnote000000000", "text")]
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        assert compute_field(c, "Номенклатура.НазадИмена", "COUNTA")["recN1"] == 2
+        assert compute_field(c, "Номенклатура.НазадИмена", "ARRAYJOIN")["recN1"] == "Кольцо, Втулка,Кольцо"
+        assert compute_field(c, "Номенклатура.Примечания", "ARRAYJOIN")["recN1"] == "x,"
+
+
 def test_filter_all_fail_gives_empty_aggregate(tmp_path):
     schema, records = _two_tables()
     schema[0]["fields"].append(rollup_field(
         "fldNnone000000000", "Никого", "fldNequip00000000", "fldOinv0000000000", "number",
-        filters={"conjunction": "and", "conditions": [
-            {"fieldId": "fldOinv0000000000", "operator": "contains", "value": "ZZZ"}]}))
+        filters={"operator": "and", "operands": [
+            {"operator": "=", "operands": ["fldOinv0000000000", "ZZZ"]}]}))
     write_snapshot(tmp_path, schema, records)
     from app.db import engine
     with engine.begin() as c:

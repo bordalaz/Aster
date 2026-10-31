@@ -2,12 +2,12 @@
 Конфиг (связь, источник, фильтр) берём из app_field.options; функцию агрегации — из rollup_aggs.AGG."""
 import json
 from collections import OrderedDict
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import text
 
-from .names import column_name, table_name
+from .names import table_name
 
 
 def _as_dict(v) -> dict:
@@ -30,113 +30,158 @@ def _field_config(conn, key: str) -> dict:
             "options": opts}
 
 
-def _cmp(op: str, a, b) -> bool:
-    return {"=": a == b, ">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b}[op]
+class LinkCell(list):
+    """Значение поля-связи: первичные имена связанных записей. В ARRAYJOIN Airtable пишет ячейку как «a, b»."""
+
+
+def _field_meta(conn, field_at: str):
+    return conn.execute(text(
+        "select f.kind, f.column_name, f.options, t.pg_name, t.airtable_id as t_at "
+        "from app_field f join app_table t on t.id = f.table_id where f.airtable_id = :f"
+    ), {"f": field_at}).first()
+
+
+def _pairs(conn, link_fld: str) -> tuple[list, str]:
+    """[(owner_at, linked_at)] связи link_fld в порядке ячейки Airtable + airtable_id связанной таблицы."""
+    link = conn.execute(text(
+        "select link_table, side from at_link_meta where field_id = :f"
+    ), {"f": link_fld}).first()
+    if not link:
+        raise KeyError(f"нет таблицы пар для связи {link_fld!r}")
+    # сторона владельца: src → его ключ src, порядок pos; dst → ключ dst, порядок rpos
+    me, other, order = ("src", "dst", "pos") if link.side == "src" else ("dst", "src", "rpos")
+    m = _field_meta(conn, link_fld)
+    linked_at = _as_dict(m.options)["linkedTableId"]
+    rows = conn.execute(text(
+        f"select o.airtable_id as owner_at, lk.airtable_id as linked_at from {link.link_table} p "
+        f"join {m.pg_name} o on o.id = p.{me} join {table_name(linked_at)} lk on lk.id = p.{other} "
+        f"order by o.airtable_id, p.{order}"
+    )).all()
+    return [(r.owner_at, r.linked_at) for r in rows], linked_at
+
+
+def _field_values(conn, field_at: str, cache: dict) -> dict:
+    """{airtable_id записи: значение поля} — откуда бы оно ни бралось:
+    колонка, at_computed (formula/rollup/lookup) или связь (первичные имена связанных записей)."""
+    if field_at in cache:
+        return cache[field_at]
+    m = _field_meta(conn, field_at)
+    if m is None:
+        raise KeyError(f"нет поля {field_at!r} в метаданных")
+    opts = _as_dict(m.options)
+    if m.kind == "multipleRecordLinks":
+        cache[field_at] = {}   # ponytail: защита от цикла первичных полей; в базе их нет
+        pairs, linked_at = _pairs(conn, field_at)
+        prim = conn.execute(text(
+            "select f.airtable_id from app_field f join app_table t on t.id = f.table_id "
+            "where t.airtable_id = :t and f.column_name = t.primary_field"), {"t": linked_at}).scalar()
+        names = _field_values(conn, prim, cache)
+        out: dict = {}
+        for owner, linked in pairs:
+            out.setdefault(owner, LinkCell()).append(names.get(linked))
+    elif opts.get("virtual"):
+        out = {r.record_airtable_id: r.value for r in conn.execute(text(
+            "select record_airtable_id, value from at_computed where table_id = :t and field_id = :f"
+        ), {"t": m.t_at, "f": field_at})}
+    else:
+        out = dict(conn.execute(text(f"select airtable_id, {m.column_name} from {m.pg_name}")).all())
+    cache[field_at] = out
+    return out
+
+
+def _plain(v):
+    """Значение ячейки → вид API: дата → 'YYYY-MM-DD' (dateTime — по UTC), Decimal → float."""
+    if isinstance(v, datetime):
+        return v.astimezone(timezone.utc).date().isoformat()
+    if isinstance(v, date):
+        return v.isoformat()
+    if isinstance(v, Decimal):
+        return float(v)
+    return v
+
+
+def _target(conn, fid: str, target):
+    """Операнд фильтра Airtable → значение того же вида, что у ячейки."""
+    if isinstance(target, dict) and target.get("mode") == "exactDate":
+        # ponytail: дата из UTC-строки; верно, пока полночь UTC — тот же день в timeZone (Томск +7)
+        return target["exactDate"][:10]
+    if isinstance(target, str) and target.startswith("sel"):
+        choices = _as_dict(_field_meta(conn, fid).options).get("choices", [])
+        return next((c["name"] for c in choices if c["id"] == target), target)
+    return target
+
+
+_OPS = {"=": lambda a, b: a == b, "!=": lambda a, b: a != b, ">": lambda a, b: a > b,
+        ">=": lambda a, b: a >= b, "<": lambda a, b: a < b, "<=": lambda a, b: a <= b}
 
 
 def _passes(filt: dict, get) -> bool:
-    """filt — options.filters (или вложенная группа); get(field_id) → значение поля связанной записи."""
-    if not filt:
-        return True
-    conj = filt.get("conjunction", "and")
-    results = []
-    for cond in filt.get("conditions", []):
-        if "conjunction" in cond:          # вложенная группа
-            results.append(_passes(cond, get))
-            continue
-        val = get(cond["fieldId"])
-        op, target = cond["operator"], cond.get("value")
-        if cond.get("valueKind") == "year":
-            yr = val.year if isinstance(val, (date, datetime)) else (
-                int(str(val)[:4]) if val else None)
-            results.append(yr is not None and _cmp(op, yr, target))
-        elif op in ("=", ">", ">=", "<", "<="):
-            results.append(val is not None and _cmp(op, val, target))
-        elif op == "contains":
-            results.append(val is not None and str(target) in str(val))
-        elif op == "doesNotContain":
-            results.append(val is None or str(target) not in str(val))
-        else:
-            # неизвестный оператор — не отсекаем, расхождение поймает сверка
-            results.append(True)
-    return all(results) if conj == "and" else any(results)
+    """filt — options.filters Airtable: {"operator": "and"|"or", "operands": [...]} или
+    условие {"operator": op, "operands": [fieldId, значение]}. get(fieldId, значение) → (ячейка, цель)."""
+    op = filt["operator"]
+    if op in ("and", "or"):
+        res = [_passes(c, get) for c in filt["operands"]]
+        return all(res) if op == "and" else any(res)
+    val, target = get(*filt["operands"])
+    vals = [_plain(v) for v in (val if isinstance(val, list) else [val]) if v is not None]
+    if op in ("contains", "doesNotContain"):
+        hit = target.casefold() in ", ".join(map(str, vals)).casefold()   # Airtable — без учёта регистра
+        return hit if op == "contains" else not hit
+    if op in _OPS:
+        # многозначная ячейка (lookup) проходит, если проходит хоть одно значение
+        return any(not isinstance(v, dict) and _OPS[op](v, target) for v in vals)
+    raise ValueError(f"оператор фильтра {op!r} не поддержан")
 
 
 def _condition_fields(filt: dict) -> list:
     """Все fieldId условий фильтра (включая вложенные группы), без повторов."""
-    out: list = []
-    for cond in (filt or {}).get("conditions", []):
-        if "conjunction" in cond:
-            out.extend(_condition_fields(cond))
-        elif cond.get("fieldId"):
-            out.append(cond["fieldId"])
-    return list(dict.fromkeys(out))
+    if not filt:
+        return []
+    if filt["operator"] in ("and", "or"):
+        return list(dict.fromkeys(f for c in filt["operands"] for f in _condition_fields(c)))
+    return [filt["operands"][0]]
 
 
 def _linked_values(conn, cfg: dict) -> "OrderedDict[str, list]":
-    """{airtable_id owner-записи: [значения источника у связанных записей в порядке pos]}."""
-    link = conn.execute(text(
-        "select link_table, side from at_link_meta where field_id = :f"
-    ), {"f": cfg["link_fld"]}).first()
-    if not link:
-        raise KeyError(f"нет таблицы пар для связи {cfg['link_fld']!r}")
-    # сторона владельца: src → его ключ src, порядок pos; dst → ключ dst, порядок rpos
-    me, other, order = ("src", "dst", "pos") if link.side == "src" else ("dst", "src", "rpos")
-
-    link_opts = _as_dict(conn.execute(text("select options from app_field where airtable_id = :f"),
-                                      {"f": cfg["link_fld"]}).scalar())
-    linked_tbl = table_name(link_opts["linkedTableId"])
-    owner_tbl = cfg["owner_tbl"]
-    src_col = column_name(cfg["src_fld"])
-
-    # источник может быть виртуальным (lookup/rollup) — тогда значения из at_computed (см. Task 5).
-    src_is_virtual = conn.execute(text(
-        "select coalesce((options->>'virtual')::boolean, false) from app_field "
-        "where table_id = (select id from app_table where airtable_id = :lt) and airtable_id = :s"
-    ), {"lt": link_opts["linkedTableId"], "s": cfg["src_fld"]}).scalar()
-
+    """{airtable_id owner-записи: [значения источника у связанных записей в порядке ячейки]}."""
+    cache: dict = {}
+    pairs, _ = _pairs(conn, cfg["link_fld"])
+    src = _field_values(conn, cfg["src_fld"], cache)
     filters = cfg["options"].get("filters")
-    cond_cols = {f: column_name(f) for f in _condition_fields(filters)}
-
-    # алиасы без совпадений по регистру (Postgres приводит к нижнему): p — пара, lk — связанная запись
-    pairs_sql = (
-        f"select o.airtable_id as owner_at, p.{order} as pos, lk.airtable_id as linked_at"
-        + ("" if src_is_virtual else f", lk.{src_col} as val")
-        + "".join(f", lk.{col} as c{i}" for i, col in enumerate(cond_cols.values()))
-        + f" from {link.link_table} p "
-        f"join {owner_tbl} o on o.id = p.{me} "
-        f"join {linked_tbl} lk on lk.id = p.{other} "
-        f"order by o.airtable_id, p.{order}"
-    )
-    rows = conn.execute(text(pairs_sql)).all()
-
     if filters:
-        idx = {f: f"c{i}" for i, f in enumerate(cond_cols)}
-        rows = [r for r in rows
-                if _passes(filters, lambda fid, r=r: getattr(r, idx[fid]) if fid in idx else None)]
-
+        conds = {f: _field_values(conn, f, cache) for f in _condition_fields(filters)}
+        pairs = [(o, lk) for o, lk in pairs
+                 if _passes(filters, lambda fid, t, lk=lk: (conds[fid].get(lk), _target(conn, fid, t)))]
     out: "OrderedDict[str, list]" = OrderedDict()
-    if src_is_virtual:
-        comp = {r.record_airtable_id: r.value for r in conn.execute(text(
-            "select record_airtable_id, value from at_computed where table_id = :lt and field_id = :s"
-        ), {"lt": link_opts["linkedTableId"], "s": cfg["src_fld"]})}
-        for r in rows:
-            out.setdefault(r.owner_at, []).append(comp.get(r.linked_at))
-    else:
-        for r in rows:
-            out.setdefault(r.owner_at, []).append(r.val)
+    for owner, linked in pairs:
+        out.setdefault(owner, []).append(src.get(linked))
     # owner-записи без связей тоже должны присутствовать (агрегат пустого списка)
-    for (owner_at,) in conn.execute(text(f"select airtable_id from {owner_tbl}")):
+    for (owner_at,) in conn.execute(text(f"select airtable_id from {cfg['owner_tbl']}")):
         out.setdefault(owner_at, [])
     return out
 
 
 def _aggregate(values: list, func: str):
-    # None = пустое значение Airtable; многозначные источники расплющиваем здесь
+    # None = пустое значение Airtable. Элемент rollup — ячейка связанной записи:
+    # ARRAYJOIN пустые ячейки оставляет («a,,b»), ячейка-связь — одна строка «x, y» и один элемент в COUNTA;
+    # прочие многозначные (lookup) расплющиваем.
+    if func == "ARRAYJOIN":
+        return ",".join(", ".join(str(x) for x in v if x is not None) if isinstance(v, LinkCell)
+                        else ",".join(str(_plain(x)) for x in v if x is not None) if isinstance(v, list)
+                        else "" if v is None else str(_plain(v))
+                        for v in values)
     flat = []
     for v in values:
-        flat.extend(v) if isinstance(v, list) else flat.append(v)
+        if isinstance(v, LinkCell) and func in ("COUNTA", "COUNT"):
+            flat.append(v or None)
+        elif isinstance(v, list):
+            flat.extend(v)
+        else:
+            flat.append(v)
     nonnull = [v for v in flat if v is not None]
+    errors = [v for v in nonnull if isinstance(v, dict)]   # {"specialValue": "NaN"} из formula-источника
+    if errors and func in ("SUM", "MIN", "MAX"):
+        return errors[0]   # Airtable: ошибка в источнике → ошибка в агрегате
     nums = [v for v in nonnull if isinstance(v, (int, float, Decimal)) and not isinstance(v, bool)]
     if func == "SUM":
         return sum(nums) if nums else 0
@@ -145,20 +190,29 @@ def _aggregate(values: list, func: str):
     if func == "COUNT":
         return len(nums)
     if func == "COUNTA_UNIQUE":
-        return len(list(dict.fromkeys(nonnull)))
+        return len(dict.fromkeys(_hashable(v) for v in nonnull))
     if func == "MIN":
-        return min(nonnull) if nonnull else None
+        return min(map(_plain, nonnull)) if nonnull else None
     if func == "MAX":
-        return max(nonnull) if nonnull else None
-    if func == "ARRAYJOIN":
-        return ", ".join(str(v) for v in nonnull)
+        return max(map(_plain, nonnull)) if nonnull else None
     if func == "ARRAYUNIQUE":
         return list(dict.fromkeys(nonnull))
     raise ValueError(f"неизвестная функция агрегации: {func}")
+
+
+def _hashable(v):
+    return json.dumps(v, sort_keys=True, default=str) if isinstance(v, (dict, list)) else v
+
+
+def _out(v):
+    """Результат → вид, в каком его отдаёт API Airtable (так он лежит в at_computed)."""
+    if isinstance(v, list):
+        return [_out(x) for x in v]
+    return _plain(v)
 
 
 def compute_field(conn, key: str, func: str) -> dict:
     """{airtable_id: вычисленное значение} для rollup-поля key с функцией func."""
     cfg = _field_config(conn, key)
     per_owner = _linked_values(conn, cfg)
-    return {owner_at: _aggregate(vals, func) for owner_at, vals in per_owner.items()}
+    return {owner_at: _out(_aggregate(vals, func)) for owner_at, vals in per_owner.items()}
