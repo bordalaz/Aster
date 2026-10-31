@@ -17,5 +17,5 @@ def test_covers_sample_rollups():
     assert AGG["Работы.Начало работ"] == "MIN"
     assert AGG["Оборудование.Дефектоскопия от"] == "MAX"
     assert AGG["Подрядчики.Работ"] == "COUNTA_UNIQUE"
-    assert AGG["Оборудование.Местонахождение"] == "FORMULA_DEFER"
+    assert AGG["Оборудование.Местонахождение"] == "LAST"
     assert AGG["Номенклатура.На ТО"] == "INVALID"

@@ -12,5 +12,5 @@ def test_compute_verify_runs(capsys, loaded_fixture):
 
     code = main(["compute-verify"])
     out = capsys.readouterr().out
-    assert "Вычисляемые (агрегаты)" in out
+    assert "Агрегаты:" in out and "Формулы:" in out
     assert code in (0, 1)   # фикстура может иметь расхождения — важно, что команда отработала

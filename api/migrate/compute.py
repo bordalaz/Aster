@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
+from .formula import LinkCell, evaluate, parse, to_api
 from .names import table_name
 
 
@@ -28,10 +29,6 @@ def _field_config(conn, key: str) -> dict:
     return {"owner_tbl": row.pg_name, "owner_at": row.t_at, "field_at": row.f_at,
             "link_fld": opts.get("recordLinkFieldId"), "src_fld": opts.get("fieldIdInLinkedTable"),
             "options": opts}
-
-
-class LinkCell(list):
-    """Значение поля-связи: первичные имена связанных записей. В ARRAYJOIN Airtable пишет ячейку как «a, b»."""
 
 
 def _field_meta(conn, field_at: str):
@@ -72,21 +69,38 @@ def _field_values(conn, field_at: str, cache: dict) -> dict:
     if m.kind == "multipleRecordLinks":
         cache[field_at] = {}   # ponytail: защита от цикла первичных полей; в базе их нет
         pairs, linked_at = _pairs(conn, field_at)
-        prim = conn.execute(text(
-            "select f.airtable_id from app_field f join app_table t on t.id = f.table_id "
-            "where t.airtable_id = :t and f.column_name = t.primary_field"), {"t": linked_at}).scalar()
-        names = _field_values(conn, prim, cache)
+        names = _primary_names(conn, linked_at, cache)
         out: dict = {}
         for owner, linked in pairs:
             out.setdefault(owner, LinkCell()).append(names.get(linked))
+    elif m.kind == "multipleAttachments":
+        out = {}
+        for rec, att in conn.execute(text(
+                "select record_airtable_id, airtable_att_id from attachment "
+                "where table_id = :t and field_id = :f order by record_airtable_id, pos"),
+                {"t": m.t_at, "f": field_at}):
+            out.setdefault(rec, []).append(att)
     elif opts.get("virtual"):
         out = {r.record_airtable_id: r.value for r in conn.execute(text(
             "select record_airtable_id, value from at_computed where table_id = :t and field_id = :f"
         ), {"t": m.t_at, "f": field_at})}
+        if (opts.get("result") or {}).get("type") == "multipleRecordLinks":
+            # lookup поля-связи: API отдаёт id записей, Airtable показывает их первичные имена
+            names = _primary_names(conn, _as_dict(_field_meta(conn, opts["fieldIdInLinkedTable"]).options)
+                                   ["linkedTableId"], cache)
+            out = {k: LinkCell(names.get(i, i) for i in v) if isinstance(v, list) else v for k, v in out.items()}
     else:
         out = dict(conn.execute(text(f"select airtable_id, {m.column_name} from {m.pg_name}")).all())
     cache[field_at] = out
     return out
+
+
+def _primary_names(conn, table_at: str, cache: dict) -> dict:
+    """{airtable_id записи: значение первичного поля} таблицы table_at."""
+    prim = conn.execute(text(
+        "select f.airtable_id from app_field f join app_table t on t.id = f.table_id "
+        "where t.airtable_id = :t and f.column_name = t.primary_field"), {"t": table_at}).scalar()
+    return _field_values(conn, prim, cache)
 
 
 def _plain(v):
@@ -105,6 +119,8 @@ def _target(conn, fid: str, target):
     if isinstance(target, dict) and target.get("mode") == "exactDate":
         # ponytail: дата из UTC-строки; верно, пока полночь UTC — тот же день в timeZone (Томск +7)
         return target["exactDate"][:10]
+    if isinstance(target, list):
+        return [_target(conn, fid, t) for t in target]
     if isinstance(target, str) and target.startswith("sel"):
         choices = _as_dict(_field_meta(conn, fid).options).get("choices", [])
         return next((c["name"] for c in choices if target == c["id"] or target in c.get("mergedIds", ())),
@@ -128,6 +144,9 @@ def _passes(filt: dict, get) -> bool:
     if op in ("contains", "doesNotContain"):
         hit = target.casefold() in ", ".join(map(str, vals)).casefold()   # Airtable — без учёта регистра
         return hit if op == "contains" else not hit
+    if op in ("isAnyOf", "isNoneOf"):
+        hit = any(v in target for v in vals)
+        return hit if op == "isAnyOf" else not hit
     if op in _OPS:
         # многозначная ячейка (lookup) проходит, если проходит хоть одно значение
         return any(not isinstance(v, dict) and _OPS[op](v, target) for v in vals)
@@ -143,11 +162,13 @@ def _condition_fields(filt: dict) -> list:
     return [filt["operands"][0]]
 
 
-def _linked_values(conn, cfg: dict) -> "OrderedDict[str, list]":
-    """{airtable_id owner-записи: [значения источника у связанных записей в порядке ячейки]}."""
+def _linked_values(conn, cfg: dict, src: dict | None = None) -> "OrderedDict[str, list]":
+    """{airtable_id owner-записи: [значения источника у связанных записей в порядке ячейки]}.
+    src — готовые значения источника {запись: значение} (по умолчанию — поле src_fld)."""
     cache: dict = {}
     pairs, _ = _pairs(conn, cfg["link_fld"])
-    src = _field_values(conn, cfg["src_fld"], cache)
+    if src is None:
+        src = _field_values(conn, cfg["src_fld"], cache)
     filters = cfg["options"].get("filters")
     if filters:
         conds = {f: _field_values(conn, f, cache) for f in _condition_fields(filters)}
@@ -167,10 +188,14 @@ def _aggregate(values: list, func: str):
     # ARRAYJOIN пустые ячейки оставляет («a,,b»), ячейка-связь — одна строка «x, y» и один элемент в COUNTA;
     # прочие многозначные (lookup) расплющиваем.
     if func == "ARRAYJOIN":
-        return ",".join(", ".join(str(x) for x in v if x is not None) if isinstance(v, LinkCell)
-                        else ",".join(str(_plain(x)) for x in v if x is not None) if isinstance(v, list)
-                        else "" if v is None else str(_plain(v))
-                        for v in values)
+        return _join(values, ",")
+    if func == "LAST":
+        # формула-rollup Airtable (сноска ¹): ARRAYJOIN(values,";"), минус одна хвостовая «;», хвост после последней «;»
+        s = _join(values, ";")
+        s = s[:-1] if s.endswith(";") else s
+        return s.rsplit(";", 1)[-1]
+    if func == "FIRST":
+        return _join(values, ",").split(",", 1)[0]   # сноска ²: текст до первой запятой
     flat = []
     for v in values:
         if isinstance(v, LinkCell) and func in ("COUNTA", "COUNT"):
@@ -201,6 +226,13 @@ def _aggregate(values: list, func: str):
     raise ValueError(f"неизвестная функция агрегации: {func}")
 
 
+def _join(values: list, sep: str) -> str:
+    return sep.join(", ".join(str(x) for x in v if x is not None) if isinstance(v, LinkCell)
+                    else sep.join(str(_plain(x)) for x in v if x is not None) if isinstance(v, list)
+                    else "" if v is None else str(_plain(v))
+                    for v in values)
+
+
 def _hashable(v):
     return json.dumps(v, sort_keys=True, default=str) if isinstance(v, (dict, list)) else v
 
@@ -217,3 +249,51 @@ def compute_field(conn, key: str, func: str) -> dict:
     cfg = _field_config(conn, key)
     per_owner = _linked_values(conn, cfg)
     return {owner_at: _out(_aggregate(vals, func)) for owner_at, vals in per_owner.items()}
+
+
+def _refs(node) -> set:
+    if node[0] == "ref":
+        return {node[1]}
+    kids = node[2] if node[0] == "call" else node[2:] if node[0] == "op" else node[1:] if node[0] == "neg" else ()
+    return set().union(*(_refs(k) for k in kids)) if kids else set()
+
+
+def compute_formula(conn, key: str, today) -> dict:
+    """{airtable_id: значение} formula-поля key. Входы — как есть в базе (колонка, at_computed, связь):
+    сверка каждой формулы изолирована, ошибка одной не тянется в зависящие от неё."""
+    cfg = _field_config(conn, key)
+    tree = parse(cfg["options"]["formula"])
+    cache: dict = {}
+    vals = {r: _field_values(conn, r, cache) for r in _refs(tree)}
+    rtype = (cfg["options"].get("result") or {}).get("type")
+    return {rec: to_api(evaluate(tree, lambda f, rec=rec: vals[f].get(rec), today), rtype)
+            for (rec,) in conn.execute(text(f"select airtable_id from {cfg['owner_tbl']}"))}
+
+
+def _api(v):
+    """Элемент lookup → вид API: dateTime — ISO с миллисекундами и Z, дата — YYYY-MM-DD, Decimal — float."""
+    if isinstance(v, datetime):
+        return v.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return _plain(v)
+
+
+def compute_lookup(conn, key: str) -> dict:
+    """{airtable_id: [значения]} lookup-поля: значения источника у связанных записей, расплющенные.
+    Источник-связь API отдаёт id записей — их и возвращаем."""
+    cfg = _field_config(conn, key)
+    src = None
+    if _field_meta(conn, cfg["src_fld"]).kind == "multipleRecordLinks":
+        src = {}
+        for owner, linked in _pairs(conn, cfg["src_fld"])[0]:
+            src.setdefault(owner, []).append(linked)
+    out = {}
+    for owner, vals in _linked_values(conn, cfg, src).items():
+        flat = [x for v in vals for x in (v if isinstance(v, list) else [v])]
+        out[owner] = [_api(x) for x in flat if x is not None]
+    return out
+
+
+def compute_count(conn, key: str) -> dict:
+    """{airtable_id: число связанных записей} count-поля (с фильтром, если задан)."""
+    cfg = _field_config(conn, key)
+    return {owner: len(vals) for owner, vals in _linked_values(conn, cfg, src={}).items()}

@@ -55,22 +55,28 @@ def cmd_verify() -> int:
 
 
 def cmd_compute_verify() -> int:
-    from .verify import verify_computed
+    from datetime import datetime, timezone
+
+    from .verify import verify_computed, verify_formulas
+    # TODAY()/NOW() в Airtable считались в момент выгрузки — берём дату снимка
+    today = datetime.fromtimestamp((SNAP / "complete").stat().st_mtime, timezone.utc).date()
     with engine.connect() as c:
-        rep = verify_computed(c)
+        rep = {"aggregates": verify_computed(c), "formulas": verify_formulas(c, today),
+               "lookups": verify_formulas(c, today, kind="multipleLookupValues"),
+               "counts": verify_formulas(c, today, kind="count"), "today": today}
+    parts = (("Агрегаты", "aggregates"), ("Формулы", "formulas"), ("Lookup", "lookups"), ("Count", "counts"))
+    rep["ok"] = all(rep[p]["ok"] for _, p in parts)
     (SNAP / "report-computed.json").write_text(
         json.dumps(rep, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-    fields = rep["fields"]
-    ok = sum(1 for f in fields.values() if f["status"] == "ok")
-    mm = [k for k, f in fields.items() if f["status"] == "mismatch"]
-    inv = [k for k, f in fields.items() if f["status"] == "invalid"]
-    known = [k for k, f in fields.items() if f["status"] == "known"]
-    print(f"Вычисляемые (агрегаты): полей {len(fields)}, совпало {ok}, "
-          f"с расхождениями {len(mm)}, известных {len(known)}, битых {len(inv)}, "
-          f"formula-отложено {len(rep['skipped']['formula'])}")
-    if mm:
-        print("Расхождения в полях:", ", ".join(mm))
-    print("Сверка агрегатов: OK" if rep["ok"] else f"Есть расхождения, см. {SNAP / 'report-computed.json'}")
+    for title, key in parts:
+        part = rep[key]
+        st = [f["status"] for f in part["fields"].values()]
+        print(f"{title}: полей {len(st)}, совпало {st.count('ok')}, с расхождениями {st.count('mismatch')}, "
+              f"известных {st.count('known')}, битых {st.count('invalid')}, не разобрано {st.count('error')}")
+        bad = [k for k, f in part["fields"].items() if f["status"] in ("mismatch", "error")]
+        if bad:
+            print("  Расхождения:", ", ".join(bad))
+    print("Сверка вычисляемых: OK" if rep["ok"] else f"Есть расхождения, см. {SNAP / 'report-computed.json'}")
     return 0 if rep["ok"] else 1
 
 
