@@ -4,7 +4,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import Boolean, MetaData, Table, func, select, text, update
+from sqlalchemy import Boolean, MetaData, Table, bindparam, func, select, text, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError
 
 from . import computed
@@ -73,20 +74,46 @@ def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = De
             bad = {k for k, v in body.values.items() if isinstance(v, bool) and not isinstance(t.c[k].type, Boolean)}
             if bad:
                 raise HTTPException(422, "Неверное значение: " + ", ".join(sorted(bad)))
-            row = c.execute(
-                update(t)
-                .where(t.c.id == record_id, t.c.updated_at == body.updated_at)
-                .values(**body.values, updated_at=func.now(), updated_by=user["id"])
-                .returning(t.c.id, t.c.updated_at)
-            ).first()
-            if not row:
+            cols = sorted(body.values)
+            as_json = [func.to_jsonb(t.c[k]).label(k) for k in cols]   # значения в JSON — как их хранит история
+            mine = (t.c.id == record_id, t.c.updated_at == body.updated_at)
+            old = c.execute(select(t.c.id, *as_json).where(*mine).with_for_update()).first()
+            if not old:
                 if c.execute(select(t.c.id).where(t.c.id == record_id)).first():
                     raise HTTPException(409, "Запись уже изменили — обновите и повторите")
                 raise HTTPException(404, "Нет такой записи")
-            res = dict(row._mapping)
+            row = c.execute(
+                update(t).where(*mine)
+                .values(**body.values, updated_at=func.now(), updated_by=user["id"])
+                .returning(t.c.id, t.c.updated_at, *as_json)
+            ).first()
+            changes = [{"t": table_id, "r": record_id, "c": k, "o": old._mapping[k], "n": row._mapping[k], "u": user["id"]}
+                       for k in cols if old._mapping[k] != row._mapping[k]]
+            if changes:   # R11: только реально изменённые поля
+                c.execute(text(
+                    "insert into app_change (table_id, record_id, column_name, old, new, user_id) "
+                    "values (:t, :r, :c, :o, :n, :u)"
+                ).bindparams(bindparam("o", type_=JSONB), bindparam("n", type_=JSONB)), changes)
+            res = {"id": row.id, "updated_at": row.updated_at}
         computed.invalidate()   # после commit: зависящие от правки формулы и итоги пересчитаются
         return res
     except DBAPIError:
         # не отдаём текст ошибки БД наружу (раскрывает структуру) — деталь уходит в лог
         log.warning("patch_record %s/%s отклонён БД", table_id, record_id, exc_info=True)
         raise HTTPException(422, "Неверное значение поля")
+
+
+@router.get("/{table_id}/records/{record_id}/history")
+def history(table_id: int, record_id: int, user: dict = Depends(active_user)):
+    """R11: кто, когда, какое поле, было → стало; новые сверху."""
+    with engine.connect() as c:
+        table_title(c, table_id, user)
+        rows = c.execute(text(
+            "select ch.at, ch.column_name, coalesce(f.title, ch.column_name) as field, ch.old, ch.new, "
+            "coalesce(u.name, 'система') as user "
+            "from app_change ch "
+            "left join app_field f on f.table_id = ch.table_id and f.column_name = ch.column_name "
+            "left join app_user u on u.id = ch.user_id "
+            "where ch.table_id = :t and ch.record_id = :r order by ch.at desc, ch.id desc"
+        ), {"t": table_id, "r": record_id})
+        return [r._asdict() for r in rows]
