@@ -37,6 +37,8 @@ from app.db import engine  # noqa: E402
 @pytest.fixture(autouse=True)
 def clean():
     yield
+    from app import computed
+    computed.reset()   # кеш вычисляемых — на процесс; между тестами данные другие
     with engine.begin() as c:
         c.execute(text("truncate app_user, app_session, app_table, app_field, app_view restart identity cascade"))
         c.execute(text("drop table if exists zip_test"))

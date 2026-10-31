@@ -1,3 +1,5 @@
+import { displayValue } from '../grid/cells.js'
+
 const TEXT = new Set(['singleLineText', 'email', 'url', 'phoneNumber'])
 const MULTILINE = new Set(['multilineText', 'richText'])
 const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'duration'])
@@ -8,7 +10,7 @@ export default function FieldEditor({ field, value, onChange }) {
   const label = <label htmlFor={id} style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{field.title}</label>
 
   if (!field.editable) {
-    return <div>{label}<div id={id} style={{ padding: '6px 0' }}>{value == null ? '—' : Array.isArray(value) ? value.join(', ') : String(value)}</div></div>
+    return <div>{label}<div id={id} style={{ padding: '6px 0' }}>{displayValue(field, value)}</div></div>
   }
   if (field.kind === 'checkbox') {
     return <div><label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

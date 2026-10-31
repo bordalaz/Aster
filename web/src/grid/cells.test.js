@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { GridCellKind } from '@glideapps/glide-data-grid'
-import { toCell, fromCell } from './cells.js'
+import { toCell, fromCell, displayValue } from './cells.js'
 
 const fText = { kind: 'singleLineText', editable: true }
 const fNum = { kind: 'number', editable: true }
@@ -40,4 +40,51 @@ test('null → пустая строка', () => {
 test('fromCell достаёт data', () => {
   expect(fromCell(fNum, { kind: GridCellKind.Number, data: 9 })).toBe(9)
   expect(fromCell(fCheck, { kind: GridCellKind.Boolean, data: false })).toBe(false)
+})
+
+const fFormulaNum = { kind: 'formula', editable: false, options: { result: { type: 'number' } } }
+const fFormulaText = { kind: 'formula', editable: false, options: { result: { type: 'singleLineText' } } }
+const fCount = { kind: 'count', editable: false, options: {} }
+const fLookupLink = { kind: 'multipleLookupValues', editable: false, options: { result: { type: 'multipleRecordLinks' } } }
+const fLookupText = { kind: 'multipleLookupValues', editable: false, options: { result: { type: 'singleLineText' } } }
+
+test('формула-число — Number-ячейка, только чтение', () => {
+  const c = toCell(fFormulaNum, 2.5)
+  expect(c.kind).toBe(GridCellKind.Number)
+  expect(c.allowOverlay).toBe(false)
+})
+
+test('count — число', () => {
+  expect(toCell(fCount, 3).kind).toBe(GridCellKind.Number)
+})
+
+test('NaN, Infinity и #ERROR! показываются текстом', () => {
+  expect(toCell(fFormulaNum, { specialValue: 'NaN' }).displayData).toBe('NaN')
+  expect(toCell(fFormulaNum, { specialValue: 'Infinity' }).displayData).toBe('∞')
+  expect(toCell(fFormulaText, { error: '#ERROR!' }).displayData).toBe('#ERROR!')
+})
+
+test('lookup текста — через запятую; lookup связи — пусто до этапа 2 (там id записей)', () => {
+  expect(toCell(fLookupText, ['a', 'b']).displayData).toBe('a, b')
+  expect(toCell(fLookupLink, ['recA']).displayData).toBe('')
+})
+
+test('displayValue для карточки', () => {
+  expect(displayValue(fFormulaText, { error: '#ERROR!' })).toBe('#ERROR!')
+  expect(displayValue(fFormulaText, null)).toBe('—')
+  expect(displayValue(fLookupText, ['a', 'b'])).toBe('a, b')
+})
+
+test('пользователь Airtable (lastModifiedBy и пр.) — по имени', () => {
+  const f = { kind: 'lastModifiedBy', editable: false, options: {} }
+  expect(toCell(f, { id: 'usr1', name: 'Teka Waqa', email: 'x@y' }).displayData).toBe('Teka Waqa')
+  expect(displayValue({ kind: 'multipleCollaborators', editable: false }, [{ name: 'А' }, { name: 'Б' }])).toBe('А, Б')
+})
+
+test('число показывается с точностью поля, без шума float', () => {
+  const f = { kind: 'formula', editable: false, options: { result: { type: 'currency', options: { precision: 2 } } } }
+  expect(toCell(f, 22966384.400000006).displayData).toBe('22966384.40')
+  expect(displayValue(f, 22966384.400000006)).toBe('22966384.40')
+  const noPrec = { kind: 'rollup', editable: false, options: { result: { type: 'number' } } }
+  expect(toCell(noPrec, 0.1 + 0.2).displayData).toBe('0.3')
 })

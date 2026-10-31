@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 
-// Поля таблицы (без виртуальных — у них нет данных в записях) + строки + точечный PATCH.
-export function useRecords(tableId) {
+// Вычисляемые поля API считает сам и отдаёт; связи и вложения — пока нет (этап 2).
+const COMPUTED = new Set(['formula', 'rollup', 'multipleLookupValues', 'count'])
+// Сервер пересчитывает формулы в фоне (~6 с на всю базу) — после правки перечитываем строки.
+// ponytail: фиксированная задержка; если пересчёт станет дольше — отдавать версию расчёта и ждать её
+const REFRESH_MS = 7000
+
+// Поля таблицы + строки + точечный PATCH.
+export function useRecords(tableId, refreshMs = REFRESH_MS) {
   const [fields, setFields] = useState([])
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -13,12 +19,19 @@ export function useRecords(tableId) {
       api(`/api/tables/${tableId}/fields`),
       api(`/api/tables/${tableId}/records`),
     ])
-    setFields(fs.filter(f => !f.options?.virtual))
+    setFields(fs.filter(f => !f.options?.virtual || COMPUTED.has(f.kind)))
     setRows(rs)
     setLoading(false)
   }, [tableId])
 
   useEffect(() => { load() }, [load])
+
+  // тихо, без «Загрузка…»: строки меняются на месте
+  const refreshRows = useCallback(async () => {
+    setRows(await api(`/api/tables/${tableId}/records`))
+  }, [tableId])
+  const timer = useRef(null)
+  useEffect(() => () => clearTimeout(timer.current), [])
 
   // row — строка, которую видел пользователь (нужен её updated_at для оптимистичной блокировки).
   const patch = useCallback(async (row, values) => {
@@ -27,11 +40,13 @@ export function useRecords(tableId) {
         method: 'PATCH', body: { updated_at: row.updated_at, values },
       })
       setRows(rs => rs.map(r => r.id === row.id ? { ...r, ...values, updated_at: res.updated_at } : r))
+      clearTimeout(timer.current)   // серия правок — одно перечитывание после последней
+      timer.current = setTimeout(refreshRows, refreshMs)
     } catch (e) {
       if (e.status === 409) await load()  // кто-то изменил запись — показываем свежую
       throw e
     }
-  }, [tableId, load])
+  }, [tableId, load, refreshRows, refreshMs])
 
   return { fields, rows, loading, patch, reload: load }
 }
