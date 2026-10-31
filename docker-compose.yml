@@ -17,6 +17,10 @@ services:
       DATABASE_URL: postgresql+psycopg://bd:${POSTGRES_PASSWORD}@db/bd
       COOKIE_SECURE: ${COOKIE_SECURE:-1}
       AIRTABLE_TOKEN: ${AIRTABLE_TOKEN:-}
+      # R7: офисная сеть (CIDR через запятую; пусто — частные сети). За обратным прокси
+      # обязательно TRUSTED_PROXIES — иначе все придут с адреса прокси (один лимит входа на всех)
+      OFFICE_NETS: ${OFFICE_NETS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     depends_on:
       db: { condition: service_healthy }
     # ponytail: код монтируется для разработки; для NAS — отдельный compose в этапе 3

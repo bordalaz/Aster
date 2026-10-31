@@ -3,6 +3,9 @@ import hmac
 import ipaddress
 import os
 import secrets
+import threading
+import time
+from collections import defaultdict, deque
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -36,19 +39,81 @@ _PRIVATE = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,::1/128"
 OUTSIDE = "Вход вне офиса доступен только администраторам"
 
 
-def in_office(host: str | None) -> bool:
-    """R7. ponytail: адрес — прямой клиент; за обратным прокси (NAS, этап 3) брать доверенный X-Forwarded-For."""
+def _ip(host: str | None):
     try:
-        ip = ipaddress.ip_address(host or "")
+        return ipaddress.ip_address((host or "").strip())
     except ValueError:
-        return False
-    nets = os.environ.get("OFFICE_NETS") or _PRIVATE
-    return any(ip in ipaddress.ip_network(n.strip()) for n in nets.split(",") if n.strip())
+        return None
+
+
+def _in(ip, nets: str) -> bool:
+    return ip is not None and any(ip in ipaddress.ip_network(n.strip()) for n in nets.split(",") if n.strip())
+
+
+def client_ip(request: Request) -> str:
+    """Настоящий адрес клиента. X-Forwarded-For верим только от прокси из TRUSTED_PROXIES:
+    идём по цепочке справа и берём первый адрес не из доверенных (левые части клиент подделывает сам)."""
+    direct = request.client.host if request.client else ""
+    trusted = os.environ.get("TRUSTED_PROXIES", "")
+    if not trusted or not _in(_ip(direct), trusted):
+        return direct
+    for hop in reversed(request.headers.get("x-forwarded-for", "").split(",")):
+        if not _in(_ip(hop), trusted):
+            return hop.strip()
+    return direct
+
+
+def in_office(host: str | None) -> bool:
+    """R7: адрес в OFFICE_NETS (по умолчанию — частные сети)."""
+    return _in(_ip(host), os.environ.get("OFFICE_NETS") or _PRIVATE)
 
 
 def check_office(request: Request, role: str) -> None:
-    if role not in ADMINS and not in_office(request.client and request.client.host):
+    if role not in ADMINS and not in_office(client_ip(request)):
         raise HTTPException(403, OUTSIDE)
+
+
+# Лимит неудачных входов: 5 на пару (адрес, логин) и 30 на адрес за 15 минут.
+# По паре, а не по логину — иначе чужой мог бы заблокировать вход любому сотруднику.
+# ponytail: память одного процесса (как computed.py); при нескольких воркерах — таблица в БД
+WINDOW, PER_LOGIN, PER_IP = 15 * 60, 5, 30
+_fails: dict = defaultdict(deque)
+_lock = threading.Lock()
+
+
+def reset_login_limits() -> None:
+    with _lock:
+        _fails.clear()
+
+
+def _recent(key, now):
+    q = _fails.get(key)
+    while q and q[0] < now - WINDOW:
+        q.popleft()
+    if not q:
+        _fails.pop(key, None)   # не копим пустые ключи от перебора случайных логинов
+        return deque()
+    return q
+
+
+def _check_limit(ip: str, login: str) -> None:
+    now = time.monotonic()
+    with _lock:
+        pair, per_ip = _recent((ip, login), now), _recent(ip, now)
+        if len(pair) >= PER_LOGIN or len(per_ip) >= PER_IP:
+            wait = int((min(pair[0] if len(pair) >= PER_LOGIN else now,
+                            per_ip[0] if len(per_ip) >= PER_IP else now) + WINDOW - now) // 60) + 1
+            raise HTTPException(429, f"Слишком много попыток входа. Повторите через {wait} мин.")
+
+
+def _record(ip: str, login: str, ok: bool) -> None:
+    with _lock:
+        if ok:
+            _fails.pop((ip, login), None)
+        else:
+            now = time.monotonic()
+            _fails[(ip, login)].append(now)
+            _fails[ip].append(now)
 
 
 def current_user(request: Request) -> dict:
@@ -91,9 +156,10 @@ class LoginBody(BaseModel):
     password: str
 
 
-# ponytail: без ограничения попыток входа — внутренняя сеть, ~50 человек; добавить, если откроем доступ снаружи (В1)
 @router.post("/login")
 def login(body: LoginBody, request: Request, response: Response):
+    ip, key = client_ip(request), body.login.strip().lower()
+    _check_limit(ip, key)   # до scrypt: перебор не тратит CPU
     with engine.begin() as c:
         u = c.execute(
             text("select id, role, blocked, password_hash from app_user where login = :l"), {"l": body.login}
@@ -101,7 +167,9 @@ def login(body: LoginBody, request: Request, response: Response):
         # scrypt гоняем в обеих ветках (константное время против энумерации логинов)
         ok = check_password(body.password, u.password_hash if u else _DUMMY_HASH)
         if not u or not ok or u.blocked:
+            _record(ip, key, False)
             raise HTTPException(401, "Неверный логин или пароль")
+        _record(ip, key, True)
         check_office(request, u.role)   # после пароля: роль не раскрываем подбором
         token = secrets.token_urlsafe(32)
         c.execute(text("delete from app_session where expires_at < now()"))
