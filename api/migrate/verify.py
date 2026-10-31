@@ -164,6 +164,8 @@ def _equal(got, want) -> bool:
         return abs(got - want) <= 1e-6 * max(1, abs(want))   # относительный допуск: суммы в рублях большие
     if isinstance(want, list) and want and all(isinstance(w, dict) and "url" in w for w in want):
         want = [w["id"] for w in want]   # вложения — по id: url у Airtable временный
+    if isinstance(got, list) and isinstance(want, list) and len(got) == len(want):
+        return all(_equal(g, w) for g, w in zip(got, want))   # lookup чисел — с тем же допуском
     if got in (0, "", []) and want is None:   # пустой агрегат <-> Airtable прислал пусто
         return True
     return got == want

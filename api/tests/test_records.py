@@ -86,14 +86,15 @@ def test_patch_wrong_kind_values(logged, zip_table):
         assert r.status_code == 422, bad
 
 
-def test_records_skip_virtual_fields(logged, loaded_fixture):
+def test_records_computed_in_links_not(logged, loaded_fixture):
+    # вычисляемые поля считает движок и отдаёт; связи — пока нет (этап 2)
     from migrate.names import column_name
 
     r = logged.get(f"/api/tables/{loaded_fixture['tblBBBBBBBBBBBBBB']}/records")
     assert r.status_code == 200
     keys = set(r.json()[0])
     assert column_name("fldBinv0000000000") in keys
-    assert column_name("fldBformula000000") not in keys
+    assert column_name("fldBformula000000") in keys
     assert column_name("fldBnom0000000000") not in keys
 
 
@@ -107,5 +108,38 @@ def test_records_skip_virtual_even_if_column_exists(logged, loaded_fixture):
     col = column_name("fldBformula000000")
     with engine.begin() as c:
         c.execute(sql(f"alter table {table_name('tblBBBBBBBBBBBBBB')} add column {col} text"))
+        c.execute(sql(f"update {table_name('tblBBBBBBBBBBBBBB')} set {col} = 'STALE'"))
     r = logged.get(f"/api/tables/{loaded_fixture['tblBBBBBBBBBBBBBB']}/records")
-    assert col not in r.json()[0]
+    assert r.json()[0][col] != "STALE"   # значение — от движка, не из колонки
+
+
+def test_records_include_live_computed(logged, tmp_path):
+    # formula Оборудование.Метка = {Инв} & "!" — в ответе /records, пересчёт после правки входа
+    from sqlalchemy import text as sql
+
+    from app import computed
+    from app.db import engine
+    from migrate.load import load_snapshot
+    from migrate.schema import apply_schema
+    from tests.compute_fixtures import write_snapshot
+    from tests.test_compute import _two_tables
+
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOmark000000000", "name": "Метка", "type": "formula", "options": {
+        "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+        "formula": '{fldOinv0000000000} & "!"'}})
+    write_snapshot(tmp_path, schema, records)
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        tid = c.execute(sql("select id from app_table where airtable_id = 'tblOOOOOOOOOOOOOO'")).scalar()
+    computed.reset()
+    rows = logged.get(f"/api/tables/{tid}/records").json()
+    assert [r["f_fldomark000000000"] for r in rows] == ["INV-1!", "INV-2!"]
+    assert "airtable_id" not in rows[0]
+
+    r = logged.patch(f"/api/tables/{tid}/records/{rows[0]['id']}",
+                     json={"updated_at": rows[0]["updated_at"], "values": {"f_fldoinv0000000000": "NEW"}})
+    assert r.status_code == 200
+    computed.wait()   # фоновый пересчёт после записи
+    assert logged.get(f"/api/tables/{tid}/records").json()[0]["f_fldomark000000000"] == "NEW!"
