@@ -256,6 +256,85 @@ def test_known_divergence_not_failing(tmp_path):
     assert rep["ok"]
 
 
+def test_last_and_first_value(tmp_path):
+    # «Последнее значение» (сноска ¹): ARRAYJOIN через «;», хвостовая «;» отрезается, берётся хвост после
+    # последней «;». «Первое» (²): ARRAYJOIN, текст до первой запятой.
+    from migrate.compute import _aggregate
+    assert _aggregate(["a", "b", "c"], "LAST") == "c"
+    assert _aggregate(["a", "b", None], "LAST") == "b"        # одна пустая в конце съедается вместе с «;»
+    assert _aggregate(["a", None, None], "LAST") == ""
+    assert _aggregate(["x; y", "z"], "LAST") == "z"
+    assert _aggregate(["x; y"], "LAST") == " y"               # «;» внутри значения тоже режет — как в Airtable
+    assert _aggregate([], "LAST") == ""
+    assert _aggregate(["WPR 120", "ГК 172"], "FIRST") == "WPR 120"
+    assert _aggregate(["ГК 172"], "FIRST") == "ГК 172"
+
+
+def test_formula_over_link_and_rollup(tmp_path):
+    # Оборудование.Имя = {Номенклатура} & "_" & {ЦенаИзНом}: связь даёт первичное имя, rollup — из at_computed
+    from datetime import date
+    from migrate.compute import compute_formula
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOname000000000", "name": "Имя", "type": "formula", "options": {
+        "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+        "formula": '{fldOnom0000000000} & "_" & {fldOprice00000000}'}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOprice00000000"] = 5.5   # ожидание rollup из Airtable
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        got = compute_formula(c, "Оборудование.Имя", date(2026, 10, 31))
+    assert got == {"recO1": "Кольцо_5.5", "recO2": "Кольцо_"}
+
+
+def _with_lookups(schema):
+    # Номенклатура: lookup инв. номеров, lookup поля-связи «Номенклатура» оборудования, count оборудования
+    schema[0]["fields"] += [
+        {"id": "fldNlkinv00000000", "name": "Инвентарные", "type": "multipleLookupValues", "options": {
+            "isValid": True, "recordLinkFieldId": "fldNequip00000000", "fieldIdInLinkedTable": "fldOinv0000000000",
+            "result": {"type": "singleLineText"}}},
+        {"id": "fldNlklnk00000000", "name": "НомОборудования", "type": "multipleLookupValues", "options": {
+            "isValid": True, "recordLinkFieldId": "fldNequip00000000", "fieldIdInLinkedTable": "fldOnom0000000000",
+            "result": {"type": "multipleRecordLinks", "options": {}}}},
+        {"id": "fldNcount00000000", "name": "Штук", "type": "count", "options": {
+            "isValid": True, "recordLinkFieldId": "fldNequip00000000"}},
+        {"id": "fldNfml0000000000", "name": "Текст", "type": "formula", "options": {
+            "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+            "formula": "{fldNlklnk00000000} & \"\""}},
+    ]
+
+
+def test_lookup_and_count(tmp_path):
+    from datetime import date
+    from migrate.compute import compute_count, compute_formula, compute_lookup
+    schema, records = _two_tables()
+    _with_lookups(schema)
+    records["tblNNNNNNNNNNNNNN"][0]["fields"]["fldNlklnk00000000"] = ["recN1", "recN1"]   # API: id записей
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        assert compute_lookup(c, "Номенклатура.Инвентарные")["recN1"] == ["INV-1", "INV-2"]
+        assert compute_lookup(c, "Номенклатура.НомОборудования")["recN1"] == ["recN1", "recN1"]  # id, как в API
+        assert compute_count(c, "Номенклатура.Штук")["recN1"] == 2
+        # в формуле lookup поля-связи — имена, а не id
+        assert compute_formula(c, "Номенклатура.Текст", date(2026, 10, 31))["recN1"] == "Кольцо, Кольцо"
+
+
+def test_filter_is_any_none_of_and_attachment_equality():
+    from migrate.compute import _passes
+    from migrate.verify import _equal
+    f = {"operator": "isNoneOf", "operands": ["fldX", ["Брак", "Списан"]]}
+    assert _passes(f, lambda fid, t: ("В эксплуатации", t))
+    assert not _passes(f, lambda fid, t: ("Брак", t))
+    assert _passes({"operator": "isAnyOf", "operands": ["fldX", ["Брак"]]}, lambda fid, t: ("Брак", t))
+    # вложения сравниваем по id: url у Airtable временный
+    assert _equal(["attA", "attB"], [{"id": "attA", "url": "https://x/1"}, {"id": "attB", "url": "https://x/2"}])
+    assert not _equal(["attA"], [{"id": "attB", "url": "https://x/1"}])
+
+
 def test_verify_matches_oracle(tmp_path):
     # recO1 совпадает с ожиданием (5.5), recO2 нет (99) — сверка должна поймать второе.
     schema, records = _two_tables()
