@@ -80,3 +80,11 @@ test('пользователь Airtable (lastModifiedBy и пр.) — по им�
   expect(toCell(f, { id: 'usr1', name: 'Teka Waqa', email: 'x@y' }).displayData).toBe('Teka Waqa')
   expect(displayValue({ kind: 'multipleCollaborators', editable: false }, [{ name: 'А' }, { name: 'Б' }])).toBe('А, Б')
 })
+
+test('число показывается с точностью поля, без шума float', () => {
+  const f = { kind: 'formula', editable: false, options: { result: { type: 'currency', options: { precision: 2 } } } }
+  expect(toCell(f, 22966384.400000006).displayData).toBe('22966384.40')
+  expect(displayValue(f, 22966384.400000006)).toBe('22966384.40')
+  const noPrec = { kind: 'rollup', editable: false, options: { result: { type: 'number' } } }
+  expect(toCell(noPrec, 0.1 + 0.2).displayData).toBe('0.3')
+})

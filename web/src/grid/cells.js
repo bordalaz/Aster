@@ -18,6 +18,13 @@ function kindOf(field) {
   return field.kind
 }
 
+// Число → текст: точность поля как в Airtable; без неё — срезаем шум float (0.1+0.2).
+function numText(field, n) {
+  const p = field.kind === 'count' ? 0
+    : COMPUTED.has(field.kind) ? field.options?.result?.options?.precision : field.options?.precision
+  return p == null ? String(Number(n.toPrecision(15))) : n.toFixed(p)
+}
+
 // Значение → текст: NaN/Infinity и ошибка Airtable приходят объектом.
 function asText(field, value) {
   if (value == null) return ''
@@ -26,6 +33,7 @@ function asText(field, value) {
   if (value.error) return value.error
   if (typeof value === 'object' && !Array.isArray(value) && value.name) return value.name   // пользователь Airtable
   if (Array.isArray(value)) return value.map(v => asText(field, v)).filter(Boolean).join(', ')
+  if (typeof value === 'number') return numText(field, value)
   return String(value)
 }
 
@@ -42,7 +50,7 @@ export function toCell(field, value) {
   if (NUMBER.has(kind) && (value == null || typeof value === 'number')) {
     return {
       kind: GridCellKind.Number, data: value ?? undefined,
-      displayData: value == null ? '' : String(value), allowOverlay: editable,
+      displayData: value == null ? '' : numText(field, value), allowOverlay: editable,
     }
   }
   const text = asText(field, value)
