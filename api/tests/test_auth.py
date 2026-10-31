@@ -26,7 +26,7 @@ def test_login_me_logout(logged):
     r = logged.get("/api/auth/me")
     assert r.status_code == 200
     assert r.json()["login"] == "ivan"
-    assert r.json()["role"] == "user"
+    assert r.json()["role"] == "admin"
     assert "password_hash" not in r.json()
     assert logged.post("/api/auth/logout").status_code == 200
     assert logged.get("/api/auth/me").status_code == 401

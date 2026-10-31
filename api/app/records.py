@@ -8,11 +8,13 @@ from sqlalchemy import Boolean, MetaData, Table, func, select, text, update
 from sqlalchemy.exc import DBAPIError
 
 from . import computed
-from .auth import current_user
+from .access import can_edit, table_title
+from .auth import active_user
 from .db import engine
 from migrate.compute import COMPUTED_KINDS
 
-router = APIRouter(prefix="/api/tables", dependencies=[Depends(current_user)])
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/tables")
 
 
 def load_table(c, table_id: int):
@@ -31,8 +33,9 @@ def load_table(c, table_id: int):
 
 # ponytail: отдаём все строки сразу (13,6 тыс. ≈ 3 МБ JSON) — сетке нужен весь набор; постранично — если упрёмся
 @router.get("/{table_id}/records")
-def list_records(table_id: int):
+def list_records(table_id: int, user: dict = Depends(active_user)):
     with engine.connect() as c:
+        table_title(c, table_id, user)
         t, fields = load_table(c, table_id)
         cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields if f.column_name in t.c and not f.options.get("virtual")]
         if "airtable_id" not in t.c:
@@ -55,9 +58,13 @@ class PatchBody(BaseModel):
 
 
 @router.patch("/{table_id}/records/{record_id}")
-def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = Depends(current_user)):
+def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = Depends(active_user)):
     try:
         with engine.begin() as c:
+            if not can_edit(user, table_title(c, table_id, user)):
+                log.warning("правка запрещена: %s (%s) → таблица %s, запись %s",
+                            user["login"], user["role"], table_id, record_id)   # E4
+                raise HTTPException(403, "Нет прав на правку этой таблицы")
             t, fields = load_table(c, table_id)
             bad = set(body.values) - {f.column_name for f in fields if f.editable}
             if bad:
@@ -81,5 +88,5 @@ def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = De
         return res
     except DBAPIError:
         # не отдаём текст ошибки БД наружу (раскрывает структуру) — деталь уходит в лог
-        logging.getLogger(__name__).warning("patch_record %s/%s отклонён БД", table_id, record_id, exc_info=True)
+        log.warning("patch_record %s/%s отклонён БД", table_id, record_id, exc_info=True)
         raise HTTPException(422, "Неверное значение поля")
