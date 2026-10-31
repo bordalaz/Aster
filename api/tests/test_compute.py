@@ -5,6 +5,7 @@ from sqlalchemy import text
 from migrate.load import load_snapshot
 from migrate.schema import apply_schema
 from migrate.compute import compute_field
+from migrate.verify import verify_computed
 from tests.compute_fixtures import write_snapshot, link_field, rollup_field
 
 
@@ -151,3 +152,36 @@ def test_filter_all_fail_gives_empty_aggregate(tmp_path):
         load_snapshot(c, tmp_path)
         vals = compute_field(c, "Номенклатура.Никого", "COUNTA")
     assert vals["recN1"] == 0   # владелец остаётся, агрегат пустого списка
+
+
+def test_verify_matches_oracle(tmp_path):
+    # recO1 совпадает с ожиданием (5.5), recO2 нет (99) — сверка должна поймать второе.
+    schema, records = _two_tables()
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        c.execute(text("insert into at_computed values "
+                       "('tblOOOOOOOOOOOOOO','recO1','fldOprice00000000', to_jsonb(5.5)), "
+                       "('tblOOOOOOOOOOOOOO','recO2','fldOprice00000000', to_jsonb(99)) "
+                       "on conflict (table_id, record_airtable_id, field_id) do update set value = excluded.value"))
+        rep = verify_computed(c, only={"Оборудование.ЦенаИзНом": "SUM"})
+    f = rep["fields"]["Оборудование.ЦенаИзНом"]
+    assert f["checked"] == 2
+    assert f["mismatches"] == 1
+    assert any(m["record"] == "recO2" for m in f["examples"])
+
+
+def test_invalid_field_reported(tmp_path):
+    schema, records = _two_tables()
+    bad = rollup_field("fldObad0000000000", "Битое", "fldOnom0000000000", "fldNprice00000000")
+    bad["options"]["isValid"] = False
+    schema[1]["fields"].append(bad)
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        rep = verify_computed(c, only={"Оборудование.Битое": "COUNTA"})
+    assert rep["fields"]["Оборудование.Битое"]["status"] == "invalid"

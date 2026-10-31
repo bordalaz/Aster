@@ -54,13 +54,32 @@ def cmd_verify() -> int:
     return 0 if rep["ok"] else 1
 
 
+def cmd_compute_verify() -> int:
+    from .verify import verify_computed
+    with engine.connect() as c:
+        rep = verify_computed(c)
+    (SNAP / "report-computed.json").write_text(
+        json.dumps(rep, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    fields = rep["fields"]
+    ok = sum(1 for f in fields.values() if f["status"] == "ok")
+    mm = [k for k, f in fields.items() if f["status"] == "mismatch"]
+    inv = [k for k, f in fields.items() if f["status"] == "invalid"]
+    print(f"Вычисляемые (агрегаты): полей {len(fields)}, совпало {ok}, "
+          f"с расхождениями {len(mm)}, битых {len(inv)}, "
+          f"formula-отложено {len(rep['skipped']['formula'])}")
+    if mm:
+        print("Расхождения в полях:", ", ".join(mm))
+    print("Сверка агрегатов: OK" if rep["ok"] else f"Есть расхождения, см. {SNAP / 'report-computed.json'}")
+    return 0 if rep["ok"] else 1
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m migrate", description=__doc__)
-    p.add_argument("command", choices=["fetch", "load", "verify", "all"])
+    p.add_argument("command", choices=["fetch", "load", "verify", "compute-verify", "all"])
     p.add_argument("--no-files", action="store_true", help="без вложений; докачать — тот же fetch без флага")
     a = p.parse_args(argv)
     fetch = lambda: cmd_fetch(files=not a.no_files)  # noqa: E731
-    steps = {"fetch": [fetch], "load": [cmd_load], "verify": [cmd_verify],
+    steps = {"fetch": [fetch], "load": [cmd_load], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
              "all": [fetch, cmd_load, cmd_verify]}[a.command]
     for step in steps:
         code = step()
