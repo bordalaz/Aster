@@ -23,7 +23,7 @@ export default function Workspace({ user, onLogout }) {
           <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{user?.name}</span>
           <button className="btn" onClick={onLogout}>Выход</button>
         </header>
-        {activeId && <TableView tableId={activeId} />}
+        {activeId && <TableView tableId={activeId} primaryField={tables.find(t => t.id === activeId)?.primary_field} />}
       </main>
     </div>
   )
