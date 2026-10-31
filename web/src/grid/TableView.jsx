@@ -27,7 +27,11 @@ export default function TableView({ tableId, primaryField }) {
         <Card
           record={rows.find(r => r.id === open.id) ?? open}
           fields={fields}
-          onSave={values => onEdit(open, Object.keys(values)[0], Object.values(values)[0])}
+          onSave={async values => {
+            setError('')
+            try { await patch(open, values) }
+            catch (e) { setError(e.status === 409 ? 'Запись изменил другой пользователь — показана свежая версия' : 'Не удалось сохранить'); throw e }
+          }}
           onClose={() => setOpen(null)}
         />
       )}
