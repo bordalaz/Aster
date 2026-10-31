@@ -2,6 +2,7 @@
 Конфиг (связь, источник, фильтр) берём из app_field.options; функцию агрегации — из rollup_aggs.AGG."""
 import json
 from collections import OrderedDict
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -29,6 +30,49 @@ def _field_config(conn, key: str) -> dict:
             "options": opts}
 
 
+def _cmp(op: str, a, b) -> bool:
+    return {"=": a == b, ">": a > b, ">=": a >= b, "<": a < b, "<=": a <= b}[op]
+
+
+def _passes(filt: dict, get) -> bool:
+    """filt — options.filters (или вложенная группа); get(field_id) → значение поля связанной записи."""
+    if not filt:
+        return True
+    conj = filt.get("conjunction", "and")
+    results = []
+    for cond in filt.get("conditions", []):
+        if "conjunction" in cond:          # вложенная группа
+            results.append(_passes(cond, get))
+            continue
+        val = get(cond["fieldId"])
+        op, target = cond["operator"], cond.get("value")
+        if cond.get("valueKind") == "year":
+            yr = val.year if isinstance(val, (date, datetime)) else (
+                int(str(val)[:4]) if val else None)
+            results.append(yr is not None and _cmp(op, yr, target))
+        elif op in ("=", ">", ">=", "<", "<="):
+            results.append(val is not None and _cmp(op, val, target))
+        elif op == "contains":
+            results.append(val is not None and str(target) in str(val))
+        elif op == "doesNotContain":
+            results.append(val is None or str(target) not in str(val))
+        else:
+            # неизвестный оператор — не отсекаем, расхождение поймает сверка
+            results.append(True)
+    return all(results) if conj == "and" else any(results)
+
+
+def _condition_fields(filt: dict) -> list:
+    """Все fieldId условий фильтра (включая вложенные группы), без повторов."""
+    out: list = []
+    for cond in (filt or {}).get("conditions", []):
+        if "conjunction" in cond:
+            out.extend(_condition_fields(cond))
+        elif cond.get("fieldId"):
+            out.append(cond["fieldId"])
+    return list(dict.fromkeys(out))
+
+
 def _linked_values(conn, cfg: dict) -> "OrderedDict[str, list]":
     """{airtable_id owner-записи: [значения источника у связанных записей в порядке pos]}."""
     link = conn.execute(text(
@@ -51,16 +95,25 @@ def _linked_values(conn, cfg: dict) -> "OrderedDict[str, list]":
         "where table_id = (select id from app_table where airtable_id = :lt) and airtable_id = :s"
     ), {"lt": link_opts["linkedTableId"], "s": cfg["src_fld"]}).scalar()
 
+    filters = cfg["options"].get("filters")
+    cond_cols = {f: column_name(f) for f in _condition_fields(filters)}
+
     # алиасы без совпадений по регистру (Postgres приводит к нижнему): p — пара, lk — связанная запись
     pairs_sql = (
         f"select o.airtable_id as owner_at, p.{order} as pos, lk.airtable_id as linked_at"
         + ("" if src_is_virtual else f", lk.{src_col} as val")
+        + "".join(f", lk.{col} as c{i}" for i, col in enumerate(cond_cols.values()))
         + f" from {link.link_table} p "
         f"join {owner_tbl} o on o.id = p.{me} "
         f"join {linked_tbl} lk on lk.id = p.{other} "
         f"order by o.airtable_id, p.{order}"
     )
     rows = conn.execute(text(pairs_sql)).all()
+
+    if filters:
+        idx = {f: f"c{i}" for i, f in enumerate(cond_cols)}
+        rows = [r for r in rows
+                if _passes(filters, lambda fid, r=r: getattr(r, idx[fid]) if fid in idx else None)]
 
     out: "OrderedDict[str, list]" = OrderedDict()
     if src_is_virtual:

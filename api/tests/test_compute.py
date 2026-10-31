@@ -97,3 +97,57 @@ def test_min_max_arrayunique(tmp_path):
         assert compute_field(c, "Номенклатура.МаксКол", "MAX")["recN1"] == 3
         uniq = compute_field(c, "Номенклатура.УникКол", "ARRAYUNIQUE")
     assert uniq["recN1"] == [3]   # дубликат схлопнут
+
+
+def test_filter_equals_select(tmp_path):
+    # Номенклатура.ВЭксплуатации = COUNTA оборудования со Статус = 'В эксплуатации'
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOstatus0000000", "name": "Статус", "type": "singleSelect",
+        "options": {"choices": [{"id": "selW", "name": "В эксплуатации"}, {"id": "selB", "name": "Брак"}]}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOstatus0000000"] = "В эксплуатации"
+    records["tblOOOOOOOOOOOOOO"][1]["fields"]["fldOstatus0000000"] = "Брак"
+    schema[0]["fields"].append(rollup_field(
+        "fldNwork000000000", "ВЭксплуатации", "fldNequip00000000", "fldOinv0000000000", "number",
+        filters={"conjunction": "and", "conditions": [
+            {"fieldId": "fldOstatus0000000", "operator": "=", "value": "В эксплуатации"}]}))
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        vals = compute_field(c, "Номенклатура.ВЭксплуатации", "COUNTA")
+    assert vals["recN1"] == 1   # из двух оборудований фильтр прошло одно
+
+
+def test_filter_year_ge(tmp_path):
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOdate000000000", "name": "Дата", "type": "date",
+        "options": {"dateFormat": {"name": "iso", "format": "YYYY-MM-DD"}}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOdate000000000"] = "2020-06-01"
+    records["tblOOOOOOOOOOOOOO"][1]["fields"]["fldOdate000000000"] = "2022-06-01"
+    schema[0]["fields"].append(rollup_field(
+        "fldNfresh00000000", "СвежихОбор", "fldNequip00000000", "fldOinv0000000000", "number",
+        filters={"conjunction": "and", "conditions": [
+            {"fieldId": "fldOdate000000000", "operator": ">=", "value": 2021, "valueKind": "year"}]}))
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        vals = compute_field(c, "Номенклатура.СвежихОбор", "COUNTA")
+    assert vals["recN1"] == 1   # только запись 2022 года
+
+
+def test_filter_all_fail_gives_empty_aggregate(tmp_path):
+    schema, records = _two_tables()
+    schema[0]["fields"].append(rollup_field(
+        "fldNnone000000000", "Никого", "fldNequip00000000", "fldOinv0000000000", "number",
+        filters={"conjunction": "and", "conditions": [
+            {"fieldId": "fldOinv0000000000", "operator": "contains", "value": "ZZZ"}]}))
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        vals = compute_field(c, "Номенклатура.Никого", "COUNTA")
+    assert vals["recN1"] == 0   # владелец остаётся, агрегат пустого списка
