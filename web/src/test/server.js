@@ -16,6 +16,7 @@ export const handlers = [
   http.get('/api/tables', () => HttpResponse.json(tables)),
   http.get('/api/tables/1/fields', () => HttpResponse.json(fields1)),
   http.get('/api/tables/1/records', () => HttpResponse.json(recs)),
+  http.get('/api/tables/1/records/:rid/history', () => HttpResponse.json([])),
   http.patch('/api/tables/1/records/:rid', async ({ request, params }) => {
     const body = await request.json()
     const row = recs.find(r => r.id === Number(params.rid))

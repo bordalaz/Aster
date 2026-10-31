@@ -25,6 +25,7 @@ export default function TableView({ tableId, primaryField }) {
       <Grid fields={fields} rows={rows} primaryField={primaryField} onEdit={onEdit} onOpen={setOpen} />
       {open && (
         <Card
+          tableId={tableId}
           record={rows.find(r => r.id === open.id) ?? open}
           fields={fields}
           onSave={async values => {
