@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from migrate.load import load_snapshot
 from migrate.schema import apply_schema
+from migrate.compute import compute_field
 from tests.compute_fixtures import write_snapshot, link_field, rollup_field
 
 
@@ -43,3 +44,56 @@ def test_snapshot_loads(tmp_path):
         load_snapshot(c, tmp_path)
         n = c.execute(text("select count(*) from at_tbloooooooooooooo")).scalar()
     assert n == 2
+
+
+def test_sum_over_links(tmp_path):
+    # Оборудование.ЦенаИзНом = SUM цены связанной номенклатуры (у recO1 одна номенклатура 5.5).
+    schema, records = _two_tables()
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        vals = compute_field(c, "Оборудование.ЦенаИзНом", "SUM")
+    assert vals["recO1"] == 5.5
+    assert vals["recO2"] == 5.5
+
+
+def test_counta_and_arrayjoin(tmp_path):
+    # Номенклатура.ЧислоОбор = COUNTA по инв. номерам; .ИнвСписок = ARRAYJOIN по инв. номерам.
+    schema, records = _two_tables()
+    schema[0]["fields"] += [
+        rollup_field("fldNcnt0000000000", "ЧислоОбор", "fldNequip00000000", "fldOinv0000000000", "number"),
+        rollup_field("fldNjoin000000000", "ИнвСписок", "fldNequip00000000", "fldOinv0000000000", "text"),
+    ]
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        cnt = compute_field(c, "Номенклатура.ЧислоОбор", "COUNTA")
+        join = compute_field(c, "Номенклатура.ИнвСписок", "ARRAYJOIN")
+    assert cnt["recN1"] == 2
+    assert join["recN1"] == "INV-1, INV-2"   # порядок = pos связей
+
+
+def test_min_max_arrayunique(tmp_path):
+    schema, records = _two_tables()
+    # числовое поле-источник с повтором для ARRAYUNIQUE
+    schema[1]["fields"].append({"id": "fldOq000000000000", "name": "Кол", "type": "number", "options": {"precision": 0}})
+    records["tblOOOOOOOOOOOOOO"][0]["fields"]["fldOq000000000000"] = 3
+    records["tblOOOOOOOOOOOOOO"][1]["fields"]["fldOq000000000000"] = 3
+    schema[0]["fields"] += [
+        rollup_field("fldNmin0000000000", "МинКол", "fldNequip00000000", "fldOq000000000000", "number"),
+        rollup_field("fldNmax0000000000", "МаксКол", "fldNequip00000000", "fldOq000000000000", "number"),
+        rollup_field("fldNuniq000000000", "УникКол", "fldNequip00000000", "fldOq000000000000", "text"),
+    ]
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        assert compute_field(c, "Номенклатура.МинКол", "MIN")["recN1"] == 3
+        assert compute_field(c, "Номенклатура.МаксКол", "MAX")["recN1"] == 3
+        uniq = compute_field(c, "Номенклатура.УникКол", "ARRAYUNIQUE")
+    assert uniq["recN1"] == [3]   # дубликат схлопнут
