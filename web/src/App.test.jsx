@@ -7,7 +7,7 @@ import App from './App.jsx'
 
 test('залогинен — виден список таблиц', async () => {
   render(<App />)
-  expect(await screen.findByText('Ведомость ЗИП')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Ведомость ЗИП' })).toBeInTheDocument()
 })
 
 test('не залогинен (401 на /me) — виден экран входа', async () => {
@@ -25,5 +25,5 @@ test('вход по паролю показывает рабочий экран'
   // после входа /me снова отвечает (дефолтный хендлер) — грузим реальную сессию
   server.resetHandlers()
   await userEvent.click(screen.getByRole('button', { name: 'Войти' }))
-  expect(await screen.findByText('Ведомость ЗИП')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Ведомость ЗИП' })).toBeInTheDocument()
 })
