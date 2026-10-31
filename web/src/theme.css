@@ -1,0 +1,17 @@
+:root {
+  --accent: #2F3E9E; --accent-dark: #26337F; --accent-tint: #ECEEF9;
+  --signal: #F08A24; --signal-tint: #FDF1E4; --signal-text: #8A4300;
+  --danger: #A3200F; --danger-tint: #FDECEA;
+  --text: #171A23; --text2: #4A5163; --muted: #5D6475;
+  --line: #E4E7EC; --grid: #ECEEF2; --panel: #F6F7F9; --bg: #FFFFFF;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #DCDFE6; font-family: Inter, system-ui, sans-serif; color: var(--text); font-size: 13px; }
+button, input, select, textarea { font: inherit; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.num { font-variant-numeric: tabular-nums; }
+.btn { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+.btn.primary:hover { background: var(--accent-dark); }
+.err { color: var(--danger); }
