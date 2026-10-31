@@ -29,5 +29,5 @@ export function useSession() {
     setStatus('out')
   }, [])
 
-  return { user, status, login, logout }
+  return { user, status, login, logout, refresh }
 }

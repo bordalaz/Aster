@@ -29,7 +29,7 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))   # офисная сеть (R7)
 
 from app.db import engine  # noqa: E402
 
@@ -57,7 +57,7 @@ def user():
 
     with engine.begin() as c:
         c.execute(
-            text("insert into app_user (login, name, password_hash) values ('ivan', 'Иван', :h)"),
+            text("insert into app_user (login, name, role, password_hash) values ('ivan', 'Иван', 'admin', :h)"),
             {"h": hash_password("secret")},
         )
 
