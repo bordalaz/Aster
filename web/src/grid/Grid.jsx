@@ -3,6 +3,7 @@ import { DataEditor, GridCellKind } from '@glideapps/glide-data-grid'
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { toCell, fromCell } from './cells.js'
+import { columnTotal, groupRows, parsePastedBool, parsePastedNumber, toCSV } from './layout.js'
 import { applyFilters, visibleColumns } from './viewConfig.js'
 
 function plural(n) {
@@ -14,7 +15,7 @@ function plural(n) {
 
 // Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
 // Без onConfigChange (тесты, простые места) держит конфиг сама.
-export default function Grid({ fields, rows, primaryField, config: outer, onConfigChange, onEdit, onOpen }) {
+export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -42,38 +43,98 @@ export default function Grid({ fields, rows, primaryField, config: outer, onConf
     getRowId: r => String(r.id),
   })
   const view = table.getRowModel().rows
+  const shownRows = useMemo(() => view.map(r => r.original), [view])
+
+  // Группировка (R9) и строка итогов, закреплённая внизу.
+  const groupField = fields.find(f => f.column_name === config.group)
+  const [collapsed, setCollapsed] = useState(new Set())
+  const items = useMemo(() => groupRows(shownRows, groupField, collapsed), [shownRows, groupField, collapsed])
+  const totals = useMemo(() => cols.map(c => columnTotal(c, shownRows)), [cols, shownRows])
+  const toggleGroup = key => setCollapsed(prev => {
+    const next = new Set(prev)
+    next.has(key) ? next.delete(key) : next.add(key)
+    return next
+  })
+
+  function exportCSV() {
+    const blob = new Blob([toCSV(cols, shownRows)], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${title}_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
 
   const gridColumns = useMemo(() => cols.map(c => {
     const s = sorting.find(x => x.id === c.column_name)
     return { id: c.column_name, title: c.title + (s ? (s.desc ? ' ▼' : ' ▲') : ''), width: widths[c.column_name] ?? 160 }
   }), [cols, widths, sorting])
 
+  const text = (t, bold) => ({ kind: GridCellKind.Text, data: t, displayData: t, allowOverlay: false, readonly: true,
+    themeOverride: bold ? { baseFontStyle: '600 13px' } : undefined })
   const getCellContent = useCallback(([ci, ri]) => {
+    if (ri === items.length) return text(totals[ci], true)          // строка итогов
+    const it = items[ri]
+    if (it.kind === 'group') return text(ci === 0 ? `${it.collapsed ? '▸' : '▾'} ${it.key} · ${it.count}` : '', true)
     const field = cols[ci]
-    const value = view[ri].original[field.column_name]
-    return toCell(field, value)
-  }, [cols, view])
+    return toCell(field, it.row[field.column_name])
+  }, [cols, items, totals])
+  const rowAt = ri => (items[ri]?.kind === 'row' ? items[ri].row : null)
 
   const onCellEdited = useCallback(([ci, ri], cell) => {
-    const field = cols[ci]
-    if (!field.editable) return
-    onEdit(view[ri].original, field.column_name, fromCell(field, cell))
-  }, [cols, view, onEdit])
+    const field = cols[ci], row = rowAt(ri)
+    if (!field.editable || !row) return
+    onEdit(row, field.column_name, fromCell(field, cell))
+  }, [cols, items, onEdit])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Вставка из Excel (R9): несколько ячеек — одним пакетом; правимые поля, только строки данных.
+  const onCellsEdited = useCallback(edits => {
+    if (edits.length < 2 || !onEditMany) return false     // одна ячейка — обычный onCellEdited
+    const byRow = new Map()
+    for (const { location: [ci, ri], value } of edits) {
+      const field = cols[ci], row = rowAt(ri)
+      if (!field?.editable || !row) continue
+      if (!byRow.has(row.id)) byRow.set(row.id, { row, values: {} })
+      byRow.get(row.id).values[field.column_name] = fromCell(field, value)
+    }
+    if (byRow.size) onEditMany([...byRow.values()])
+    return true
+  }, [cols, items, onEditMany])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const coercePasteValue = useCallback((val, cell) => {
+    if (cell.kind === GridCellKind.Number) {
+      const n = parsePastedNumber(val)
+      return n === undefined ? cell : { ...cell, data: n ?? undefined }
+    }
+    if (cell.kind === GridCellKind.Boolean) return { ...cell, data: parsePastedBool(val) }
+    return undefined   // текст — как есть
+  }, [])
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, borderBottom: '1px solid var(--line)' }}>
         <input className="search" placeholder="Поиск" value={globalFilter} onChange={e => setGlobalFilter(e.target.value)} />
         <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{view.length} {plural(view.length)}</span>
+        <button className="btn" onClick={exportCSV} title="CSV для Excel: видимые колонки и строки текущего вида">Выгрузить CSV</button>
       </div>
       <span data-testid="col-order" style={{ display: 'none' }}>{cols.map(c => c.column_name).join(',')}</span>
+      <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
       <div style={{ flex: 1 }}>
         <DataEditor
           columns={gridColumns}
-          rows={view.length}
+          rows={items.length + 1}
+          freezeTrailingRows={1}
           getCellContent={getCellContent}
+          getRowThemeOverride={ri => (ri === items.length || items[ri]?.kind === 'group' ? { bgCell: '#F3F4F8' } : undefined)}
           onCellEdited={onCellEdited}
-          onCellClicked={([, ri]) => onOpen(view[ri].original)}
+          onCellsEdited={onCellsEdited}
+          coercePasteValue={coercePasteValue}
+          onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
+          onCellClicked={([, ri]) => {
+            const it = items[ri]
+            if (it?.kind === 'group') toggleGroup(it.key)
+            else if (it?.kind === 'row') onOpen(it.row)
+          }}
           onHeaderClicked={ci => table.getColumn(cols[ci].column_name).toggleSorting()}
           onColumnResize={(col, w) => patchConfig({ widths: { ...widths, [col.id]: Math.round(Math.min(2000, Math.max(40, w))) } })}
           onColumnMoved={(from, to) => {

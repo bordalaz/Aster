@@ -1,6 +1,6 @@
 import { GridCellKind } from '@glideapps/glide-data-grid'
 
-const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
+export const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
 // Правятся прямо в сетке; остальные типы — только в карточке (в сетке читаются).
 const INLINE = new Set([
   'singleLineText', 'multilineText', 'richText', 'email', 'url', 'phoneNumber',
@@ -12,14 +12,14 @@ const HIDDEN_LOOKUP = new Set(['multipleRecordLinks', 'multipleAttachments'])
 const SPECIAL = { NaN: 'NaN', Infinity: '∞', '-Infinity': '−∞' }
 
 // Тип, по которому показываем: у формул/rollup/lookup — тип результата, count — число.
-function kindOf(field) {
+export function kindOf(field) {
   if (field.kind === 'count') return 'number'
   if (COMPUTED.has(field.kind)) return field.options?.result?.type ?? 'singleLineText'
   return field.kind
 }
 
 // Число → текст: точность поля как в Airtable; без неё — срезаем шум float (0.1+0.2).
-function numText(field, n) {
+export function numText(field, n) {
   const p = field.kind === 'count' ? 0
     : COMPUTED.has(field.kind) ? field.options?.result?.options?.precision : field.options?.precision
   return p == null ? String(Number(n.toPrecision(15))) : n.toFixed(p)

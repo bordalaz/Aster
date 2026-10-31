@@ -83,3 +83,30 @@ test('пользователь: общий вид не правит, «общи�
   await userEvent.selectOptions(screen.getByLabelText('Вид'), '12')
   expect(screen.getByRole('button', { name: 'Удалить вид' })).toBeInTheDocument()
 })
+
+test('группировка из панели: заголовки групп в сетке; клик по группе не нужен для проверки порядка', async () => {
+  setup()
+  await screen.findByText('2 записи', { exact: false })
+  await userEvent.selectOptions(screen.getByLabelText('Группировка'), 'f_fld00000000000004')
+  expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],2,[На складе],1')
+  expect(screen.getByText('не сохранено')).toBeInTheDocument()
+})
+
+test('выгрузка CSV — видимые колонки и отфильтрованные строки', async () => {
+  const blobs = []
+  const orig = URL.createObjectURL
+  URL.createObjectURL = b => { blobs.push(b); return 'blob:x' }
+  URL.revokeObjectURL = () => {}
+  try {
+    setup()
+    await screen.findByText('2 записи', { exact: false })
+    await userEvent.selectOptions(screen.getByLabelText('Вид'), '10')   // фильтр qty > 6
+    await userEvent.click(screen.getByRole('button', { name: 'Выгрузить CSV' }))
+    const csv = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsText(blobs[0]) })
+    expect(csv).toContain('Наименование;Кол-во')
+    expect(csv).toContain('Втулка;7')
+    expect(csv).not.toContain('Кольцо')
+  } finally {
+    URL.createObjectURL = orig
+  }
+})

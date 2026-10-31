@@ -5,8 +5,8 @@ import Grid from './Grid.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar from '../views/ViewBar.jsx'
 
-export default function TableView({ tableId, primaryField, user }) {
-  const { fields, rows, loading, patch } = useRecords(tableId)
+export default function TableView({ tableId, primaryField, user, title }) {
+  const { fields, rows, loading, patch, patchMany } = useRecords(tableId)
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
   const [error, setError] = useState('')
   const [views, setViews] = useState([])
@@ -37,6 +37,16 @@ export default function TableView({ tableId, primaryField, user }) {
     }
   }
 
+  async function onEditMany(edits) {
+    setError('')
+    try {
+      await patchMany(edits)
+    } catch (e) {
+      setError(e.status === 409 ? 'Часть записей изменил другой пользователь — вставка отменена, показаны свежие данные'
+        : e.body?.detail && typeof e.body.detail === 'string' ? `Вставка не выполнена: ${e.body.detail}` : 'Вставка не выполнена')
+    }
+  }
+
   if (loading) return <div style={{ padding: 16 }}>Загрузка…</div>
 
   return (
@@ -45,8 +55,8 @@ export default function TableView({ tableId, primaryField, user }) {
       <ViewBar tableId={tableId} fields={fields} primaryField={primaryField} user={user} views={views} current={current}
         config={config} setConfig={setConfig} onSelect={select} reload={reload} />
       <div style={{ flex: 1, minHeight: 0 }}>
-        <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} config={config}
-          onConfigChange={setConfig} onEdit={onEdit} onOpen={setOpen} />
+        <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
+          onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={setOpen} />
       </div>
       {open && (
         <Card

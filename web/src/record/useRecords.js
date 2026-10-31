@@ -48,5 +48,21 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
     }
   }, [tableId, load, refreshRows, refreshMs])
 
-  return { fields, rows, loading, patch, reload: load }
+  // Пакет правок (вставка из Excel): edits — [{row, values}]; одна транзакция на сервере, всё или ничего.
+  const patchMany = useCallback(async edits => {
+    try {
+      const res = await api(`/api/tables/${tableId}/records`, {
+        method: 'PATCH', body: { items: edits.map(e => ({ id: e.row.id, updated_at: e.row.updated_at, values: e.values })) },
+      })
+      const by = new Map(edits.map((e, i) => [e.row.id, { ...e.values, updated_at: res[i].updated_at }]))
+      setRows(rs => rs.map(r => (by.has(r.id) ? { ...r, ...by.get(r.id) } : r)))
+      clearTimeout(timer.current)
+      timer.current = setTimeout(refreshRows, refreshMs)
+    } catch (e) {
+      if (e.status === 409) await load()
+      throw e
+    }
+  }, [tableId, load, refreshRows, refreshMs])
+
+  return { fields, rows, loading, patch, patchMany, reload: load }
 }

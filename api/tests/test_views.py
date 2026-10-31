@@ -5,7 +5,7 @@ from sqlalchemy import text
 from app.db import engine
 from tests.test_access import as_user, tables  # noqa: F401 — фикстура
 
-CFG = {"columns": ["name"], "widths": {"name": 200}, "sort": [{"col": "name", "desc": True}],
+CFG = {"columns": ["name"], "widths": {"name": 200}, "sort": [{"col": "name", "desc": True}], "group": "name",
        "filters": [{"col": "name", "op": "contains", "value": "x"}]}
 
 
@@ -55,6 +55,7 @@ def test_owner_edits_and_deletes_personal(tables):
     {"filters": [{"col": "name", "op": "drop table", "value": 1}]},  # неизвестное условие
     {"widths": {"name": 99999}},                                  # вне диапазона
     {"evil": 1},
+    {"group": "nope"},
 ])
 def test_config_strict(tables, config):
     assert create(as_user("u", "user"), tables["eq"], config=config).status_code == 422

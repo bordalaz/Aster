@@ -67,6 +67,11 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
           </optgroup>}
         </select>
         {dirty && <span style={{ color: 'var(--warn, #F08A24)', fontSize: 12 }}>не сохранено</span>}
+        <select aria-label="Группировка" value={config.group ?? ''}
+          onChange={e => { const { group, ...rest } = config; setConfig(e.target.value ? { ...rest, group: e.target.value } : rest) }}>
+          <option value="">Без группировки</option>
+          {fields.map(f => <option key={f.column_name} value={f.column_name}>Группа: {f.title}</option>)}
+        </select>
         <button className="btn" aria-pressed={panel === 'columns'} onClick={() => setPanel(panel === 'columns' ? null : 'columns')}>Колонки</button>
         <button className="btn" aria-pressed={panel === 'filters'} onClick={() => setPanel(panel === 'filters' ? null : 'filters')}>
           Фильтры{filters.length ? ` (${filters.length})` : ''}
