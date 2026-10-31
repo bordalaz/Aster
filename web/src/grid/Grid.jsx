@@ -3,6 +3,7 @@ import { DataEditor, GridCellKind } from '@glideapps/glide-data-grid'
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { toCell, fromCell } from './cells.js'
+import { applyFilters, visibleColumns } from './viewConfig.js'
 
 function plural(n) {
   const a = n % 10, b = n % 100
@@ -11,23 +12,29 @@ function plural(n) {
   return 'записей'
 }
 
-export default function Grid({ fields, rows, primaryField, onEdit, onOpen }) {
-  // Первичное поле — первой колонкой и закреплено слева (R9).
-  const cols = useMemo(() => {
-    const prim = fields.filter(f => f.column_name === primaryField)
-    const rest = fields.filter(f => f.column_name !== primaryField)
-    return [...prim, ...rest]
-  }, [fields, primaryField])
+// Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
+// Без onConfigChange (тесты, простые места) держит конфиг сама.
+export default function Grid({ fields, rows, primaryField, config: outer, onConfigChange, onEdit, onOpen }) {
+  const [inner, setInner] = useState({})
+  const config = outer ?? inner
+  const setConfig = onConfigChange ?? setInner
+  const patchConfig = useCallback(p => setConfig({ ...config, ...p }), [config, setConfig])
 
-  const [widths, setWidths] = useState({})
-  const [sorting, setSorting] = useState([])
+  // Первичное поле — первой колонкой и закреплено слева (R9).
+  const cols = useMemo(() => visibleColumns(fields, primaryField, config.columns), [fields, primaryField, config.columns])
+  const widths = config.widths ?? {}
+  const sorting = useMemo(() => (config.sort ?? []).map(s => ({ id: s.col, desc: s.desc })), [config.sort])
+  const data = useMemo(() => applyFilters(fields, rows, config.filters), [fields, rows, config.filters])
   const [globalFilter, setGlobalFilter] = useState('')
 
   const table = useReactTable({
-    data: rows,
+    data,
     columns: useMemo(() => cols.map(c => ({ accessorKey: c.column_name })), [cols]),
     state: { sorting, globalFilter },
-    onSortingChange: setSorting,
+    onSortingChange: up => {
+      const next = typeof up === 'function' ? up(sorting) : up
+      patchConfig({ sort: next.map(s => ({ col: s.id, desc: s.desc })) })
+    },
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -68,7 +75,14 @@ export default function Grid({ fields, rows, primaryField, onEdit, onOpen }) {
           onCellEdited={onCellEdited}
           onCellClicked={([, ri]) => onOpen(view[ri].original)}
           onHeaderClicked={ci => table.getColumn(cols[ci].column_name).toggleSorting()}
-          onColumnResize={(col, w) => setWidths(x => ({ ...x, [col.id]: w }))}
+          onColumnResize={(col, w) => patchConfig({ widths: { ...widths, [col.id]: Math.round(Math.min(2000, Math.max(40, w))) } })}
+          onColumnMoved={(from, to) => {
+            if (from === 0 || to === 0) return   // первичное поле остаётся первым
+            const names = cols.map(c => c.column_name)
+            const [moved] = names.splice(from, 1)
+            names.splice(to, 0, moved)
+            patchConfig({ columns: names.filter(n => n !== primaryField) })
+          }}
           rowMarkers="number"
           freezeColumns={1}
           width="100%"
