@@ -19,15 +19,28 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   const [search, setSearch] = useState('')
   const exportRef = useRef(null)
 
-  // Перечитать виды и выбрать нужный (после сохранения/удаления).
-  const reload = useCallback(async select => {
+  // Последний вид таблицы и его несохранённые настройки — у пользователя в браузере (как Airtable помнит вид).
+  // ponytail: localStorage, на одном устройстве; на сервер — если понадобится между устройствами
+  const KEY = `aster.view.${user?.id ?? 0}.${tableId}`
+  const ready = useRef(false)
+
+  // Перечитать виды и выбрать нужный (после сохранения/удаления); cfg — восстановить несохранённое.
+  const reload = useCallback(async (select, cfg) => {
     const vs = await api(`/api/tables/${tableId}/views`).catch(() => [])
     setViews(vs)
     const v = vs.find(x => x.id === select)
     setCurrent(v ? v.id : null)
-    setConfig(v ? v.config : {})
+    setConfig(cfg ?? (v ? v.config : {}))
   }, [tableId])
-  useEffect(() => { reload(null) }, [reload])
+  useEffect(() => {
+    let saved = null
+    try { saved = JSON.parse(localStorage.getItem(KEY)) } catch { /* нет хранилища — начнём с «Все записи» */ }
+    reload(saved?.view ?? null, saved?.config).then(() => { ready.current = true })
+  }, [reload, KEY])
+  useEffect(() => {
+    if (!ready.current) return
+    try { localStorage.setItem(KEY, JSON.stringify({ view: current, config })) } catch { /* приватный режим */ }
+  }, [KEY, current, config])
 
   // Пришли по связи из другой таблицы — открыть карточку нужной записи, когда строки загрузятся.
   useEffect(() => {

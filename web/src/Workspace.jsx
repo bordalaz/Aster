@@ -18,12 +18,18 @@ export default function Workspace({ user, onLogout }) {
   const opened = useCallback(() => setJump(null), [])
   const isAdmin = user?.role === 'superadmin' || user?.role === 'admin'
 
+  const TABLE_KEY = `aster.table.${user?.id ?? 0}`   // последняя открытая таблица — как Airtable
   useEffect(() => {
     api('/api/tables').then(ts => {
       setTables(ts)
-      setActiveId(prev => prev ?? ts[0]?.id ?? null)
+      let last = null
+      try { last = Number(localStorage.getItem(TABLE_KEY)) } catch { /* нет хранилища */ }
+      setActiveId(prev => prev ?? (ts.some(t => t.id === last) ? last : ts[0]?.id ?? null))
     })
-  }, [])
+  }, [TABLE_KEY])
+  useEffect(() => {
+    if (activeId != null) try { localStorage.setItem(TABLE_KEY, String(activeId)) } catch { /* приватный режим */ }
+  }, [TABLE_KEY, activeId])
 
   const section = s => (screen === s ? 'page' : undefined)
   const active = tables.find(t => t.id === activeId)

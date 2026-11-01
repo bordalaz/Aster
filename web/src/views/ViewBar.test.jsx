@@ -146,3 +146,17 @@ test('переход по связи: таблица открывается ср
   expect(await screen.findByRole('dialog', { name: 'Втулка' })).toBeInTheDocument()
   expect(onOpened).toHaveBeenCalled()
 })
+
+test('выбранный вид и его несохранённые настройки запоминаются для таблицы', async () => {
+  localStorage.clear()
+  server.use(http.get('/api/tables/1/views', () => HttpResponse.json(views)))
+  const first = render(<TableView tableId={1} primaryField={NAME} user={admin} />)
+  await screen.findByText('2 записи', { exact: false })
+  await pick('Мой')
+  await userEvent.click(screen.getByRole('button', { name: 'Группировка' }))
+  await userEvent.selectOptions(screen.getByLabelText('Группировка'), 'f_fld00000000000004')
+  first.unmount()                                            // ушли на другую таблицу
+  render(<TableView tableId={1} primaryField={NAME} user={admin} />)
+  expect(await screen.findByRole('button', { name: 'Вид: Мой' })).toBeInTheDocument()
+  expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],2,[На складе],1')
+})

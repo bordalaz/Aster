@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll } from 'vitest'
 import { server, resetDb } from './server.js'
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
-afterEach(() => { server.resetHandlers(); resetDb() })
+afterEach(() => { server.resetHandlers(); resetDb(); localStorage.clear() })
 afterAll(() => server.close())
 
 // jsdom не реализует ResizeObserver (нужен Glide Data Grid)
