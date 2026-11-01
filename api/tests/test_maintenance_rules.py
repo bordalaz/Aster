@@ -86,3 +86,9 @@ def test_no_to3_yet_is_not_no_data():
     r = ev("Корпус батареи", events={"ТО-2": [D(2026, 7, 28)]}, trips=[(D(2026, 8, 1), 100)])
     assert r["need_to"] is None and r["need_reason"] is None
     assert ev("Корпус батареи", events={"ТО-2": [D(2026, 7, 28)]}, trips=[(D(2026, 8, 1), 500)])["need_to"] == "ТО-1/ТО-2"
+
+
+def test_plain_to_is_not_a_level():
+    """«ТО» без уровня не сбрасывает отсчёт и не считается ТО-1 (решение владельца)."""
+    from app.maintenance import _to_event
+    assert _to_event("ТО Уровень 2") == "ТО-2" and _to_event("ТО") is None and _to_event("Осмотр") is None

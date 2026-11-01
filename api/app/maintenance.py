@@ -30,7 +30,7 @@ def _to_event(work: str | None) -> str | None:
     m = re.fullmatch(r"ТО Уровень ([123])", (work or "").strip())
     if m:
         return f"ТО-{m.group(1)}"
-    return "ТО-1" if (work or "").strip() == "ТО" else None   # ponytail: «ТО» без уровня — как ТО-1
+    return None   # «ТО» без уровня ставят отдельным модулям по необходимости — в регламент уровней не входит
 
 
 def _table(c, title):
