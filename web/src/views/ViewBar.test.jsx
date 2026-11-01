@@ -143,6 +143,6 @@ test('переход по связи: таблица открывается ср
   server.use(http.get('/api/tables/1/views', () => HttpResponse.json([])))
   const onOpened = vi.fn()
   render(<TableView tableId={1} primaryField={NAME} user={admin} openId={2} onOpened={onOpened} />)
-  expect(await screen.findByText('Запись №2')).toBeInTheDocument()
+  expect(await screen.findByRole('dialog', { name: 'Втулка' })).toBeInTheDocument()
   expect(onOpened).toHaveBeenCalled()
 })

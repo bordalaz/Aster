@@ -79,3 +79,36 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .views-side button:hover { background: var(--hover); }
 .views-side button[aria-current="true"] { background: #e9f0fd; font-weight: 500; }
 .views-side input { height: 30px; border: 1px solid transparent; border-bottom-color: var(--line); padding: 0 8px; margin-bottom: 4px; }
+
+/* --- раскрытая запись (карточка), как в Airtable --- */
+.card-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45); display: flex; justify-content: center; padding: 72px 16px 12px; }
+.card { width: min(760px, 100%); background: #fff; border-radius: 6px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; min-height: 0; }
+.card-head { height: 40px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--line); }
+.card-head-title { margin-left: 8px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-body { overflow-y: auto; padding: 32px 60px 40px; display: grid; gap: 14px; align-content: start; }
+.card-primary { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.card-title { margin: -8px 0 6px; padding-bottom: 14px; border-bottom: 1px solid var(--line); font-size: 22px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+.card-hidden { display: flex; justify-content: center; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+
+.fld { display: grid; gap: 4px; }
+.fld-inline { grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: start; }
+.fld-label { display: flex; align-items: flex-start; gap: 6px; color: var(--muted); font-size: 13px; line-height: 1.35; padding-top: 7px; overflow-wrap: anywhere; }
+.fld-label svg { flex: none; margin-top: 1px; }
+.fld-value { min-width: 0; }
+.fld-input { width: 100%; min-height: 32px; border: 1px solid var(--line); border-radius: 3px; padding: 0 8px; background: #fff; }
+.fld-input:hover { border-color: #c4c7cd; }
+.fld-input:focus, .fld-input:focus-within { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(22, 110, 225, 0.2); }
+.fld-area { padding: 6px 8px; resize: vertical; min-height: 64px; }
+.fld-ro { min-height: 32px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 3px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; overflow-wrap: anywhere; }
+.fld-inline .fld-ro:empty::before { content: "—"; color: var(--faint); }
+/* галочка как в Airtable: белый квадрат с рамкой, внутри зелёная ✓ */
+.fld-check { appearance: none; width: 22px; height: 22px; margin: 5px 0; border: 1px solid #c4c7cd; border-radius: 3px; background: #fff center / 16px no-repeat; cursor: pointer; }
+.fld-check:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%2320c933' d='M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); }
+.fld-select { position: relative; display: flex; align-items: center; gap: 6px; }
+.fld-select select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.fld-multi { display: grid; gap: 4px; padding-top: 4px; }
+.pill { display: inline-block; padding: 1px 8px; font-size: 12px; line-height: 18px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.link-cards { display: grid; gap: 6px; }
+.link-card { text-align: left; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px 10px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-card:hover { border-color: #c4c7cd; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08); }
+@media (max-width: 640px) { .card-body { padding: 20px 16px; } .fld-inline { grid-template-columns: 1fr; gap: 4px; } }

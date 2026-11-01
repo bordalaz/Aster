@@ -4,10 +4,13 @@ import { useRecords } from '../record/useRecords.js'
 import Grid from './Grid.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
+import { visibleColumns } from './viewConfig.js'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
   const { fields, rows, loading, patch, patchMany, refresh } = useRecords(tableId)
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
+  const [order, setOrder] = useState([])   // id строк сетки по порядку — для ▲▼ в карточке
+  const openRow = useCallback((row, ids) => { setOpen(row); if (ids) setOrder(ids) }, [])
   const [error, setError] = useState('')
   const [views, setViews] = useState([])
   const [current, setCurrent] = useState(null)   // id вида; null — «Все записи»
@@ -70,25 +73,34 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
         {side && <ViewsSide views={views} current={current} onSelect={select} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
-            onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={setOpen} search={search} exportRef={exportRef} />
+            onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef} />
         </div>
       </div>
-      {open && (
-        <Card
-          tableId={tableId}
-          record={rows.find(r => r.id === open.id) ?? open}
-          fields={fields}
-          onSave={async values => {
-            setError('')
-            try { await patch(open, values) }
-            catch (e) { setError(e.status === 409 ? 'Запись изменил другой пользователь — показана свежая версия' : 'Не удалось сохранить'); throw e }
-          }}
-          onClose={() => setOpen(null)}
-          onOpenLink={onOpenLink}
-          onChanged={refresh}
-          equipment={title === 'Оборудование'}
-        />
-      )}
+      {open && (() => {
+        const record = rows.find(r => r.id === open.id) ?? open
+        const i = order.indexOf(open.id)
+        const go = d => { const r = rows.find(x => x.id === order[i + d]); if (r) setOpen(r) }
+        return (
+          <Card
+            tableId={tableId}
+            record={record}
+            fields={fields}
+            shown={visibleColumns(fields, primaryField, config.columns).map(c => c.column_name)}
+            primaryField={primaryField}
+            onSave={async values => {
+              setError('')
+              // свежая версия записи: после каждой правки updated_at меняется
+              try { await patch(rows.find(r => r.id === open.id) ?? open, values) }
+              catch (e) { setError(e.status === 409 ? 'Запись изменил другой пользователь — показана свежая версия' : 'Не удалось сохранить'); throw e }
+            }}
+            onPrev={i > 0 ? () => go(-1) : undefined}
+            onNext={i >= 0 && i < order.length - 1 ? () => go(1) : undefined}
+            onClose={() => setOpen(null)}
+            onOpenLink={onOpenLink}
+            onChanged={refresh}
+          />
+        )
+      })()}
     </div>
   )
 }
