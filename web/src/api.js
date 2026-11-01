@@ -21,3 +21,16 @@ export async function api(path, { method = 'GET', body } = {}) {
   }
   return r.status === 204 ? null : r.json()
 }
+
+// Загрузка файла сырым телом (R27): до привязки к записи файл виден только загрузившему.
+export async function uploadFile(file) {
+  const r = await fetch(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
+    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/octet-stream' }, body: file,
+  })
+  if (!r.ok) {
+    let b = null
+    try { b = await r.json() } catch { /* не JSON */ }
+    throw new ApiError(r.status, b)
+  }
+  return r.json()
+}

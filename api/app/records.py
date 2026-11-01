@@ -8,7 +8,7 @@ from sqlalchemy import Boolean, MetaData, Table, bindparam, func, select, text, 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError
 
-from . import computed, links
+from . import attachments, computed, links
 from .access import can_edit, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
@@ -50,12 +50,15 @@ def list_records(table_id: int, user: dict = Depends(active_user)):
         opts = dict(c.execute(text("select airtable_id, options from app_field where kind = :k"), {"k": links.LINK}).all())
         mappers = links.lookup_mappers(c, fields, user, opts)
         linked = links.link_values(c, fields, user)
+        files = [(f.column_name, f.airtable_id) for f in fields if f.kind == attachments.ATTACH]
+        att = attachments.values_for(c, c.execute(text("select airtable_id from app_table where id = :t"), {"t": table_id}).scalar()) if files else {}
         out = []
         for r in c.execute(select(*cols, t.c.airtable_id).order_by(t.c.id)).mappings():
             d = dict(r)
             at = d.pop("airtable_id")
             d.update((col, mappers[col](vals.get(at)) if col in mappers else vals.get(at)) for col, vals in virt)
             d.update((col, None if vals is None else vals.get(d["id"], [])) for col, vals in linked)
+            d.update((col, att.get((at, fid), [])) for col, fid in files)
             out.append(d)
         return out
 

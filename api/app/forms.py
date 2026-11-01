@@ -10,7 +10,7 @@ from sqlalchemy import Boolean, bindparam, func, insert, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from . import computed, links
+from . import attachments, computed, links
 from .access import can_read, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
@@ -19,8 +19,6 @@ from .records import load_table
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
-# ponytail: вложения в формах — следующим шагом (загрузка файлов, R27); пока такие поля форма не показывает
-SKIP = {"multipleAttachments"}
 
 
 def _form(c, form_id: int, user: dict):
@@ -36,7 +34,7 @@ def _form(c, form_id: int, user: dict):
     fields = []
     for x in f.fields:
         m = meta.get(x["col"])
-        if m is None or m.kind in SKIP or not (m.kind == links.LINK or (m.editable and not m.options.get("virtual"))):
+        if m is None or not (m.kind in (links.LINK, attachments.ATTACH) or (m.editable and not m.options.get("virtual"))):
             continue
         fields.append({"column_name": m.column_name, "title": m.title, "kind": m.kind, "options": m.options,
                        "required": x["required"], "help": x.get("help")})
@@ -127,11 +125,13 @@ def submit(form_id: int, body: SubmitBody, user: dict = Depends(active_user)):
                 raise HTTPException(422, "Заполните: " + ", ".join(missing))
             t, _ = load_table(c, f.table_id)
             names = links.Names(c, user)
-            stored, linked = {}, {}
+            stored, linked, files = {}, {}, {}
             for col, v in body.values.items():
                 if _empty(v):
                     continue
-                if by[col]["kind"] == links.LINK:
+                if by[col]["kind"] == attachments.ATTACH:
+                    files[col] = v
+                elif by[col]["kind"] == links.LINK:
                     linked[col] = _link_ids(c, names, by[col], v)
                 else:
                     _check(by[col], v, t.c[col].type)
@@ -140,6 +140,13 @@ def submit(form_id: int, body: SubmitBody, user: dict = Depends(active_user)):
                 **stored, airtable_id="aster" + uuid.uuid4().hex, created_at=func.now(), created_by=user["id"],
                 updated_by=user["id"]).returning(t.c.id)).scalar()
             _write_links(c, f.table_id, rid, linked)
+            if files:   # загрузки этого пользователя — к новой записи
+                at = c.execute(text("select a.airtable_id, f.column_name, f.airtable_id from app_table a "
+                                    "join app_field f on f.table_id = a.id where a.id = :t and f.column_name = any(:c)"),
+                               {"t": f.table_id, "c": list(files)}).all()
+                rec_at = c.execute(select(t.c.airtable_id).where(t.c.id == rid)).scalar()
+                for tbl_at, col, fld_at in at:
+                    linked[col] = attachments.bind(c, tbl_at, rec_at, fld_at, files[col], user)
             new = dict(c.execute(select(*[func.to_jsonb(t.c[k]).label(k) for k in stored]).where(t.c.id == rid)).first()._mapping) if stored else {}
             new |= {k: v for k, v in linked.items()}
             c.execute(text(

@@ -6,7 +6,7 @@ import Card from '../card/Card.jsx'
 import ViewBar from '../views/ViewBar.jsx'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
-  const { fields, rows, loading, patch, patchMany } = useRecords(tableId)
+  const { fields, rows, loading, patch, patchMany, refresh } = useRecords(tableId)
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
   const [error, setError] = useState('')
   const [views, setViews] = useState([])
@@ -78,6 +78,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           }}
           onClose={() => setOpen(null)}
           onOpenLink={onOpenLink}
+          onChanged={refresh}
         />
       )}
     </div>

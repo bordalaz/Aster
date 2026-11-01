@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import FieldEditor from './fields.jsx'
 import History from './History.jsx'
+import Files from '../files/Files.jsx'
+import { api } from '../api.js'
 
-export default function Card({ tableId, record, fields, onSave, onClose, onOpenLink }) {
+export default function Card({ tableId, record, fields, onSave, onClose, onOpenLink, onChanged }) {
   const [draft, setDraft] = useState({})   // только изменённые поля
   const [saving, setSaving] = useState(false)
 
+  const canEdit = fields.some(f => f.editable)   // editable в /fields — с учётом роли
   const valueOf = f => (f.column_name in draft ? draft[f.column_name] : record[f.column_name])
 
   async function save() {
@@ -28,7 +31,18 @@ export default function Card({ tableId, record, fields, onSave, onClose, onOpenL
         <strong>Запись №{record.id}</strong>
         <button className="btn" style={{ marginLeft: 'auto' }} onClick={onClose}>Закрыть</button>
       </div>
-      {fields.map(f => (
+      {fields.map(f => f.kind === 'multipleAttachments' ? (
+        // вложения меняются сразу, без «Сохранить»; править — если роль правит таблицу
+        <Files key={f.column_name} title={f.title} files={record[f.column_name]}
+          onUpload={canEdit && tableId ? async up => {
+            await api(`/api/tables/${tableId}/records/${record.id}/attachments`, { method: 'POST', body: { column: f.column_name, ids: up.map(u => u.id) } })
+            await onChanged?.()
+          } : undefined}
+          onRemove={canEdit && tableId ? async file => {
+            await api(`/api/tables/${tableId}/records/${record.id}/attachments/${file.id}`, { method: 'DELETE' })
+            await onChanged?.()
+          } : undefined} />
+      ) : (
         <FieldEditor
           key={f.column_name}
           field={f}
