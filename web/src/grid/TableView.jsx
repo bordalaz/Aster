@@ -78,9 +78,9 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   async function addRecord() {
     setError('')
     try {
-      const { id } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      const { id, updated_at } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      setOpen({ id, updated_at })   // карточку — сразу; формулы досчитаются, пока сетка перечитывается
       await refresh()
-      setOpen({ id })
     } catch { setError('Не удалось добавить запись') }
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CompactSelection, DataEditor, GridCellKind } from '@glideapps/glide-data-grid'
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
@@ -7,6 +7,23 @@ import { columnTotal, groupRows, parsePastedBool, parsePastedNumber, toCSV } fro
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 import { renderers } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
+
+function GroupMenu({ at, onClose, onToggle, onExpandAll, onCollapseAll }) {
+  const run = fn => () => { fn(); onClose() }
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={e => { if (e.button === 0) onClose() }} onContextMenu={e => e.preventDefault()} />
+      <div className="pop menu" role="menu" style={{ position: 'fixed', left: at.x, top: at.y, zIndex: 31 }}
+        onKeyDown={e => { if (e.key === 'Escape') onClose() }}>
+        <button role="menuitem" autoFocus onClick={run(onToggle)}>
+          <Icon name={at.collapsed ? 'expand' : 'collapse'} />{at.collapsed ? 'Развернуть группу' : 'Свернуть группу'}
+        </button>
+        <button role="menuitem" onClick={run(onExpandAll)}><Icon name="expandV" />Развернуть все</button>
+        <button role="menuitem" onClick={run(onCollapseAll)}><Icon name="collapseV" />Свернуть все</button>
+      </div>
+    </>
+  )
+}
 
 function plural(n) {
   const a = n % 10, b = n % 100
@@ -69,6 +86,10 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // Итоги как у Airtable по умолчанию: суммы только у числовых полей, остальное пусто; слева — число записей.
   const totals = useMemo(() => cols.map((c, i) => (i === 0 ? `${view.length} ${plural(view.length)}`
     : NUMERIC.has(kindOf(c)) ? columnTotal(c, shownRows) : '')), [cols, shownRows, view.length])
+  // ПКМ по заголовку группы — меню как в Airtable: свернуть/развернуть группу, развернуть все, свернуть все.
+  const [groupMenu, setGroupMenu] = useState(null)   // {x, y, id, collapsed}
+  const hovered = useRef(null)                        // ячейка под курсором — для ПКМ
+  const allGroupIds = () => groupRows(shownRows, groupFields, new Set()).filter(i => i.kind === 'group').map(i => i.id)
   const toggleGroup = key => setCollapsed(prev => {
     const next = new Set(prev)
     next.has(key) ? next.delete(key) : next.add(key)
@@ -161,7 +182,19 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       <span role="status" className="sr-only">{view.length} {plural(view.length)}</span>
       <span data-testid="col-order" style={{ display: 'none' }}>{cols.map(c => c.column_name).join(',')}</span>
       <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      {/* ПКМ ловим на контейнере: в Glide 6.0.3 onCellContextMenu для мыши не срабатывает (слушатель вешается до появления элемента) */}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }} onContextMenu={e => {
+        const [ci, ri] = hovered.current ?? []
+        const it = items[ri]
+        if (ci === undefined || ci > 1 || it?.kind !== 'group') return
+        e.preventDefault()
+        setGroupMenu({ x: e.clientX, y: e.clientY, id: it.id, collapsed: it.collapsed })
+      }}>
+        {groupMenu && (
+          <GroupMenu at={groupMenu} onClose={() => setGroupMenu(null)}
+            onToggle={() => toggleGroup(groupMenu.id)} onExpandAll={() => setCollapsed(new Set())}
+            onCollapseAll={() => setCollapsed(new Set(allGroupIds()))} />
+        )}
         {onAdd && <button className="add-row" aria-label="Добавить запись" title="Добавить запись" onClick={onAdd}><Icon name="plus" size={14} /></button>}
         <DataEditor
           theme={THEME}
@@ -178,6 +211,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           onCellsEdited={onCellsEdited}
           coercePasteValue={coercePasteValue}
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
+          onItemHovered={a => { hovered.current = a.kind === 'cell' ? a.location : null }}
           onCellClicked={([ci, ri]) => {
             if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
             else if (ci === 0 && rowAt(ri)) onOpen(rowAt(ri), shownRows.map(r => r.id))
