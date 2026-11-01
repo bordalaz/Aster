@@ -31,7 +31,7 @@ export default function Workspace({ user, onLogout }) {
           <strong>{screen === 'forms' ? 'Формы' : screen === 'calibration' ? 'Калибровка' : screen === 'users' ? 'Пользователи' : screen === 'password' ? 'Смена пароля' : tables.find(t => t.id === activeId)?.title ?? ''}</strong>
           <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{user?.name}</span>
           <button className="btn" aria-pressed={screen === 'forms'} onClick={() => setScreen('forms')}>Формы</button>
-          <button className="btn" aria-pressed={screen === 'calibration'} onClick={() => setScreen('calibration')}>Калибровка</button>
+          {/* ponytail: калибровка скрыта до конца переноса Airtable 1:1; вернуть — раскомментировать кнопку и блок в Card */}
           {isAdmin && <button className="btn" onClick={() => setScreen('users')}>Пользователи</button>}
           <button className="btn" onClick={() => setScreen('password')}>Пароль</button>
           <button className="btn" onClick={onLogout}>Выход</button>
