@@ -8,7 +8,7 @@ from sqlalchemy import Boolean, MetaData, Table, bindparam, func, select, text, 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError
 
-from . import computed
+from . import computed, links
 from .access import can_edit, table_title
 from .auth import active_user
 from .db import engine
@@ -44,11 +44,16 @@ def list_records(table_id: int, user: dict = Depends(active_user)):
         # вычисляемые поля — из движка (ключ — airtable_id записи, наружу его не отдаём)
         comp = computed.values()
         virt = [(f.column_name, comp.get(f.airtable_id, {})) for f in fields if f.kind in COMPUTED_KINDS]
+        # связи — названиями связанных записей (R11); lookup ссылок — тоже
+        opts = dict(c.execute(text("select airtable_id, options from app_field where kind = :k"), {"k": links.LINK}).all())
+        mappers = links.lookup_mappers(c, fields, user, opts)
+        linked = links.link_values(c, fields, user)
         out = []
         for r in c.execute(select(*cols, t.c.airtable_id).order_by(t.c.id)).mappings():
             d = dict(r)
             at = d.pop("airtable_id")
-            d.update((col, vals.get(at)) for col, vals in virt)
+            d.update((col, mappers[col](vals.get(at)) if col in mappers else vals.get(at)) for col, vals in virt)
+            d.update((col, None if vals is None else vals.get(d["id"], [])) for col, vals in linked)
             out.append(d)
         return out
 

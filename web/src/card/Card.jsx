@@ -2,7 +2,7 @@ import { useState } from 'react'
 import FieldEditor from './fields.jsx'
 import History from './History.jsx'
 
-export default function Card({ tableId, record, fields, onSave, onClose }) {
+export default function Card({ tableId, record, fields, onSave, onClose, onOpenLink }) {
   const [draft, setDraft] = useState({})   // только изменённые поля
   const [saving, setSaving] = useState(false)
 
@@ -34,6 +34,7 @@ export default function Card({ tableId, record, fields, onSave, onClose }) {
           field={f}
           value={valueOf(f)}
           onChange={v => setDraft(d => ({ ...d, [f.column_name]: v }))}
+          onOpenLink={onOpenLink}
         />
       ))}
       {fields.some(f => f.editable) && <button className="btn primary" disabled={saving} onClick={save}>Сохранить</button>}

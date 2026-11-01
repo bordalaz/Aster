@@ -1,14 +1,21 @@
-import { displayValue } from '../grid/cells.js'
+import { displayValue, isLink } from '../grid/cells.js'
 
 const TEXT = new Set(['singleLineText', 'email', 'url', 'phoneNumber'])
 const MULTILINE = new Set(['multilineText', 'richText'])
 const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'duration'])
 
 // Один редактор поля по его kind. Неэдитируемое — только показ.
-export default function FieldEditor({ field, value, onChange }) {
+export default function FieldEditor({ field, value, onChange, onOpenLink }) {
   const id = `f-${field.column_name ?? field.title}`
   const label = <label htmlFor={id} style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{field.title}</label>
 
+  // связанные записи (R11): кнопки-переходы, если таблица видна роли; правка связей — позже, с формами
+  if (isLink(field) && field.link_table && Array.isArray(value) && value.length) {
+    return <div>{label}<div id={id} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 0' }}>
+      {value.map(v => <button key={v.id} type="button" className="btn" style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        title={v.name} onClick={() => onOpenLink?.(field.link_table, v.id)}>{v.name || `№${v.id}`}</button>)}
+    </div></div>
+  }
   if (!field.editable) {
     return <div>{label}<div id={id} style={{ padding: '6px 0' }}>{displayValue(field, value)}</div></div>
   }
