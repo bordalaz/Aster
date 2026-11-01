@@ -96,6 +96,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // ПКМ по заголовку группы — меню как в Airtable: свернуть/развернуть группу, развернуть все, свернуть все.
   const [groupMenu, setGroupMenu] = useState(null)   // {x, y, id, collapsed}
   const hovered = useRef(null)                        // ячейка под курсором — для ПКМ
+  const [info, setInfo] = useState(null)             // описание поля по ⓘ в заголовке
   const allGroupIds = () => groupRows(shownRows, groupFields, new Set()).filter(i => i.kind === 'group').map(i => i.id)
   const toggleGroup = key => setCollapsed(prev => {
     const next = new Set(prev)
@@ -116,6 +117,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // Колонка 0 — номера записей (как в Airtable: группы не нумеруются); щелчок по номеру открывает карточку.
   const gridColumns = useMemo(() => [{ id: '__n', title: '', width: 52 }, ...cols.map(c => ({
     id: c.column_name, title: c.title, icon: `i-${fieldIcon(c.kind)}`,
+    ...(c.description ? { hasMenu: true, menuIcon: 'i-info' } : {}),   // ⓘ описание поля, как в Airtable
     width: widths[c.column_name] ?? (c.column_name === primaryField ? 260 : 160),
   }))], [cols, widths, primaryField])
   const nums = useMemo(() => { let n = 0; return items.map(i => (i.kind === 'row' ? ++n : null)) }, [items])
@@ -198,6 +200,12 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
         e.preventDefault()
         setGroupMenu({ x: e.clientX, y: e.clientY, id: it.id, collapsed: it.collapsed })
       }}>
+        {info?.text && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setInfo(null)} />
+            <div className="pop field-info" role="tooltip" style={{ position: 'fixed', left: Math.max(8, info.x), top: info.y, zIndex: 31 }}>{info.text}</div>
+          </>
+        )}
         {groupMenu && (
           <GroupMenu at={groupMenu} onClose={() => setGroupMenu(null)}
             onToggle={() => toggleGroup(groupMenu.id)} onExpandAll={() => setCollapsed(new Set())}
@@ -220,6 +228,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           coercePasteValue={coercePasteValue}
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
           onItemHovered={a => { hovered.current = a.kind === 'cell' ? a.location : null }}
+          onHeaderMenuClick={(ci, bounds) => setInfo({ text: cols[ci - 1]?.description, x: bounds.x + bounds.width - 260, y: bounds.y + bounds.height + 4 })}
           onCellClicked={([ci, ri]) => {
             if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
             else if (ci === 0 && rowAt(ri)) onOpen(rowAt(ri), shownRows.map(r => r.id))

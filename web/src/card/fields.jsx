@@ -18,6 +18,7 @@ export default function FieldEditor({ field, value, onChange, onOpenLink, inline
   const label = (
     <label htmlFor={id} className="fld-label">
       <Icon name={fieldIcon(field.kind)} size={14} />{field.title}
+      {field.description && <span className="info" title={field.description} aria-label={`Описание: ${field.description}`}><Icon name="info" size={13} /></span>}
     </label>
   )
   const wrap = control => <div className={inline ? 'fld fld-inline' : 'fld'}>{label}<div className="fld-value">{control}</div></div>

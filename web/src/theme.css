@@ -143,3 +143,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .avatar:hover { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08); }
 .profile-head { display: grid; padding: 6px 8px; }
 .profile-head span { color: var(--muted); font-size: 12px; }
+
+/* ⓘ описание поля/таблицы, как в Airtable */
+.info { display: inline-flex; color: var(--faint); margin-left: 2px; cursor: help; }
+.field-info { min-width: 0; width: 260px; font-size: 12px; line-height: 1.45; color: var(--text); white-space: pre-wrap; }

@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api")
 @router.get("/tables")
 def tables(user: dict = Depends(active_user)):
     with engine.connect() as c:
-        rows = c.execute(text("select id, title, primary_field, hidden from app_table order by sort_order, id"))
+        rows = c.execute(text("select id, title, primary_field, hidden, description from app_table order by sort_order, id"))
         return [r._asdict() for r in rows if can_read(user, r.title)]
 
 
@@ -38,7 +38,7 @@ def fields(table_id: int, user: dict = Depends(active_user)):
         edit = can_edit(user, table_title(c, table_id, user))
         rows = c.execute(
             text(
-                "select id, column_name, title, kind, editable, options from app_field "
+                "select id, column_name, title, kind, editable, options, description from app_field "
                 "where table_id = :t order by sort_order, id"
             ),
             {"t": table_id},

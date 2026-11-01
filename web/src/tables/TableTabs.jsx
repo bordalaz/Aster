@@ -28,12 +28,14 @@ export default function TableTabs({ tables, activeId, onPick, onHide }) {
       <div className="scroll" role="tablist" aria-label="Таблицы">
         {shown.map(t => t.id === activeId ? (
           <span key={t.id} className="tab-active" ref={active}>
-            <button role="tab" className="tab" aria-selected="true" onClick={() => onPick(t.id)}>{t.title}</button>
+            <button role="tab" className="tab" aria-selected="true" title={t.description ?? undefined} onClick={() => onPick(t.id)}>{t.title}
+              {t.description && <Icon name="info" size={12} style={{ marginLeft: 4, color: 'var(--faint)', verticalAlign: '-2px' }} />}</button>
             {onHide && <button className="tab-caret" aria-label={`Меню таблицы ${t.title}`} aria-expanded={menu === 'table'}
               onClick={() => setMenu(menu === 'table' ? null : 'table')}><Icon name="caretDown" size={12} /></button>}
           </span>
         ) : (
-          <button key={t.id} role="tab" className="tab" aria-selected="false" onClick={() => onPick(t.id)}>{t.title}</button>
+          <button key={t.id} role="tab" className="tab" aria-selected="false" title={t.description ?? undefined} onClick={() => onPick(t.id)}>{t.title}
+            {t.description && <Icon name="info" size={12} style={{ marginLeft: 4, color: 'var(--faint)', verticalAlign: '-2px' }} />}</button>
         ))}
       </div>
       {menu === 'table' && (

@@ -99,9 +99,13 @@ def cmd_tables() -> int:
     if not p.exists():
         print(f"Нет {p}")
         return 2
+    from .tables import apply_descriptions
     with engine.begin() as c:
         n = apply_hidden(c, json.loads(p.read_text(encoding="utf-8")))
-    print(f"Таблиц отмечено: {n}")
+        full = SNAP / "at_view_datas.jsonl"   # схемы таблиц с описаниями — из обхода видов
+        lines = [json.loads(x) for x in full.read_text(encoding="utf-8").splitlines() if x.strip()] if full.exists() else []
+        d = apply_descriptions(c, [x["schema"] for x in lines if "schema" in x])
+    print(f"Таблиц отмечено: {n}, описаний полей: {d}")
     return 0
 
 
