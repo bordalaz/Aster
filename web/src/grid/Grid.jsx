@@ -31,7 +31,9 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const table = useReactTable({
     data,
     // связи — [{id, name}]: сортировка и поиск по названиям
-    columns: useMemo(() => cols.map(c => (isLink(c)
+    columns: useMemo(() => cols.map(c => (c.options?.computed
+      ? { id: c.column_name, accessorFn: r => r[c.column_name]?.name ?? '' }
+      : isLink(c)
       ? { id: c.column_name, accessorFn: r => (r[c.column_name]?.length ? displayValue(c, r[c.column_name]) : '') }
       : { accessorKey: c.column_name })), [cols]),
     state: { sorting, globalFilter },
@@ -129,7 +131,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           rows={items.length + 1}
           freezeTrailingRows={1}
           getCellContent={getCellContent}
-          getRowThemeOverride={ri => (ri === items.length || items[ri]?.kind === 'group' ? { bgCell: '#F3F4F8' } : undefined)}
+          getRowThemeOverride={ri => (ri === items.length || items[ri]?.kind === 'group' ? { bgCell: '#F3F4F8' }
+            : rowAt(ri)?._tone === 'red' ? { bgCell: '#FDF0F0' } : undefined)}   // R18б: труба на кусту ≥ 400 ч
           onCellEdited={onCellEdited}
           onCellsEdited={onCellsEdited}
           coercePasteValue={coercePasteValue}

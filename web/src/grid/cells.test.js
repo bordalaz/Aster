@@ -91,3 +91,13 @@ test('число показывается с точностью поля, без
   const noPrec = { kind: 'rollup', editable: false, options: { result: { type: 'number' } } }
   expect(toCell(noPrec, 0.1 + 0.2).displayData).toBe('0.3')
 })
+
+test('вычисляемые колонки регламента: текст из name, цвет по тону, подсказка — title', () => {
+  const f = { column_name: '_need_to', kind: 'singleLineText', editable: false, options: { virtual: true, computed: 'maintenance' } }
+  const to = toCell(f, { name: 'ТО-2', tone: 'accent', title: '260 ч после 2026-01-10' })
+  expect(to.displayData).toBe('ТО-2')
+  expect(to.themeOverride.textDark).toBe('#2F3E9E')
+  expect(toCell(f, { name: '2026-03-01 · просрочено по часам', tone: 'red' }).themeOverride.textDark).toBe('#D93025')
+  expect(toCell(f, { name: '2026-03-01 · осталось 3 дн.', tone: 'orange' }).themeOverride.textDark).toBe('#F08A24')
+  expect(toCell(f, null).displayData).toBe('')
+})

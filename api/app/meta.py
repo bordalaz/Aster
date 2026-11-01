@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 
-from . import links
+from . import links, maintenance
 from .access import can_edit, can_read, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
@@ -19,7 +19,8 @@ def tables(user: dict = Depends(active_user)):
 @router.get("/tables/{table_id}/fields")
 def fields(table_id: int, user: dict = Depends(active_user)):
     with engine.connect() as c:
-        edit = can_edit(user, table_title(c, table_id, user))
+        title = table_title(c, table_id, user)
+        edit = can_edit(user, title)
         rows = c.execute(
             text(
                 "select id, column_name, title, kind, editable, options from app_field "
@@ -32,5 +33,9 @@ def fields(table_id: int, user: dict = Depends(active_user)):
         targets = links.link_tables(c, rows, user)
         # editable — с учётом роли: интерфейс по нему решает, давать ли правку;
         # link_table — куда ведёт ссылка (None — таблица скрыта от роли)
-        return [{**r._asdict(), "editable": r.editable and edit,
-                 **({"link_table": targets[r.column_name]} if r.column_name in targets else {})} for r in rows]
+        out = [{**r._asdict(), "editable": r.editable and edit,
+                **({"link_table": targets[r.column_name]} if r.column_name in targets else {})} for r in rows]
+        if title == maintenance.EQ:   # вычисляемые колонки регламента — в конце, только чтение
+            out += [{"id": -i - 1, "column_name": col, "title": name, "kind": "singleLineText", "editable": False,
+                     "options": {"virtual": True, "computed": "maintenance"}} for i, (col, name) in enumerate(maintenance.FIELDS)]
+        return out

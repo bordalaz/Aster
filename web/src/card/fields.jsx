@@ -17,7 +17,8 @@ export default function FieldEditor({ field, value, onChange, onOpenLink }) {
     </div></div>
   }
   if (!field.editable) {
-    return <div>{label}<div id={id} style={{ padding: '6px 0' }}>{displayValue(field, value)}</div></div>
+    return <div>{label}<div id={id} style={{ padding: '6px 0' }}>{displayValue(field, value)}</div>
+      {value?.title && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{value.title}</div>}</div>
   }
   if (field.kind === 'checkbox') {
     return <div><label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

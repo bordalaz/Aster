@@ -42,7 +42,18 @@ export function displayValue(field, value) {
   return asText(field, value) || '—'
 }
 
+// R14/R20: индиго — «нужное ТО» плашкой, оранжевый — скоро, красный — просрочено, серый — нет данных
+const TONES = {
+  accent: { textDark: '#2F3E9E', bgCell: '#ECEEF8', baseFontStyle: '600 13px' },
+  orange: { textDark: '#F08A24' }, red: { textDark: '#D93025' }, muted: { textDark: '#8A8F98' },
+}
+
 export function toCell(field, value) {
+  if (field.options?.computed) {   // регламент ТО: {name, tone, title}
+    const t = value?.name ?? ''
+    return { kind: GridCellKind.Text, data: t, displayData: t, allowOverlay: false, readonly: true,
+      themeOverride: TONES[value?.tone] }
+  }
   const kind = kindOf(field)
   const editable = field.editable && INLINE.has(field.kind)
   if (kind === 'checkbox') {

@@ -117,3 +117,33 @@ def test_admin_adds_housing_size(eq):
     assert a.put("/api/calibration/sizes", json={"pattern": "190/203", "size": "7"}).status_code == 200
     d = a.get("/api/calibration/equipment").json()
     assert {h["id"]: h["size"] for h in d["housings"]}[eq["h_unknown"]] == "7" and d["unknown_sizes"] == []
+
+
+def test_maintenance_columns_on_equipment(eq):
+    """Регламент на данных базы: вычисляемые колонки Оборудования; списанный — без рекомендаций."""
+    u = as_user("u", "user")
+    b = u.get("/api/tables").json()
+    tid = next(t["id"] for t in b if t["title"] == "Оборудование")
+    cols = [f["column_name"] for f in u.get(f"/api/tables/{tid}/fields").json()]
+    assert cols[-5:] == ["_need_to", "_last_to", "_defect", "_defect_mark", "_calib"]
+    u.post("/api/calibrations", json={"key": "cal-mt-00001", "date": "2026-10-01", "equipment_id": eq["mir"], "housing_id": eq["h"]})
+    rows = {r["id"]: r for r in u.get(f"/api/tables/{tid}/records").json()}
+    assert rows[eq["mir"]]["_need_to"]["name"] == "нет данных"           # E7: ТО не было — не «пора»
+    assert rows[eq["mir"]]["_calib"]["name"].startswith("2026-10-01 · ")  # R21: дата + пара
+    assert rows[eq["h"]]["_calib"]["name"].startswith("2026-10-01 · МИР 295")   # видно и у кожуха
+    assert "_need_to" not in rows[eq["h_off"]] and "_calib" not in rows[eq["h_off"]]   # списан
+
+
+def test_rules_admin_edits_thresholds(eq):
+    from sqlalchemy import text as t_
+    with engine.connect() as c:
+        to2 = c.execute(t_("select id from app_maint_rule where level = 'ТО-2' and match ? 'Пульсатор'")).scalar()
+        arr = c.execute(t_("select id from app_maint_rule where on_arrival limit 1")).scalar()
+    u = as_user("u", "user")
+    assert len(u.get("/api/maintenance/rules").json()) >= 13
+    assert u.patch(f"/api/maintenance/rules/{to2}", json={"hours": 300}).status_code == 403
+    a = as_user("a", "admin")
+    assert a.patch(f"/api/maintenance/rules/{arr}", json={"hours": 10}).status_code == 404     # «при поступлении» без порога
+    assert a.patch(f"/api/maintenance/rules/{to2}", json={"hours": 300, "months": None}).status_code == 200
+    assert next(r for r in a.get("/api/maintenance/rules").json() if r["id"] == to2)["hours"] == 300
+    a.patch(f"/api/maintenance/rules/{to2}", json={"hours": 250})   # вернуть (таблица правил общая для тестов)

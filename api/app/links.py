@@ -96,3 +96,16 @@ def link_tables(c, rows, user) -> dict:
             t = names.readable((r.options or {}).get("linkedTableId"))
             out[r.column_name] = t.id if t else None
     return out
+
+
+def pairs(c, table_id: int, title: str = None, target_at: str = None) -> list[tuple[int, int]]:
+    """Пары (запись этой таблицы, связанная запись) ссылочного поля — по названию поля или по таблице-цели;
+    порядок — как в Airtable. Нет такого поля — пусто."""
+    q = ("select m.link_table, m.side from app_field f join at_link_meta m on m.field_id = f.airtable_id "
+         "where f.table_id = :t and f.kind = :k and " + ("f.title = :x" if title else "f.options->>'linkedTableId' = :x")
+         + " order by f.sort_order limit 1")
+    link = c.execute(text(q), {"t": table_id, "k": LINK, "x": title or target_at}).first()
+    if link is None:
+        return []
+    me, other, pos = ("src", "dst", "pos") if link.side == "src" else ("dst", "src", "rpos")
+    return c.execute(text(f"select {me}, {other} from {link.link_table} order by {me}, {pos} nulls last, {other}")).all()

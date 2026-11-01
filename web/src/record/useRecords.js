@@ -19,7 +19,7 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
       api(`/api/tables/${tableId}/fields`),
       api(`/api/tables/${tableId}/records`),
     ])
-    setFields(fs.filter(f => !f.options?.virtual || SERVED.has(f.kind)))
+    setFields(fs.filter(f => !f.options?.virtual || SERVED.has(f.kind) || f.options?.computed))
     setRows(rs)
     setLoading(false)
   }, [tableId])

@@ -54,15 +54,10 @@ def _equipment(c, user) -> dict:
     cols = {r.title: r.column_name for r in c.execute(text(
         "select title, column_name from app_field where table_id = :t and (options->>'virtual') is null"), {"t": eq.id})}
     nn = c.execute(text("select column_name from app_field where table_id = :t and title = 'Наименование'"), {"t": nom.id}).scalar()
-    link = c.execute(text(
-        "select m.link_table, m.side from app_field f join at_link_meta m on m.field_id = f.airtable_id "
-        "where f.table_id = :t and f.kind = :k and f.options->>'linkedTableId' = :n order by f.sort_order limit 1"),
-        {"t": eq.id, "k": links.LINK, "n": nom.airtable_id}).first()
-    if not (nn and link):
+    if not nn:
         return {}
-    me, other, pos = ("src", "dst", "pos") if link.side == "src" else ("dst", "src", "rpos")
     first = {}
-    for m, o in c.execute(text(f"select {me}, {other} from {link.link_table} order by {me}, {pos} nulls last, {other}")):
+    for m, o in links.pairs(c, eq.id, target_at=nom.airtable_id):
         first.setdefault(m, o)
     nom_names = dict(c.execute(text(f"select id, {nn} from {nom.pg_name}")).all())
     sizes = dict(c.execute(text("select pattern, size from app_housing_size")).all())

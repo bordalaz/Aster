@@ -8,7 +8,7 @@ from sqlalchemy import Boolean, MetaData, Table, bindparam, func, select, text, 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError
 
-from . import attachments, computed, links
+from . import attachments, computed, links, maintenance
 from .access import can_edit, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
@@ -36,7 +36,7 @@ def load_table(c, table_id: int):
 @router.get("/{table_id}/records")
 def list_records(table_id: int, user: dict = Depends(active_user)):
     with engine.connect() as c:
-        table_title(c, table_id, user)
+        title = table_title(c, table_id, user)
         t, fields = load_table(c, table_id)
         hidden = hidden_columns(c, user, table_id)   # данные из финансов — только тем, кто их видит
         fields = [f for f in fields if f.column_name not in hidden]
@@ -60,6 +60,10 @@ def list_records(table_id: int, user: dict = Depends(active_user)):
             d.update((col, None if vals is None else vals.get(d["id"], [])) for col, vals in linked)
             d.update((col, att.get((at, fid), [])) for col, fid in files)
             out.append(d)
+        if title == maintenance.EQ:   # регламент ТО (R18–R21): вычисляемые колонки и подсветка строки
+            maint = maintenance.compute(c, user)
+            for d in out:
+                d.update(maint.get(d["id"], {}))
         return out
 
 
