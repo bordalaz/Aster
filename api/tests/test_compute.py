@@ -389,3 +389,12 @@ def test_invalid_field_reported(tmp_path):
         load_snapshot(c, tmp_path)
         rep = verify_computed(c, only={"Оборудование.Битое": "COUNTA"})
     assert rep["fields"]["Оборудование.Битое"]["status"] == "invalid"
+
+
+def test_filter_not_equal_empty_cell_passes():
+    """Airtable: пустая ячейка ≠ «На возврат» — условие истинно (Номенклатура.Всего считает такое оборудование)."""
+    from migrate.compute import _passes
+    f = {"operator": "!=", "operands": ["fldS", "На возврат"]}
+    assert _passes(f, lambda fid, t: (None, t))
+    assert not _passes(f, lambda fid, t: ("На возврат", t))
+    assert not _passes({"operator": "=", "operands": ["fldS", "На возврат"]}, lambda fid, t: (None, t))

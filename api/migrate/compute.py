@@ -157,6 +157,8 @@ def _passes(filt: dict, get) -> bool:
         hit = any(v in target for v in vals)
         return hit if op == "isAnyOf" else not hit
     if op in _OPS:
+        if not vals:   # пустая ячейка: Airtable считает «≠ X» истиной, остальные сравнения — ложью
+            return op == "!="
         # многозначная ячейка (lookup) проходит, если проходит хоть одно значение
         return any(not isinstance(v, dict) and _OPS[op](v, target) for v in vals)
     raise ValueError(f"оператор фильтра {op!r} не поддержан")
