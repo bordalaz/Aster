@@ -41,7 +41,7 @@ export default function Users({ me }) {
       <table style={{ borderCollapse: 'collapse', width: '100%', maxWidth: 900 }}>
         <thead>
           <tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: 12 }}>
-            <th>Логин</th><th>ФИО</th><th>Роль</th><th>Состояние</th><th>Сброс пароля</th>
+            <th>Логин</th><th>ФИО</th><th>Роль</th><th>Финансы</th><th>Состояние</th><th>Сброс пароля</th>
           </tr>
         </thead>
         <tbody>
@@ -55,6 +55,13 @@ export default function Users({ me }) {
                       {[...new Set([u.role, ...roles])].map(r => <option key={r} value={r}>{ROLES[r]}</option>)}
                     </select>
                   : ROLES[u.role]}
+              </td>
+              <td title="Просмотр финансовых таблиц и полей из них; админы видят всегда, выдаёт суперадмин">
+                {u.role === 'superadmin' || u.role === 'admin' ? 'да'
+                  : me.role === 'superadmin'
+                    ? <input type="checkbox" aria-label={`Финансы ${u.login}`} checked={!!u.finance_access}
+                        onChange={e => patch(u.id, { finance_access: e.target.checked })} />
+                    : u.finance_access ? 'да' : 'нет'}
               </td>
               <td>
                 {u.blocked ? 'Заблокирован' : u.must_change_password ? 'Временный пароль' : 'Активен'}

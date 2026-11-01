@@ -95,3 +95,22 @@ test('отказ сервера показывается текстом', async 
   await userEvent.click(within(petr).getByRole('button', { name: 'Заблокировать' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Суперадмина изменить нельзя')
 })
+
+test('доступ к финансам: галочку видит и меняет только суперадмин; у админов — всегда есть', async () => {
+  let patched = null
+  server.use(
+    http.get('/api/users', () => HttpResponse.json(users)),
+    http.patch('/api/users/3', async ({ request }) => { patched = await request.json(); return HttpResponse.json({ ok: true }) }),
+  )
+  const { unmount } = render(<Users me={{ id: 2, role: 'admin' }} />)
+  await screen.findByText('petr')
+  expect(screen.queryByLabelText('Финансы petr')).toBeNull()
+  unmount()
+
+  render(<Users me={{ id: 1, role: 'superadmin' }} />)
+  await screen.findByText('petr')
+  expect(screen.queryByLabelText('Финансы ivan')).toBeNull()   // админ видит финансы по роли
+  await userEvent.click(screen.getByLabelText('Финансы petr'))
+  await screen.findByText('petr')
+  expect(patched).toEqual({ finance_access: true })
+})

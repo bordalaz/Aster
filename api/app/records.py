@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError
 
 from . import computed, links
-from .access import can_edit, table_title
+from .access import can_edit, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
 from migrate.compute import COMPUTED_KINDS
@@ -38,6 +38,8 @@ def list_records(table_id: int, user: dict = Depends(active_user)):
     with engine.connect() as c:
         table_title(c, table_id, user)
         t, fields = load_table(c, table_id)
+        hidden = hidden_columns(c, user, table_id)   # данные из финансов — только тем, кто их видит
+        fields = [f for f in fields if f.column_name not in hidden]
         cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields if f.column_name in t.c and not f.options.get("virtual")]
         if "airtable_id" not in t.c:
             return [dict(r) for r in c.execute(select(*cols).order_by(t.c.id)).mappings()]

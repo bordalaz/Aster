@@ -36,14 +36,14 @@ def test_links_as_names(loaded_fixture):
     assert f[col("fldBinv0000000000")].get("link_table") is None
 
 
-def test_links_to_hidden_table_are_empty(loaded_fixture):
+def test_links_to_hidden_table_are_hidden(loaded_fixture):
     computed.reset()
     t = loaded_fixture
     with engine.begin() as c:   # Номенклатура становится финансовой — пользователю не видна
         c.execute(text("update app_table set title = 'Договоры' where airtable_id = 'tblAAAAAAAAAAAAAA'"))
     u = as_user("usr", "user")
     rows = u.get(f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/records").json()
-    assert all(r[col("fldBnom0000000000")] is None for r in rows)
+    assert all(col("fldBnom0000000000") not in r for r in rows)          # поле целиком скрыто
     assert all(r[col("fldBtrips00000000")] is not None for r in rows)
     f = {x["column_name"]: x for x in u.get(f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/fields").json()}
-    assert f[col("fldBnom0000000000")]["link_table"] is None
+    assert col("fldBnom0000000000") not in f
