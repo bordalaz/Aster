@@ -12,15 +12,13 @@ from . import computed, links
 from .access import table_title
 from .auth import ADMINS, active_user
 from .db import engine
-from .calibration import OFF
-from .maintenance_rules import Rule, add_months, evaluate, is_base, pipe_flags
+from .maintenance_rules import Rule, add_months, evaluate, is_base, pipe_flags, trip_counts
 
 router = APIRouter(prefix="/api")
 
 EQ = "Оборудование"
-FINISHED = "Закончен"   # ponytail: галочку «Обработан» не учитываем — у 2153 из 2292 законченных рейсов её нет,
-                        # и Airtable сам считает циркуляцию по всем рейсам; если галочку начнут ставить — добавить условие
 CAL_MONTHS = 12          # R20: калибровка — год
+OFF = {"Списан", "Оставлено в скважине", "Брак", "На возврат"}   # без подсказок регламента (решение владельца)
 # Вычисляемые колонки сетки Оборудования (R18а, R18б, R21)
 FIELDS = [("_need_to", "Нужное ТО"), ("_last_to", "Последнее ТО"), ("_defect", "Дефектоскопия"),
           ("_defect_mark", "На дефектоскопию"), ("_calib", "Калибровка")]
@@ -69,8 +67,9 @@ def compute(c, user, today: dt.date | None = None) -> dict[int, dict]:
 
     # рейсы (R16, E8)
     trips: dict[int, list] = {}
-    t, rows = _rows(c, "Рейсы APS", "Статус", "Начало", "Конец", "Циркуляция, час")
-    trip = {r[0]: r for r in rows if r[1] == FINISHED and r[4]}
+    t, rows = _rows(c, "Рейсы APS", "Статус", "Начало", "Конец", "Циркуляция, час", "Обработан")
+    cutoff = min(((r[2] or r[3]) for r in rows if r[5] and (r[2] or r[3])), default=None)
+    trip = {r[0]: r for r in rows if trip_counts(r[1], r[4], r[5], r[2] or r[3], cutoff)}
     for tr, e in links.pairs(c, t.id, "ID_Оборудования") if t else []:
         r = trip.get(tr)
         if r:
@@ -120,7 +119,7 @@ def compute(c, user, today: dt.date | None = None) -> dict[int, dict]:
 
     out = {}
     for r in c.execute(text(f"select id, airtable_id, {typ or 'null'} as typ, {status or 'null'} as st from {eq.pg_name}")):
-        if r.st in OFF:   # списанные и оставленные в скважине — без рекомендаций
+        if r.st in OFF:   # выбывшее оборудование — без подсказок
             continue
         nomen = nom_names.get(first.get(r.id))
         ev = events.get(r.id, {})

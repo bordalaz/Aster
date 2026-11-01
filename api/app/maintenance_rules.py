@@ -33,6 +33,15 @@ def add_months(d: dt.date, months: int) -> dt.date:
     return dt.date(year, month, min(d.day, last))
 
 
+def trip_counts(status: str | None, hours, processed: bool, start, cutoff) -> bool:
+    """R16, E8: рейс идёт в наработку, если он «Закончен», с циркуляцией и обработан («Обработан» — отметка,
+    что даты, метры и циркуляция проверены). Рейсы до появления отметки (cutoff — начало первого обработанного)
+    заводились без неё — считаются все законченные."""
+    if status != "Закончен" or not hours:
+        return False
+    return bool(processed) or cutoff is None or (start is not None and start < cutoff)
+
+
 def hours_since(trips: list[tuple[dt.date, float]], since: dt.date) -> float:
     """trips — (дата начала, часы) законченных рейсов прибора (E8: прочие сюда не попадают)."""
     return round(sum(h for d, h in trips if d >= since), 2)

@@ -92,3 +92,14 @@ def test_plain_to_is_not_a_level():
     """«ТО» без уровня не сбрасывает отсчёт и не считается ТО-1 (решение владельца)."""
     from app.maintenance import _to_event
     assert _to_event("ТО Уровень 2") == "ТО-2" and _to_event("ТО") is None and _to_event("Осмотр") is None
+
+
+def test_trip_counts_processed_or_before_flag_existed():
+    from app.maintenance_rules import trip_counts
+    cut = dt.datetime(2025, 9, 24)
+    assert trip_counts("Закончен", 10, True, dt.datetime(2026, 1, 1), cut)
+    assert not trip_counts("Закончен", 10, False, dt.datetime(2026, 1, 1), cut)      # после появления отметки — нужна она
+    assert trip_counts("Закончен", 10, False, dt.datetime(2024, 1, 1), cut)          # старые рейсы — без отметки
+    assert not trip_counts("В работе", 10, True, dt.datetime(2026, 1, 1), cut)       # E8
+    assert not trip_counts("Закончен", None, True, dt.datetime(2026, 1, 1), cut)
+    assert trip_counts("Закончен", 10, False, dt.datetime(2026, 1, 1), None)         # отметок ещё нет нигде
