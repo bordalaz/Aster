@@ -36,11 +36,12 @@ class ViewConfig(Strict):
     widths: dict[str, int] | None = None
     sort: list[SortItem] | None = Field(None, max_length=10)
     filters: list[FilterItem] | None = Field(None, max_length=30)
+    group: str | None = Field(None, min_length=1, max_length=100)   # группировка по одной колонке
     source: Literal["airtable"] | None = None
 
     def used_columns(self) -> set[str]:
         return (set(self.columns or ()) | set(self.widths or ()) | {s.col for s in self.sort or ()}
-                | {f.col for f in self.filters or ()})
+                | {f.col for f in self.filters or ()} | ({self.group} if self.group else set()))
 
 
 def check_config(c, table_id: int, cfg: ViewConfig) -> dict:

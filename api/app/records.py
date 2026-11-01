@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import Boolean, MetaData, Table, bindparam, func, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError
@@ -58,48 +58,79 @@ class PatchBody(BaseModel):
     values: dict[str, Any]
 
 
+def _editable_table(c, table_id: int, user: dict, what: str):
+    if not can_edit(user, table_title(c, table_id, user)):
+        log.warning("правка запрещена: %s (%s) → таблица %s, %s", user["login"], user["role"], table_id, what)   # E4
+        raise HTTPException(403, "Нет прав на правку этой таблицы")
+    return load_table(c, table_id)
+
+
+def _update(c, t, fields, table_id: int, record_id: int, body: PatchBody, user: dict, many: bool = False) -> dict:
+    """Правка одной записи с проверкой версии и записью истории; вызывается внутри транзакции."""
+    bad = set(body.values) - {f.column_name for f in fields if f.editable}
+    if bad:
+        raise HTTPException(422, "Нельзя менять поля: " + ", ".join(sorted(bad)))
+    # Postgres молча кладёт true в int как 1 — отсекаем сами
+    bad = {k for k, v in body.values.items() if isinstance(v, bool) and not isinstance(t.c[k].type, Boolean)}
+    if bad:
+        raise HTTPException(422, "Неверное значение: " + ", ".join(sorted(bad)))
+    cols = sorted(body.values)
+    as_json = [func.to_jsonb(t.c[k]).label(k) for k in cols]   # значения в JSON — как их хранит история
+    mine = (t.c.id == record_id, t.c.updated_at == body.updated_at)
+    old = c.execute(select(t.c.id, *as_json).where(*mine).with_for_update()).first()
+    if not old:
+        where = f" (запись {record_id})" if many else ""
+        if c.execute(select(t.c.id).where(t.c.id == record_id)).first():
+            raise HTTPException(409, "Запись уже изменили — обновите и повторите" + where)
+        raise HTTPException(404, "Нет такой записи" + where)
+    row = c.execute(
+        update(t).where(*mine)
+        .values(**body.values, updated_at=func.now(), updated_by=user["id"])
+        .returning(t.c.id, t.c.updated_at, *as_json)
+    ).first()
+    changes = [{"t": table_id, "r": record_id, "c": k, "o": old._mapping[k], "n": row._mapping[k], "u": user["id"]}
+               for k in cols if old._mapping[k] != row._mapping[k]]
+    if changes:   # R11: только реально изменённые поля
+        c.execute(text(
+            "insert into app_change (table_id, record_id, column_name, old, new, user_id) "
+            "values (:t, :r, :c, :o, :n, :u)"
+        ).bindparams(bindparam("o", type_=JSONB), bindparam("n", type_=JSONB)), changes)
+    return {"id": row.id, "updated_at": row.updated_at}
+
+
 @router.patch("/{table_id}/records/{record_id}")
 def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = Depends(active_user)):
     try:
         with engine.begin() as c:
-            if not can_edit(user, table_title(c, table_id, user)):
-                log.warning("правка запрещена: %s (%s) → таблица %s, запись %s",
-                            user["login"], user["role"], table_id, record_id)   # E4
-                raise HTTPException(403, "Нет прав на правку этой таблицы")
-            t, fields = load_table(c, table_id)
-            bad = set(body.values) - {f.column_name for f in fields if f.editable}
-            if bad:
-                raise HTTPException(422, "Нельзя менять поля: " + ", ".join(sorted(bad)))
-            # Postgres молча кладёт true в int как 1 — отсекаем сами
-            bad = {k for k, v in body.values.items() if isinstance(v, bool) and not isinstance(t.c[k].type, Boolean)}
-            if bad:
-                raise HTTPException(422, "Неверное значение: " + ", ".join(sorted(bad)))
-            cols = sorted(body.values)
-            as_json = [func.to_jsonb(t.c[k]).label(k) for k in cols]   # значения в JSON — как их хранит история
-            mine = (t.c.id == record_id, t.c.updated_at == body.updated_at)
-            old = c.execute(select(t.c.id, *as_json).where(*mine).with_for_update()).first()
-            if not old:
-                if c.execute(select(t.c.id).where(t.c.id == record_id)).first():
-                    raise HTTPException(409, "Запись уже изменили — обновите и повторите")
-                raise HTTPException(404, "Нет такой записи")
-            row = c.execute(
-                update(t).where(*mine)
-                .values(**body.values, updated_at=func.now(), updated_by=user["id"])
-                .returning(t.c.id, t.c.updated_at, *as_json)
-            ).first()
-            changes = [{"t": table_id, "r": record_id, "c": k, "o": old._mapping[k], "n": row._mapping[k], "u": user["id"]}
-                       for k in cols if old._mapping[k] != row._mapping[k]]
-            if changes:   # R11: только реально изменённые поля
-                c.execute(text(
-                    "insert into app_change (table_id, record_id, column_name, old, new, user_id) "
-                    "values (:t, :r, :c, :o, :n, :u)"
-                ).bindparams(bindparam("o", type_=JSONB), bindparam("n", type_=JSONB)), changes)
-            res = {"id": row.id, "updated_at": row.updated_at}
+            t, fields = _editable_table(c, table_id, user, f"запись {record_id}")
+            res = _update(c, t, fields, table_id, record_id, body, user)
         computed.invalidate()   # после commit: зависящие от правки формулы и итоги пересчитаются
         return res
     except DBAPIError:
         # не отдаём текст ошибки БД наружу (раскрывает структуру) — деталь уходит в лог
         log.warning("patch_record %s/%s отклонён БД", table_id, record_id, exc_info=True)
+        raise HTTPException(422, "Неверное значение поля")
+
+
+class BatchItem(PatchBody):
+    id: int
+
+
+class BatchBody(BaseModel):
+    items: list[BatchItem] = Field(min_length=1, max_length=1000)
+
+
+@router.patch("/{table_id}/records")
+def patch_records(table_id: int, body: BatchBody, user: dict = Depends(active_user)):
+    """Пакетная правка (вставка из Excel, R9): всё или ничего, один пересчёт формул на пакет."""
+    try:
+        with engine.begin() as c:
+            t, fields = _editable_table(c, table_id, user, f"пакет из {len(body.items)}")
+            res = [_update(c, t, fields, table_id, it.id, it, user, many=True) for it in body.items]
+        computed.invalidate()
+        return res
+    except DBAPIError:
+        log.warning("patch_records %s отклонён БД", table_id, exc_info=True)
         raise HTTPException(422, "Неверное значение поля")
 
 
