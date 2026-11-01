@@ -63,6 +63,21 @@ def cmd_views() -> int:
     return 0
 
 
+def cmd_forms() -> int:
+    """Формы из снимка редактора форм Airtable (forms_airtable.jsonl) → app_form; данные не трогает."""
+    from .forms import load_forms
+    p = SNAP / "forms_airtable.jsonl"
+    if not p.exists():
+        print(f"Нет {p}")
+        return 2
+    forms = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
+    titles = {v["id"]: v["name"] for t in json.loads((SNAP / "schema.json").read_text(encoding="utf-8")) for v in t["views"]}
+    with engine.begin() as c:
+        n = load_forms(c, forms, titles)
+    print(f"Форм перенесено: {n}")
+    return 0
+
+
 def cmd_verify() -> int:
     with engine.connect() as c:
         rep = verify(c, SNAP)
@@ -106,11 +121,11 @@ def cmd_compute_verify() -> int:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m migrate", description=__doc__)
-    p.add_argument("command", choices=["fetch", "load", "views", "verify", "compute-verify", "all"])
+    p.add_argument("command", choices=["fetch", "load", "views", "forms", "verify", "compute-verify", "all"])
     p.add_argument("--no-files", action="store_true", help="без вложений; докачать — тот же fetch без флага")
     a = p.parse_args(argv)
     fetch = lambda: cmd_fetch(files=not a.no_files)  # noqa: E731
-    steps = {"fetch": [fetch], "load": [cmd_load], "views": [cmd_views], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
+    steps = {"fetch": [fetch], "load": [cmd_load], "views": [cmd_views], "forms": [cmd_forms], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
              "all": [fetch, cmd_load, cmd_verify]}[a.command]
     for step in steps:
         code = step()
