@@ -55,3 +55,31 @@ test('вставка: русские числа и галочки', () => {
   expect(parsePastedBool('да')).toBe(true)
   expect(parsePastedBool('')).toBe(false)
 })
+
+import { summarize, rowColor, orderRows } from './layout.js'
+
+test('итоги внизу — функции Airtable', () => {
+  const num = { kind: 'number', column_name: 'q', options: { precision: 0 } }
+  const rows = [{ q: 2 }, { q: 4 }, { q: null }, { q: 9 }]
+  expect(summarize(num, rows, 'sum')).toBe('Сумма 15')
+  expect(summarize(num, rows, 'average')).toBe('Средн. 5')
+  expect(summarize(num, rows, 'median')).toBe('Медиана 4')
+  expect(summarize(num, rows, 'max')).toBe('Макс. 9')
+  expect(summarize({ kind: 'singleLineText', column_name: 'q' }, [{ q: 'a' }, { q: 'a' }, { q: 'b' }, { q: null }], 'countUnique')).toBe('Уникальных 2')
+  expect(summarize({ kind: 'date', column_name: 'd' }, [{ d: '2026-03-01' }, { d: '2025-01-09' }], 'earliestDate')).toBe('Самая ранняя 09.01.2025')
+  const dur = { kind: 'duration', column_name: 'h', options: { durationFormat: 'h:mm' } }
+  expect(summarize(dur, [{ h: 3600 }, { h: 1800 }], 'sum')).toBe('Сумма 1:30')
+})
+
+test('цвет строки: по полю выбора или по первому сработавшему правилу', () => {
+  const st = { kind: 'singleSelect', column_name: 's', options: { choices: [{ name: 'Брак', color: 'redBright' }] } }
+  expect(rowColor({ kind: 'select', col: 's' }, [st], { s: 'Брак' })).toBe('#f82b60')
+  expect(rowColor({ kind: 'select', col: 's' }, [st], { s: null })).toBe(null)
+  const rules = { kind: 'rules', rules: [{ color: 'greenDark', filters: [{ col: 's', op: 'contains', value: 'бр' }] }] }
+  expect(rowColor(rules, [st], { s: 'Брак' })).toBe('#338a17')
+  expect(rowColor(rules, [st], { s: 'Склад' })).toBe(null)
+})
+
+test('ручной порядок записей вида (сортировка в Airtable выключена); новые — в конце', () => {
+  expect(orderRows([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }], [3, 1, 2]).map(r => r.id)).toEqual([3, 1, 2, 4])
+})

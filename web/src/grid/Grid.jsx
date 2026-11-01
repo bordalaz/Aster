@@ -3,7 +3,7 @@ import { CompactSelection, DataEditor, GridCellKind } from '@glideapps/glide-dat
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { displayValue, isLink, kindOf, toCell, fromCell } from './cells.js'
-import { columnTotal, groupRows, parsePastedBool, parsePastedNumber, toCSV } from './layout.js'
+import { columnTotal, groupRows, orderRows, parsePastedBool, parsePastedNumber, rowColor, summarize, toCSV } from './layout.js'
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 import { renderers } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
@@ -45,7 +45,7 @@ const THEME = {
   fontFamily: '-apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   editorFontSize: '13px', lineHeight: 1.4, headerIconSize: 16,
 }
-const ROW_H = 32, GROUP_H = 44, NUMERIC = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
+const ROW_H = { small: 32, medium: 56, large: 88, xlarge: 128 }, GROUP_H = 44, NUMERIC = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
 
 // Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
 // Без onConfigChange (тесты, простые места) держит конфиг сама. search — поиск из панели вида.
@@ -60,7 +60,9 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const cols = useMemo(() => visibleColumns(fields, primaryField, config.columns), [fields, primaryField, config.columns])
   const widths = config.widths ?? {}
   const sorting = useMemo(() => (config.sort ?? []).map(s => ({ id: s.col, desc: s.desc })), [config.sort])
-  const data = useMemo(() => applyFilters(fields, rows, config.filters), [fields, rows, config.filters])
+  // сортировка в Airtable выключена — записи в сохранённом порядке вида (rowOrder)
+  const data = useMemo(() => orderRows(applyFilters(fields, rows, config.filters), config.sort?.length ? null : config.rowOrder),
+    [fields, rows, config.filters, config.sort, config.rowOrder])
 
   const table = useReactTable({
     data,
@@ -84,11 +86,17 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const [collapsed, setCollapsed] = useState(new Set())
   const items = useMemo(() => groupRows(shownRows, groupFields, collapsed), [shownRows, groupFields, collapsed])
   // Итоги как у Airtable по умолчанию: суммы только у числовых полей, остальное пусто; слева — число записей.
-  const totals = useMemo(() => cols.map((c, i) => (i === 0 ? `${view.length} ${plural(view.length)}`
-    : NUMERIC.has(kindOf(c)) ? columnTotal(c, shownRows) : '')), [cols, shownRows, view.length])
+  // Итоги внизу — по настройке вида, как в Airtable; у «Все записи» (своего вида в Airtable нет) — суммы чисел.
+  const totals = useMemo(() => cols.map((c, i) => {
+    const count = `${view.length} ${plural(view.length)}`
+    const own = config.summary ? summarize(c, shownRows, config.summary[c.column_name])
+      : config.source !== 'airtable' && NUMERIC.has(kindOf(c)) ? columnTotal(c, shownRows) : ''
+    return i === 0 ? [count, own].filter(Boolean).join(' · ') : own
+  }), [cols, shownRows, view.length, config.summary, config.source])
   // ПКМ по заголовку группы — меню как в Airtable: свернуть/развернуть группу, развернуть все, свернуть все.
   const [groupMenu, setGroupMenu] = useState(null)   // {x, y, id, collapsed}
   const hovered = useRef(null)                        // ячейка под курсором — для ПКМ
+  const [info, setInfo] = useState(null)             // описание поля по ⓘ в заголовке
   const allGroupIds = () => groupRows(shownRows, groupFields, new Set()).filter(i => i.kind === 'group').map(i => i.id)
   const toggleGroup = key => setCollapsed(prev => {
     const next = new Set(prev)
@@ -109,6 +117,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // Колонка 0 — номера записей (как в Airtable: группы не нумеруются); щелчок по номеру открывает карточку.
   const gridColumns = useMemo(() => [{ id: '__n', title: '', width: 52 }, ...cols.map(c => ({
     id: c.column_name, title: c.title, icon: `i-${fieldIcon(c.kind)}`,
+    ...(c.description ? { hasMenu: true, menuIcon: 'i-info' } : {}),   // ⓘ описание поля, как в Airtable
     width: widths[c.column_name] ?? (c.column_name === primaryField ? 260 : 160),
   }))], [cols, widths, primaryField])
   const nums = useMemo(() => { let n = 0; return items.map(i => (i.kind === 'row' ? ++n : null)) }, [items])
@@ -127,10 +136,11 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
         data: { kind: 'group', label: groupFields[it.depth]?.title ?? '', value: String(it.key || '(пусто)'), count: it.count,
           collapsed: it.collapsed, depth: it.depth } }
     }
-    if (ci === 0) return { ...text(String(nums[ri]), false), contentAlign: 'center', themeOverride: { baseFontStyle: '11px', textDark: '#a0a4ab' } }
+    if (ci === 0) return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: String(nums[ri]),
+      data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row) } }
     const field = fieldAt(ci)
     return toCell(field, it.row[field.column_name])
-  }, [cols, items, totals, groupFields, nums])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cols, items, totals, groupFields, nums, config.color, fields])   // eslint-disable-line react-hooks/exhaustive-deps
   const rowAt = ri => (items[ri]?.kind === 'row' ? items[ri].row : null)
 
   const onCellEdited = useCallback(([ci, ri], cell) => {
@@ -190,6 +200,12 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
         e.preventDefault()
         setGroupMenu({ x: e.clientX, y: e.clientY, id: it.id, collapsed: it.collapsed })
       }}>
+        {info?.text && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setInfo(null)} />
+            <div className="pop field-info" role="tooltip" style={{ position: 'fixed', left: Math.max(8, info.x), top: info.y, zIndex: 31 }}>{info.text}</div>
+          </>
+        )}
         {groupMenu && (
           <GroupMenu at={groupMenu} onClose={() => setGroupMenu(null)}
             onToggle={() => toggleGroup(groupMenu.id)} onExpandAll={() => setCollapsed(new Set())}
@@ -202,7 +218,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           customRenderers={renderers}
           columns={gridColumns}
           rows={items.length + 1}
-          rowHeight={ri => (items[ri]?.kind === 'group' ? GROUP_H : ROW_H)}
+          rowHeight={ri => (items[ri]?.kind === 'group' ? GROUP_H : ROW_H[config.rowHeight] ?? ROW_H.small)}
           headerHeight={32}
           freezeTrailingRows={1}
           getCellContent={getCellContent}
@@ -212,6 +228,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           coercePasteValue={coercePasteValue}
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
           onItemHovered={a => { hovered.current = a.kind === 'cell' ? a.location : null }}
+          onHeaderMenuClick={(ci, bounds) => setInfo({ text: cols[ci - 1]?.description, x: bounds.x + bounds.width - 260, y: bounds.y + bounds.height + 4 })}
           onCellClicked={([ci, ri]) => {
             if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
             else if (ci === 0 && rowAt(ri)) onOpen(rowAt(ri), shownRows.map(r => r.id))
@@ -228,7 +245,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
             patchConfig({ columns: names.filter(n => n !== primaryField) })
           }}
           rowMarkers="none"
-          freezeColumns={2}
+          freezeColumns={1 + Math.min(Math.max(config.frozen ?? 1, 1), cols.length)}   // номера + закреплённые поля вида
           width="100%"
           height="100%"
           smoothScrollY

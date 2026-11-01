@@ -55,11 +55,15 @@ test('вход вне офиса — сообщение сервера (E2)', as
   expect(await screen.findByText('Вход вне офиса доступен только администраторам')).toBeInTheDocument()
 })
 
-test('кнопка «Пользователи» — только админам', async () => {
+test('меню профиля: «Пользователи» — только админам, «Сменить пароль» и «Выйти» — всем', async () => {
   server.use(http.get('/api/auth/me', () => HttpResponse.json({ id: 3, login: 'petr', name: 'Пётр', role: 'user', must_change_password: false })))
   render(<App />)
   await screen.findByRole('tab', { name: 'Ведомость ЗИП' })
-  expect(screen.queryByRole('button', { name: 'Пользователи' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /Пароль/ })).toBeNull()        // в шапке пароля больше нет
+  await userEvent.click(screen.getByRole('button', { name: 'Профиль' }))
+  expect(screen.queryByRole('menuitem', { name: 'Пользователи' })).toBeNull()
+  expect(screen.getByRole('menuitem', { name: 'Сменить пароль' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Выйти' })).toBeInTheDocument()
 })
 
 test('админ: суперадмина и себя не трогает, пользователя — может; создаёт с временным паролем', async () => {

@@ -50,6 +50,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tab[aria-selected="true"] { background: #fff; color: var(--text); font-weight: 500; border-radius: 3px 3px 0 0; box-shadow: 0 0 0 1px var(--line); clip-path: inset(-1px -1px 0 -1px); }
 .tab[aria-selected="true"]::before, .tab[aria-selected="true"] + .tab::before { display: none; }
 .tabs .all { flex: none; margin-left: 4px; }
+.tab-active { display: inline-flex; align-items: center; flex: none; height: 32px; background: #fff; border-radius: 3px 3px 0 0; box-shadow: 0 0 0 1px var(--line); clip-path: inset(-1px -1px 0 -1px); }
+.tab-active .tab { background: none; box-shadow: none; clip-path: none; padding-right: 4px; }
+.tab-active + .tab::before { display: none; }
+.tab-caret { border: 0; background: none; height: 22px; width: 22px; margin-right: 4px; border-radius: 4px; display: grid; place-items: center; color: var(--text2); cursor: pointer; }
+.tab-caret:hover { background: var(--hover); }
 
 /* --- панель вида --- */
 .viewbar { height: 44px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: #fff; border-bottom: 1px solid var(--line-strong); }
@@ -72,13 +77,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .menu button:hover { background: var(--hover); }
 .menu .sep { height: 1px; background: var(--line); margin: 4px 0; }
 
-/* --- боковая панель видов --- */
-.views-side { width: 260px; flex: none; border-right: 1px solid var(--line); background: #fff; padding: 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.views-side h5 { margin: 10px 8px 4px; font-size: 11px; font-weight: 500; color: var(--muted); }
-.views-side button { border: 0; background: none; text-align: left; height: 32px; padding: 0 8px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.views-side button:hover { background: var(--hover); }
-.views-side button[aria-current="true"] { background: #e9f0fd; font-weight: 500; }
-.views-side input { height: 30px; border: 1px solid transparent; border-bottom-color: var(--line); padding: 0 8px; margin-bottom: 4px; }
+/* --- боковая панель видов, как в Airtable --- */
+.views-side { width: 280px; flex: none; border-right: 1px solid var(--line); background: #fff; padding: 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.views-side button { border: 0; background: none; text-align: left; cursor: pointer; color: var(--text); }
+.vs-create { height: 32px; padding: 0 10px; border-radius: 4px; display: flex; align-items: center; gap: 10px; }
+.vs-create:hover, .vs-item:hover, .vs-section:hover { background: var(--hover); }
+.vs-create-form input { width: 100%; height: 32px; border: 1px solid var(--accent); border-radius: 4px; padding: 0 8px; }
+.vs-search { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.vs-search input { flex: 1; border: 0; outline: none; height: 30px; background: none; min-width: 0; }
+.vs-section { width: 100%; height: 32px; padding: 0 8px; border-radius: 4px; display: flex; align-items: center; gap: 8px; color: var(--text2); margin-top: 6px; }
+.vs-list { display: grid; gap: 1px; }
+.vs-item { height: 32px; padding: 0 10px 0 22px; border-radius: 4px; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.vs-list > .vs-item:only-child { padding-left: 10px; }
+.vs-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-item[aria-current="true"] { background: #e7e9ee; font-weight: 500; }
 
 /* --- раскрытая запись (карточка), как в Airtable --- */
 .card-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45); display: flex; justify-content: center; padding: 72px 16px 12px; }
@@ -125,3 +137,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sel-editor li:hover, .sel-editor li[aria-selected="true"] { background: #f1f5ff; }
 .sel-editor li.empty { color: var(--muted); cursor: default; }
 .sel-editor .link { border: 0; background: none; color: var(--accent); cursor: pointer; justify-self: start; padding: 4px 6px; }
+
+/* профиль, как в Airtable */
+.avatar { width: 28px; height: 28px; border-radius: 50%; border: 0; background: #6d4c41; color: #fff; font-weight: 600; cursor: pointer; display: grid; place-items: center; }
+.avatar:hover { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08); }
+.profile-head { display: grid; padding: 6px 8px; }
+.profile-head span { color: var(--muted); font-size: 12px; }
+
+/* ⓘ описание поля/таблицы, как в Airtable */
+.info { display: inline-flex; color: var(--faint); margin-left: 2px; cursor: help; }
+.field-info { min-width: 0; width: 260px; font-size: 12px; line-height: 1.45; color: var(--text); white-space: pre-wrap; }

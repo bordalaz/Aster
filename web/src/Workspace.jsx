@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import TableTabs from './tables/TableTabs.jsx'
 import TableView from './grid/TableView.jsx'
@@ -7,6 +7,36 @@ import Forms from './forms/Forms.jsx'
 import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
 import { Icon } from './ui/icons.jsx'
+
+// Профиль, как в Airtable: кружок с инициалом → имя, «Пользователи» (админы), «Сменить пароль», «Выйти».
+function ProfileMenu({ user, isAdmin, onUsers, onPassword, onLogout }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const down = e => { if (!box.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [open])
+  const go = fn => () => { setOpen(false); fn() }
+  return (
+    <div ref={box} style={{ position: 'relative' }}>
+      <button className="avatar" aria-label="Профиль" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {(user?.name ?? '?').trim().charAt(0).toUpperCase()}
+      </button>
+      {open && (
+        <div className="pop menu" role="menu" style={{ right: 0, top: 40 }}>
+          <div className="profile-head"><strong>{user?.name}</strong><span>{user?.login}</span></div>
+          <div className="sep" />
+          {isAdmin && <button role="menuitem" onClick={go(onUsers)}><Icon name="users" />Пользователи</button>}
+          <button role="menuitem" onClick={go(onPassword)}><Icon name="key" />Сменить пароль</button>
+          <div className="sep" />
+          <button role="menuitem" onClick={go(onLogout)}><Icon name="signOut" />Выйти</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Оболочка как в Airtable: верхняя полоса базы с разделами, под ней вкладки таблиц.
 export default function Workspace({ user, onLogout }) {
@@ -46,14 +76,14 @@ export default function Workspace({ user, onLogout }) {
           <button aria-current={section('forms')} onClick={() => setScreen('forms')}>Формы</button>
         </nav>
         <div className="right">
-          {/* ponytail: калибровка скрыта до конца переноса Airtable 1:1 */}
-          {isAdmin && <button className="quiet" aria-current={section('users')} onClick={() => setScreen('users')}><Icon name="users" />Пользователи</button>}
-          <button className="quiet" onClick={() => setScreen('password')}><Icon name="key" />Пароль</button>
-          <span style={{ color: 'var(--muted)', padding: '0 4px' }}>{user?.name}</span>
-          <button className="quiet" onClick={onLogout} aria-label="Выход" title="Выход"><Icon name="signOut" /></button>
+          <ProfileMenu user={user} isAdmin={isAdmin} onUsers={() => setScreen('users')} onPassword={() => setScreen('password')} onLogout={onLogout} />
         </div>
       </header>
-      {screen === 'table' && <TableTabs tables={tables} activeId={activeId} onPick={setActiveId} />}
+      {screen === 'table' && <TableTabs tables={tables} activeId={activeId} onPick={setActiveId}
+        onHide={isAdmin ? async (id, hidden) => {
+          await api(`/api/tables/${id}`, { method: 'PATCH', body: { hidden } })
+          setTables(ts => ts.map(t => (t.id === id ? { ...t, hidden } : t)))
+        } : undefined} />}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {screen === 'forms' && <Forms />}
         {screen === 'calibration' && <Calibration user={user} />}

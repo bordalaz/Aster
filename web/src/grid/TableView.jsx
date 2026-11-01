@@ -93,7 +93,14 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
         config={config} setConfig={setConfig} reload={reload} side={side} onToggleSide={() => setSide(!side)}
         search={search} onSearch={setSearch} onExport={() => exportRef.current?.()} />
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        {side && <ViewsSide views={views} current={current} onSelect={select} />}
+        {side && <ViewsSide views={views} current={current} onSelect={select} onCreate={async t => {
+          setError('')
+          try {
+            const { source, ...own } = config
+            const { id } = await api(`/api/tables/${tableId}/views`, { method: 'POST', body: { title: t, shared: false, config: own } })
+            await reload(id)
+          } catch { setError('Не удалось создать вид') }
+        }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
