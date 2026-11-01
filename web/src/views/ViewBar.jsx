@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, ApiError } from '../api.js'
-import { NO_VALUE, OPS, sameConfig, visibleColumns } from '../grid/viewConfig.js'
+import { groupCols, LIST_OPS, NO_VALUE, OPS, sameConfig, visibleColumns } from '../grid/viewConfig.js'
 
 const isAdmin = u => u?.role === 'superadmin' || u?.role === 'admin'
 const errText = e => (e instanceof ApiError && typeof e.body?.detail === 'string') ? e.body.detail : 'Не удалось сохранить вид'
@@ -50,6 +50,18 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
     setColumns(next)
   }
   const setFilter = (i, p) => setConfig({ ...config, filters: filters.map((f, j) => (j === i ? { ...f, ...p } : f)) })
+  // смена условия между списочным и обычным — значение переводится, а не теряется
+  const setOp = (i, op) => {
+    const v = filters[i].value
+    const value = LIST_OPS.has(op) ? (Array.isArray(v) ? v : v ? [String(v)] : []) : (Array.isArray(v) ? v.join(';') : v)
+    setFilter(i, { op, value })
+  }
+  const groups = groupCols(config.group)
+  const setGroup = (level, col) => {
+    const next = [...groups.slice(0, level), ...(col ? [col] : [])]
+    const { group, ...rest } = config
+    setConfig(next.length ? { ...rest, group: next } : rest)
+  }
 
   const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }
   const box = { padding: '8px 12px', borderBottom: '1px solid var(--line)', background: 'var(--panel)', display: 'grid', gap: 6, maxHeight: 280, overflowY: 'auto' }
@@ -67,11 +79,13 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
           </optgroup>}
         </select>
         {dirty && <span style={{ color: 'var(--warn, #F08A24)', fontSize: 12 }}>не сохранено</span>}
-        <select aria-label="Группировка" value={config.group ?? ''}
-          onChange={e => { const { group, ...rest } = config; setConfig(e.target.value ? { ...rest, group: e.target.value } : rest) }}>
-          <option value="">Без группировки</option>
-          {fields.map(f => <option key={f.column_name} value={f.column_name}>Группа: {f.title}</option>)}
-        </select>
+        {[0, 1, 2].filter(l => l <= groups.length).map(l => (
+          <select key={l} aria-label={l ? `Группировка, уровень ${l + 1}` : 'Группировка'} value={groups[l] ?? ''}
+            onChange={e => setGroup(l, e.target.value)}>
+            <option value="">{l ? 'затем —' : 'Без группировки'}</option>
+            {fields.map(f => <option key={f.column_name} value={f.column_name}>{l ? 'затем: ' : 'Группа: '}{f.title}</option>)}
+          </select>
+        ))}
         <button className="btn" aria-pressed={panel === 'columns'} onClick={() => setPanel(panel === 'columns' ? null : 'columns')}>Колонки</button>
         <button className="btn" aria-pressed={panel === 'filters'} onClick={() => setPanel(panel === 'filters' ? null : 'filters')}>
           Фильтры{filters.length ? ` (${filters.length})` : ''}
@@ -81,10 +95,6 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
         {canEdit && <button className="btn" onClick={remove}>Удалить вид</button>}
       </div>
 
-      {config.source === 'airtable' && !filters.length && !config.sort?.length &&
-        <div style={{ padding: '4px 12px', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid var(--line)' }}>
-          Вид перенесён из Airtable с набором колонок. Фильтры и сортировку Airtable не отдаёт — задайте их и сохраните вид.
-        </div>}
       {error && <div className="err" role="alert" style={{ padding: '4px 12px' }}>{error}</div>}
 
       {panel === 'columns' && (
@@ -111,11 +121,13 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
               <select aria-label="Поле фильтра" value={f.col} onChange={e => setFilter(i, { col: e.target.value })}>
                 {fields.map(x => <option key={x.column_name} value={x.column_name}>{x.title}</option>)}
               </select>
-              <select aria-label="Условие" value={f.op} onChange={e => setFilter(i, { op: e.target.value })}>
+              <select aria-label="Условие" value={f.op} onChange={e => setOp(i, e.target.value)}>
                 {Object.entries(OPS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
-              {!NO_VALUE.has(f.op) &&
-                <input aria-label="Значение фильтра" value={f.value ?? ''} maxLength={500} onChange={e => setFilter(i, { value: e.target.value })} />}
+              {!NO_VALUE.has(f.op) && (LIST_OPS.has(f.op)
+                ? <input aria-label="Значение фильтра" title="Несколько значений — через ;" placeholder="значение; значение"
+                    value={(f.value ?? []).join(';')} onChange={e => setFilter(i, { value: e.target.value.split(';').slice(0, 50) })} />
+                : <input aria-label="Значение фильтра" value={f.value ?? ''} maxLength={500} onChange={e => setFilter(i, { value: e.target.value })} />)}
               <button className="btn" aria-label="Убрать условие"
                 onClick={() => setConfig({ ...config, filters: filters.filter((_, j) => j !== i) })}>×</button>
             </div>

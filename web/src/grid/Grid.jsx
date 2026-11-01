@@ -4,7 +4,7 @@ import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel 
 import '@glideapps/glide-data-grid/dist/index.css'
 import { toCell, fromCell } from './cells.js'
 import { columnTotal, groupRows, parsePastedBool, parsePastedNumber, toCSV } from './layout.js'
-import { applyFilters, visibleColumns } from './viewConfig.js'
+import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 
 function plural(n) {
   const a = n % 10, b = n % 100
@@ -46,9 +46,10 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const shownRows = useMemo(() => view.map(r => r.original), [view])
 
   // Группировка (R9) и строка итогов, закреплённая внизу.
-  const groupField = fields.find(f => f.column_name === config.group)
+  const groupFields = useMemo(() => groupCols(config.group).map(c => fields.find(f => f.column_name === c)).filter(Boolean),
+    [config.group, fields])
   const [collapsed, setCollapsed] = useState(new Set())
-  const items = useMemo(() => groupRows(shownRows, groupField, collapsed), [shownRows, groupField, collapsed])
+  const items = useMemo(() => groupRows(shownRows, groupFields, collapsed), [shownRows, groupFields, collapsed])
   const totals = useMemo(() => cols.map(c => columnTotal(c, shownRows)), [cols, shownRows])
   const toggleGroup = key => setCollapsed(prev => {
     const next = new Set(prev)
@@ -75,7 +76,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const getCellContent = useCallback(([ci, ri]) => {
     if (ri === items.length) return text(totals[ci], true)          // строка итогов
     const it = items[ri]
-    if (it.kind === 'group') return text(ci === 0 ? `${it.collapsed ? '▸' : '▾'} ${it.key} · ${it.count}` : '', true)
+    if (it.kind === 'group') return text(ci === 0 ? `${'    '.repeat(it.depth)}${it.collapsed ? '▸' : '▾'} ${it.key} · ${it.count}` : '', true)
     const field = cols[ci]
     return toCell(field, it.row[field.column_name])
   }, [cols, items, totals])
@@ -132,7 +133,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
           onCellClicked={([, ri]) => {
             const it = items[ri]
-            if (it?.kind === 'group') toggleGroup(it.key)
+            if (it?.kind === 'group') toggleGroup(it.id)
             else if (it?.kind === 'row') onOpen(it.row)
           }}
           onHeaderClicked={ci => table.getColumn(cols[ci].column_name).toggleSorting()}

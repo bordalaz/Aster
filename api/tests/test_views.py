@@ -93,3 +93,64 @@ def test_import_airtable_views(loaded_fixture):
     title, kind, owner, config, at = rows[0]
     assert (title, kind, owner, at) == ("В работе", "grid", None, "viwB1")
     assert config == {"columns": [cols["fldBwork000000000"], cols["fldBinv0000000000"]], "source": "airtable"}
+
+
+def test_convert_airtable_filters():
+    """Фильтры/сортировки/группировки из веб-клиента Airtable (view_filters.json) → наш config."""
+    from migrate.views import convert_view
+
+    cols = {"fldA": "f_a", "fldB": "f_b", "fldD": "f_d"}
+    recs = {"rec1": "Склад 1"}
+    raw = {"f": {"c": "and", "f": [
+        ["fldA", "=", "В работе"],
+        ["fldA", "!=", None],                                   # незаполненное — Airtable игнорирует
+        ["fldB", "|", ["rec1", "recGone"]],                      # «имеет любое из» по ссылке
+        ["fldD", ">", {"mode": "exactDate", "exactDate": "2023-07-01T00:00:00.000Z"}],
+        {"c": "and", "f": [["fldB", "isNotEmpty", None]]},        # вложенное И — разворачивается
+        {"c": "or", "f": [["fldA", "contains", "ГПН"], ["fldA", "contains", "ТФ"]]},
+        {"c": "or", "f": [["fldA", "=", "x"], ["fldA", "isAnyOf", ["y", "z"]]]},
+        {"c": "or", "f": []},                                     # пустая группа
+    ]}, "s": [["fldA", 1], ["fldD", 0]], "g": [["fldB", "ascending"], ["fldA", "descending"]]}
+    cfg, problems = convert_view(raw, cols, recs)
+    assert problems == []
+    assert cfg == {
+        "filters": [
+            {"col": "f_a", "op": "eq", "value": "В работе"},
+            {"col": "f_b", "op": "any_of", "value": ["Склад 1", "recGone"]},
+            {"col": "f_d", "op": "gt", "value": "2023-07-01"},
+            {"col": "f_b", "op": "not_empty"},
+            {"col": "f_a", "op": "contains_any", "value": ["ГПН", "ТФ"]},
+            {"col": "f_a", "op": "any_of", "value": ["x", "y", "z"]},
+        ],
+        "sort": [{"col": "f_a", "desc": False}, {"col": "f_d", "desc": True}],
+        "group": ["f_b", "f_a"],
+    }
+
+    # непереводимое — не теряем молча: вид без фильтров + список причин
+    cfg, problems = convert_view({"f": {"c": "and", "f": [
+        {"c": "or", "f": [["fldA", "=", "x"], ["fldB", "=", "y"]]}, ["fldGone", "=", "1"]]}}, cols, recs)
+    assert "filters" not in cfg and len(problems) == 2
+
+
+def test_import_airtable_view_filters(loaded_fixture):
+    from migrate.views import load_views
+
+    schema = [{"id": "tblBBBBBBBBBBBBBB", "views": [
+        {"id": "viwB1", "name": "В работе", "type": "grid", "visibleFieldIds": ["fldBwork000000000"]}]}]
+    raw = {"viwB1": {"f": {"c": "and", "f": [["fldBwork000000000", "contains", "a"]]}, "g": [["fldBinv0000000000", "ascending"]]}}
+    with engine.begin() as c:
+        assert load_views(c, schema, raw) == 1
+        config = c.execute(text("select config from app_view")).scalar()
+        cols = dict(c.execute(text("select airtable_id, column_name from app_field")).all())
+    assert config == {"columns": [cols["fldBwork000000000"]], "source": "airtable",
+                      "filters": [{"col": cols["fldBwork000000000"], "op": "contains", "value": "a"}],
+                      "group": [cols["fldBinv0000000000"]]}
+
+
+@pytest.mark.parametrize("config", [
+    {"filters": [{"col": "x", "op": "any_of", "value": "строка"}]},       # списочное условие — только список
+    {"filters": [{"col": "x", "op": "eq", "value": ["a"]}]},              # список — только у списочных
+    {"group": ["a", "b", "c", "d"]},                                       # не больше 3 уровней
+])
+def test_list_ops_strict(tables, config):
+    assert create(as_user("u", "user"), tables["eq"], config=config).status_code == 422

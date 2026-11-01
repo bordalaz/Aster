@@ -30,12 +30,23 @@ test('условия фильтра', () => {
   expect(matches(F.name, 'x', { op: 'not_empty' })).toBe(true)
 })
 
+test('условия «любое из»: точное совпадение элемента, «содержит любое из» — подстрока', () => {
+  expect(matches(F.name, 'Брак', { op: 'any_of', value: ['брак', ' Списан'] })).toBe(true)
+  expect(matches(F.name, 'Брак частичный', { op: 'any_of', value: ['Брак'] })).toBe(false)
+  expect(matches(F.name, ['ТФ', 'ГПН'], { op: 'any_of', value: ['ГПН'] })).toBe(true)   // multiSelect/ссылки
+  expect(matches(F.name, null, { op: 'any_of', value: ['x'] })).toBe(false)
+  expect(matches(F.name, 'Брак', { op: 'none_of', value: ['Списан', 'Брак'] })).toBe(false)
+  expect(matches(F.name, null, { op: 'none_of', value: ['x'] })).toBe(true)
+  expect(matches(F.name, 'База ЖАГ', { op: 'contains_any', value: ['юпо', 'жаг'] })).toBe(true)
+})
+
 test('фильтры складываются по «и»; недозаполненный фильтр не действует', () => {
   const rows = [{ name: 'Кольцо', qty: 5 }, { name: 'Кольцо', qty: 50 }, { name: 'Втулка', qty: 50 }]
   expect(applyFilters(fields, rows, [{ col: 'name', op: 'contains', value: 'кол' }, { col: 'qty', op: 'gte', value: 10 }]))
     .toEqual([{ name: 'Кольцо', qty: 50 }])
   expect(applyFilters(fields, rows, [{ col: 'name', op: 'contains', value: '' }])).toHaveLength(3)
   expect(applyFilters(fields, rows, [{ col: 'gone', op: 'eq', value: 1 }])).toHaveLength(3)
+  expect(applyFilters(fields, rows, [{ col: 'name', op: 'any_of', value: [' '] }])).toHaveLength(3)   // пустой список
 })
 
 test('сравнение конфигов без учёта порядка ключей', () => {
