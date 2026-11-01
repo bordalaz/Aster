@@ -7,7 +7,7 @@ const MAX = 50 * 1024 * 1024
 
 // Список вложений (R27, R28): имя → скачать под исходным именем; картинки и PDF — «открыть» в новой вкладке.
 // onUpload — добавить файлы (получает загруженные [{id, name, size}]); onRemove — убрать файл.
-export default function Files({ title, files, onUpload, onRemove }) {
+export default function Files({ title, files, onUpload, onRemove, bare = false }) {   // bare — подпись рисует владелец (карточка)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -30,7 +30,7 @@ export default function Files({ title, files, onUpload, onRemove }) {
 
   return (
     <div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{title}</div>
+      {!bare && <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{title}</div>}
       {(files ?? []).length === 0 && !onUpload && <div style={{ padding: '6px 0' }}>—</div>}
       <div style={{ display: 'grid', gap: 2 }}>
         {(files ?? []).map(f => (

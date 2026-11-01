@@ -147,8 +147,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const [selection, setSelection] = useState({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
   const onKeyDown = useCallback(e => {
     const cell = selection.current?.cell
-    if (e.key === ' ' && cell && rowAt(cell[1])) { e.preventDefault(); onOpen(rowAt(cell[1])) }
-  }, [selection, items, onOpen])   // eslint-disable-line react-hooks/exhaustive-deps
+    if (e.key === ' ' && cell && rowAt(cell[1])) { e.preventDefault(); onOpen(rowAt(cell[1]), shownRows.map(r => r.id)) }
+  }, [selection, items, onOpen, shownRows])   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--canvas)' }}>
@@ -173,7 +173,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
           onCellClicked={([ci, ri]) => {
             if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
-            else if (ci === 0 && rowAt(ri)) onOpen(rowAt(ri))
+            else if (ci === 0 && rowAt(ri)) onOpen(rowAt(ri), shownRows.map(r => r.id))
           }}
           gridSelection={selection}
           onGridSelectionChange={setSelection}
