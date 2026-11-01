@@ -137,3 +137,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sel-editor li:hover, .sel-editor li[aria-selected="true"] { background: #f1f5ff; }
 .sel-editor li.empty { color: var(--muted); cursor: default; }
 .sel-editor .link { border: 0; background: none; color: var(--accent); cursor: pointer; justify-self: start; padding: 4px 6px; }
+
+/* профиль, как в Airtable */
+.avatar { width: 28px; height: 28px; border-radius: 50%; border: 0; background: #6d4c41; color: #fff; font-weight: 600; cursor: pointer; display: grid; place-items: center; }
+.avatar:hover { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08); }
+.profile-head { display: grid; padding: 6px 8px; }
+.profile-head span { color: var(--muted); font-size: 12px; }
