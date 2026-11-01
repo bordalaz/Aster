@@ -1,21 +1,68 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api.js'
 import { groupCols, LIST_OPS, NO_VALUE, OPS, sameConfig, visibleColumns } from '../grid/viewConfig.js'
+import { Icon } from '../ui/icons.jsx'
 
 const isAdmin = u => u?.role === 'superadmin' || u?.role === 'admin'
 const errText = e => (e instanceof ApiError && typeof e.body?.detail === 'string') ? e.body.detail : 'Не удалось сохранить вид'
 
-// Выбор и сохранение видов (R10) + панели «Колонки» и «Фильтры». Конфиг сетки живёт в TableView.
-export default function ViewBar({ tableId, fields, primaryField, user, views, current, config, setConfig, onSelect, reload }) {
-  const [panel, setPanel] = useState(null)   // 'columns' | 'filters' | 'saveas' | null
+function plural(n, one, few, many) {
+  const a = n % 10, b = n % 100
+  return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 10 || b >= 20) ? few : many
+}
+
+// Закрыть всплывающее окно по щелчку мимо или Esc.
+function useDismiss(open, close) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const down = e => { if (ref.current && !ref.current.contains(e.target)) close() }
+    const key = e => { if (e.key === 'Escape') close() }
+    document.addEventListener('mousedown', down)
+    document.addEventListener('keydown', key)
+    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key) }
+  }, [open, close])
+  return ref
+}
+
+// Список видов слева (☰), как боковая панель видов Airtable.
+export function ViewsSide({ views, current, onSelect }) {
+  const [q, setQ] = useState('')
+  const match = v => v.title.toLowerCase().includes(q.trim().toLowerCase())
+  const item = v => (
+    <button key={v.id ?? 'all'} aria-current={current === v.id ? 'true' : undefined} onClick={() => onSelect(v.id)}>
+      <Icon name="table" size={14} style={{ color: 'var(--accent)' }} />{v.title}
+    </button>
+  )
+  return (
+    <aside className="views-side" aria-label="Виды">
+      <input aria-label="Найти вид" placeholder="Найти вид" value={q} onChange={e => setQ(e.target.value)} />
+      {item({ id: null, title: 'Все записи' })}
+      {views.some(v => v.shared && match(v)) && <h5>Общие</h5>}
+      {views.filter(v => v.shared && match(v)).map(item)}
+      {views.some(v => !v.shared && match(v)) && <h5>Мои</h5>}
+      {views.filter(v => !v.shared && match(v)).map(item)}
+    </aside>
+  )
+}
+
+// Панель вида (R10): меню вида, скрытые поля, фильтр, группировка, сортировка, поиск.
+export default function ViewBar({ tableId, fields, primaryField, user, views, current, config, setConfig, reload,
+  side, onToggleSide, search, onSearch, onExport }) {
+  const [panel, setPanel] = useState(null)   // 'menu' | 'columns' | 'filters' | 'group' | 'sort' | 'saveas' | 'search'
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [shared, setShared] = useState(false)
+  const close = () => setPanel(null)
+  const ref = useDismiss(panel !== null, close)
+  const toggle = p => setPanel(panel === p ? null : p)
 
   const view = views.find(v => v.id === current)
   const canEdit = view && (view.mine || (view.shared && isAdmin(user)))
   const dirty = !sameConfig(config, view?.config ?? {})
   const filters = config.filters ?? []
+  const sorts = config.sort ?? []
+  const titleOf = c => fields.find(f => f.column_name === c)?.title ?? c
 
   async function run(fn) {
     setError('')
@@ -24,25 +71,26 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
   const save = () => run(async () => {
     await api(`/api/views/${view.id}`, { method: 'PATCH', body: { config } })
     await reload(view.id)
+    close()
   })
   const saveAs = e => {
     e.preventDefault()
     run(async () => {
       const { source, ...own } = config   // копия — уже свой вид, не «из Airtable»
       const { id } = await api(`/api/tables/${tableId}/views`, { method: 'POST', body: { title, shared, config: own } })
-      setPanel(null); setTitle(''); setShared(false)
+      close(); setTitle(''); setShared(false)
       await reload(id)
     })
   }
   const remove = () => run(async () => {
     await api(`/api/views/${view.id}`, { method: 'DELETE' })
+    close()
     await reload(null)
   })
 
   // Колонки: видимые по порядку, затем скрытые.
   const shown = visibleColumns(fields, primaryField, config.columns).map(c => c.column_name).filter(c => c !== primaryField)
   const hidden = fields.map(f => f.column_name).filter(c => c !== primaryField && !shown.includes(c))
-  const titleOf = c => fields.find(f => f.column_name === c)?.title ?? c
   const setColumns = columns => setConfig({ ...config, columns })
   const move = (i, d) => {
     const next = [...shown]
@@ -62,92 +110,153 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
     const { group, ...rest } = config
     setConfig(next.length ? { ...rest, group: next } : rest)
   }
+  const setSorts = next => {
+    const { sort, ...rest } = config
+    setConfig(next.length ? { ...rest, sort: next } : rest)
+  }
 
-  const bar = { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }
-  const box = { padding: '8px 12px', borderBottom: '1px solid var(--line)', background: 'var(--panel)', display: 'grid', gap: 6, maxHeight: 280, overflowY: 'auto' }
+  const fieldOptions = fields.map(f => <option key={f.column_name} value={f.column_name}>{f.title}</option>)
+  const label = {
+    columns: hidden.length ? `${hidden.length} ${plural(hidden.length, 'скрытое поле', 'скрытых поля', 'скрытых полей')}` : 'Скрыть поля',
+    filters: filters.length === 1 ? `Отфильтровано: ${titleOf(filters[0].col)}`
+      : filters.length ? `Отфильтровано: ${filters.length} ${plural(filters.length, 'условие', 'условия', 'условий')}` : 'Фильтр',
+    group: groups.length ? `Группировка: ${groups.length} ${plural(groups.length, 'поле', 'поля', 'полей')}` : 'Группировка',
+    sort: sorts.length ? `Сортировка: ${sorts.length} ${plural(sorts.length, 'поле', 'поля', 'полей')}` : 'Сортировка',
+  }
 
   return (
-    <div>
-      <div style={bar}>
-        <select aria-label="Вид" value={current ?? ''} onChange={e => onSelect(e.target.value ? Number(e.target.value) : null)}>
-          <option value="">Все записи</option>
-          {views.some(v => v.shared) && <optgroup label="Общие">
-            {views.filter(v => v.shared).map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
-          </optgroup>}
-          {views.some(v => !v.shared) && <optgroup label="Мои">
-            {views.filter(v => !v.shared).map(v => <option key={v.id} value={v.id}>{v.title}</option>)}
-          </optgroup>}
-        </select>
-        {dirty && <span style={{ color: 'var(--warn, #F08A24)', fontSize: 12 }}>не сохранено</span>}
-        {[0, 1, 2].filter(l => l <= groups.length).map(l => (
-          <select key={l} aria-label={l ? `Группировка, уровень ${l + 1}` : 'Группировка'} value={groups[l] ?? ''}
-            onChange={e => setGroup(l, e.target.value)}>
-            <option value="">{l ? 'затем —' : 'Без группировки'}</option>
-            {fields.map(f => <option key={f.column_name} value={f.column_name}>{l ? 'затем: ' : 'Группа: '}{f.title}</option>)}
-          </select>
-        ))}
-        <button className="btn" aria-pressed={panel === 'columns'} onClick={() => setPanel(panel === 'columns' ? null : 'columns')}>Колонки</button>
-        <button className="btn" aria-pressed={panel === 'filters'} onClick={() => setPanel(panel === 'filters' ? null : 'filters')}>
-          Фильтры{filters.length ? ` (${filters.length})` : ''}
-        </button>
-        {canEdit && dirty && <button className="btn primary" onClick={save}>Сохранить вид</button>}
-        <button className="btn" onClick={() => setPanel(panel === 'saveas' ? null : 'saveas')}>Сохранить как…</button>
-        {canEdit && <button className="btn" onClick={remove}>Удалить вид</button>}
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div className="viewbar">
+        <button className="tool" aria-label="Список видов" aria-pressed={side} onClick={onToggleSide}><Icon name="list" /></button>
+        <div style={{ position: 'relative' }}>
+          <button className="tool" aria-haspopup="menu" aria-label={`Вид: ${view?.title ?? 'Все записи'}`} aria-expanded={panel === 'menu'} onClick={() => toggle('menu')}>
+            <Icon name="table" style={{ color: 'var(--accent)' }} />
+            <span className="viewname">{view?.title ?? 'Все записи'}</span>
+            <Icon name="caretDown" size={12} />
+          </button>
+          {panel === 'menu' && (
+            <div className="pop menu" role="menu" style={{ left: 0, top: 32 }}>
+              {canEdit && dirty && <button role="menuitem" onClick={save}><Icon name="floppy" />Сохранить вид</button>}
+              <button role="menuitem" onClick={() => setPanel('saveas')}><Icon name="copy" />Сохранить как…</button>
+              <button role="menuitem" onClick={() => { onExport?.(); close() }}><Icon name="download" />Выгрузить CSV</button>
+              {canEdit && <><div className="sep" /><button role="menuitem" onClick={remove} style={{ color: 'var(--danger)' }}><Icon name="trash" />Удалить вид</button></>}
+            </div>
+          )}
+          {panel === 'saveas' && (
+            <form className="pop" onSubmit={saveAs} style={{ left: 0, top: 32 }}>
+              <h4>Новый вид</h4>
+              <input aria-label="Название вида" placeholder="Название вида" value={title} maxLength={200} onChange={e => setTitle(e.target.value)} autoFocus />
+              {isAdmin(user) && <label className="row"><input type="checkbox" checked={shared} onChange={e => setShared(e.target.checked)} />общий</label>}
+              <div className="row"><button className="btn primary" type="submit" disabled={!title.trim()}>Сохранить</button></div>
+            </form>
+          )}
+        </div>
+        {dirty && <span className="dirty">не сохранено</span>}
+        {canEdit && dirty && <button className="tool" onClick={save}>Сохранить</button>}
+
+        <div className="spacer" />
+
+        <div style={{ position: 'relative' }}>
+          <button className={`tool hidden${hidden.length ? ' on' : ''}`} aria-expanded={panel === 'columns'} onClick={() => toggle('columns')}>
+            <Icon name="eyeSlash" />{label.columns}
+          </button>
+          {panel === 'columns' && (
+            <div className="pop" aria-label="Поля" role="group" style={{ right: 0, top: 32 }}>
+              {shown.map((c, i) => (
+                <div key={c} className="row">
+                  <label className="row" style={{ flex: 1 }}><input type="checkbox" checked onChange={() => setColumns(shown.filter(x => x !== c))} />{titleOf(c)}</label>
+                  <button className="quiet" aria-label={`Выше: ${titleOf(c)}`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                  <button className="quiet" aria-label={`Ниже: ${titleOf(c)}`} disabled={i === shown.length - 1} onClick={() => move(i, 1)}>↓</button>
+                </div>
+              ))}
+              {hidden.map(c => (
+                <label key={c} className="row" style={{ color: 'var(--muted)' }}>
+                  <input type="checkbox" checked={false} onChange={() => setColumns([...shown, c])} />{titleOf(c)}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <button className={`tool filter${filters.length ? ' on' : ''}`} aria-expanded={panel === 'filters'} onClick={() => toggle('filters')}>
+            <Icon name="funnel" />{label.filters}
+          </button>
+          {panel === 'filters' && (
+            <div className="pop" aria-label="Фильтр" role="group" style={{ right: 0, top: 32 }}>
+              <h4>{filters.length ? 'Записи, где' : 'Условий фильтра пока нет'}</h4>
+              {filters.map((f, i) => (
+                <div key={i} className="row">
+                  <select aria-label="Поле фильтра" value={f.col} onChange={e => setFilter(i, { col: e.target.value })}>{fieldOptions}</select>
+                  <select aria-label="Условие" value={f.op} onChange={e => setOp(i, e.target.value)}>
+                    {Object.entries(OPS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                  {!NO_VALUE.has(f.op) && (LIST_OPS.has(f.op)
+                    ? <input aria-label="Значение фильтра" title="Несколько значений — через ;" placeholder="значение; значение"
+                        value={(f.value ?? []).join(';')} onChange={e => setFilter(i, { value: e.target.value.split(';').slice(0, 50) })} />
+                    : <input aria-label="Значение фильтра" value={f.value ?? ''} maxLength={500} onChange={e => setFilter(i, { value: e.target.value })} />)}
+                  <button className="quiet" aria-label="Убрать условие"
+                    onClick={() => setConfig({ ...config, filters: filters.filter((_, j) => j !== i) })}><Icon name="x" size={14} /></button>
+                </div>
+              ))}
+              <button className="link" disabled={filters.length >= 30}
+                onClick={() => setConfig({ ...config, filters: [...filters, { col: primaryField ?? fields[0]?.column_name, op: 'contains', value: '' }] })}>
+                + условие
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <button className={`tool group${groups.length ? ' on' : ''}`} aria-expanded={panel === 'group'} onClick={() => toggle('group')}>
+            <Icon name="rows" />{label.group}
+          </button>
+          {panel === 'group' && (
+            <div className="pop" aria-label="Группировка записей" role="group" style={{ right: 0, top: 32 }}>
+              <h4>Группировать по</h4>
+              {[0, 1, 2].filter(l => l <= groups.length).map(l => (
+                <select key={l} aria-label={l ? `Группировка, уровень ${l + 1}` : 'Группировка'} value={groups[l] ?? ''}
+                  onChange={e => setGroup(l, e.target.value)}>
+                  <option value="">{l ? '+ ещё уровень' : 'Без группировки'}</option>
+                  {fieldOptions}
+                </select>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          <button className={`tool sort${sorts.length ? ' on' : ''}`} aria-expanded={panel === 'sort'} onClick={() => toggle('sort')}>
+            <Icon name="sort" />{label.sort}
+          </button>
+          {panel === 'sort' && (
+            <div className="pop" aria-label="Сортировка" role="group" style={{ right: 0, top: 32 }}>
+              <h4>Сортировать по</h4>
+              {sorts.map((s, i) => (
+                <div key={i} className="row">
+                  <select aria-label="Поле сортировки" value={s.col}
+                    onChange={e => setSorts(sorts.map((x, j) => (j === i ? { ...x, col: e.target.value } : x)))}>{fieldOptions}</select>
+                  <select aria-label="Направление" value={s.desc ? 'desc' : 'asc'}
+                    onChange={e => setSorts(sorts.map((x, j) => (j === i ? { ...x, desc: e.target.value === 'desc' } : x)))}>
+                    <option value="asc">А → Я, 1 → 9</option>
+                    <option value="desc">Я → А, 9 → 1</option>
+                  </select>
+                  <button className="quiet" aria-label="Убрать сортировку" onClick={() => setSorts(sorts.filter((_, j) => j !== i))}><Icon name="x" size={14} /></button>
+                </div>
+              ))}
+              <button className="link" onClick={() => setSorts([...sorts, { col: primaryField ?? fields[0]?.column_name, desc: false }])}>+ сортировка</button>
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'relative' }}>
+          {panel === 'search' || search
+            ? <input className="tool" style={{ border: '1px solid var(--line)', width: 200, cursor: 'text' }} placeholder="Поиск" aria-label="Поиск"
+                autoFocus value={search} onChange={e => onSearch(e.target.value)} />
+            : <button className="tool" aria-label="Поиск" onClick={() => setPanel('search')}><Icon name="search" /></button>}
+        </div>
       </div>
-
       {error && <div className="err" role="alert" style={{ padding: '4px 12px' }}>{error}</div>}
-
-      {panel === 'columns' && (
-        <div style={box} aria-label="Колонки" role="group">
-          {shown.map((c, i) => (
-            <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <label style={{ flex: 1 }}><input type="checkbox" checked onChange={() => setColumns(shown.filter(x => x !== c))} /> {titleOf(c)}</label>
-              <button className="btn" aria-label={`Выше: ${titleOf(c)}`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-              <button className="btn" aria-label={`Ниже: ${titleOf(c)}`} disabled={i === shown.length - 1} onClick={() => move(i, 1)}>↓</button>
-            </div>
-          ))}
-          {hidden.map(c => (
-            <label key={c} style={{ color: 'var(--muted)' }}>
-              <input type="checkbox" checked={false} onChange={() => setColumns([...shown, c])} /> {titleOf(c)}
-            </label>
-          ))}
-        </div>
-      )}
-
-      {panel === 'filters' && (
-        <div style={box} aria-label="Фильтры" role="group">
-          {filters.map((f, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <select aria-label="Поле фильтра" value={f.col} onChange={e => setFilter(i, { col: e.target.value })}>
-                {fields.map(x => <option key={x.column_name} value={x.column_name}>{x.title}</option>)}
-              </select>
-              <select aria-label="Условие" value={f.op} onChange={e => setOp(i, e.target.value)}>
-                {Object.entries(OPS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-              {!NO_VALUE.has(f.op) && (LIST_OPS.has(f.op)
-                ? <input aria-label="Значение фильтра" title="Несколько значений — через ;" placeholder="значение; значение"
-                    value={(f.value ?? []).join(';')} onChange={e => setFilter(i, { value: e.target.value.split(';').slice(0, 50) })} />
-                : <input aria-label="Значение фильтра" value={f.value ?? ''} maxLength={500} onChange={e => setFilter(i, { value: e.target.value })} />)}
-              <button className="btn" aria-label="Убрать условие"
-                onClick={() => setConfig({ ...config, filters: filters.filter((_, j) => j !== i) })}>×</button>
-            </div>
-          ))}
-          <div>
-            <button className="btn" disabled={filters.length >= 30}
-              onClick={() => setConfig({ ...config, filters: [...filters, { col: primaryField ?? fields[0]?.column_name, op: 'contains', value: '' }] })}>
-              + условие
-            </button>
-          </div>
-        </div>
-      )}
-
-      {panel === 'saveas' && (
-        <form onSubmit={saveAs} style={{ ...box, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input aria-label="Название вида" placeholder="Название вида" value={title} maxLength={200} onChange={e => setTitle(e.target.value)} autoFocus />
-          {isAdmin(user) && <label><input type="checkbox" checked={shared} onChange={e => setShared(e.target.checked)} /> общий</label>}
-          <button className="btn primary" type="submit" disabled={!title.trim()}>Сохранить</button>
-        </form>
-      )}
     </div>
   )
 }

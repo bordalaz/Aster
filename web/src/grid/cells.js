@@ -1,4 +1,5 @@
 import { GridCellKind } from '@glideapps/glide-data-grid'
+import { choiceColor, LINK_PILL } from './renderers.js'
 
 export const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
 // Правятся прямо в сетке; остальные типы — только в карточке (в сетке читаются).
@@ -62,11 +63,28 @@ export function displayValue(field, value) {
   return asText(field, value) || '—'
 }
 
+const SELECT = new Set(['singleSelect', 'multipleSelects'])
+const asList = v => (v == null ? [] : Array.isArray(v) ? v.flat() : [v])
+const choicesOf = f => (COMPUTED.has(f.kind) ? f.options?.result?.options : f.options)?.choices ?? []
+const pillsCell = (items, round) => ({
+  kind: GridCellKind.Custom, allowOverlay: false, readonly: true,
+  copyData: items.map(i => i.text).join(', '), data: { kind: 'pills', items, round },
+})
+
 export function toCell(field, value) {
   const kind = kindOf(field)
   const editable = field.editable && INLINE.has(field.kind)
-  if (kind === 'checkbox') {
-    return { kind: GridCellKind.Boolean, data: !!value, allowOverlay: false, readonly: !field.editable }
+  if (kind === 'checkbox' && !Array.isArray(value)) {
+    const color = choiceColor(field.options?.color ?? 'greenBright').bg
+    return { kind: GridCellKind.Custom, allowOverlay: false, readonly: !field.editable, copyData: value ? 'да' : '',
+      data: { kind: 'check', value: !!value, color } }
+  }
+  if (SELECT.has(kind)) {   // плашки цвета варианта, как в Airtable
+    const colors = Object.fromEntries(choicesOf(field).map(c => [c.name, c.color]))
+    return pillsCell(asList(value).filter(v => v != null && v !== '').map(v => ({ text: String(v), ...choiceColor(colors[v]) })), true)
+  }
+  if (kind === 'multipleRecordLinks') {   // связи — «таблетки» с названиями записей
+    return pillsCell(asList(value).filter(v => v?.name).map(v => ({ text: v.name, ...LINK_PILL })), false)
   }
   if (kind === 'duration' && (value == null || typeof value === 'number')) {
     const text = value == null ? '' : durText(field, value)
@@ -83,7 +101,7 @@ export function toCell(field, value) {
 }
 
 export function fromCell(field, cell) {
-  if (field.kind === 'checkbox') return !!cell.data
+  if (field.kind === 'checkbox') return !!(cell.kind === GridCellKind.Custom ? cell.data.value : cell.data)
   if (field.kind === 'duration') return parseDuration(cell.data)
   if (NUMBER.has(field.kind)) return cell.data ?? null
   return cell.data === '' ? null : cell.data

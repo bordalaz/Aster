@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/server.js'
@@ -16,6 +16,12 @@ const views = [
   { id: 12, title: 'Мой', shared: false, mine: true, config: {} },
 ]
 
+async function pick(name) {
+  if (!screen.queryByLabelText('Виды')) await userEvent.click(screen.getByRole('button', { name: 'Список видов' }))
+  await userEvent.click(within(screen.getByLabelText('Виды')).getByRole('button', { name }))
+}
+const viewMenu = () => userEvent.click(screen.getByRole('button', { name: /^Вид:/ }))
+
 function setup(u = admin, vs = views) {
   const posted = []
   server.use(
@@ -29,7 +35,7 @@ function setup(u = admin, vs = views) {
 test('выбор вида применяет его фильтры', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
-  await userEvent.selectOptions(screen.getByLabelText('Вид'), '10')
+  await pick('Много')
   expect(await screen.findByText('1 запись', { exact: false })).toBeInTheDocument()
   expect(screen.queryByText('не сохранено')).toBeNull()
 })
@@ -37,7 +43,7 @@ test('выбор вида применяет его фильтры', async () =>
 test('вид из Airtable: колонки применены, без устаревшей подсказки про фильтры', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
-  await userEvent.selectOptions(screen.getByLabelText('Вид'), '11')
+  await pick('Из Airtable')
   expect(screen.queryByText(/Airtable не отдаёт/)).toBeNull()
   expect(screen.getByTestId('col-order').textContent).toBe(`${NAME},${QTY}`)
 })
@@ -45,7 +51,7 @@ test('вид из Airtable: колонки применены, без устар
 test('фильтр из панели меняет строки и отмечает «не сохранено»', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
-  await userEvent.click(screen.getByRole('button', { name: 'Фильтры' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Фильтр' }))
   await userEvent.click(screen.getByRole('button', { name: '+ условие' }))
   await userEvent.type(screen.getByLabelText('Значение фильтра'), 'втул')
   expect(await screen.findByText('1 запись', { exact: false })).toBeInTheDocument()
@@ -55,7 +61,7 @@ test('фильтр из панели меняет строки и отмечае
 test('скрытие колонки из панели', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
-  await userEvent.click(screen.getByRole('button', { name: 'Колонки' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Скрыть поля' }))
   await userEvent.click(screen.getByLabelText('Кол-во'))
   expect(screen.getByTestId('col-order').textContent).not.toContain(QTY)
   expect(screen.getByTestId('col-order').textContent.startsWith(NAME)).toBe(true)
@@ -64,29 +70,33 @@ test('скрытие колонки из панели', async () => {
 test('«Сохранить как» — админ может сделать общий; копия вида Airtable уже не «из Airtable»', async () => {
   const posted = setup()
   await screen.findByText('2 записи', { exact: false })
-  await userEvent.selectOptions(screen.getByLabelText('Вид'), '11')
-  await userEvent.click(screen.getByRole('button', { name: 'Сохранить как…' }))
+  await pick('Из Airtable')
+  await viewMenu()
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Сохранить как…' }))
   await userEvent.type(screen.getByLabelText('Название вида'), 'Копия')
   await userEvent.click(screen.getByLabelText('общий'))
   await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
-  await screen.findByLabelText('Вид')
+  await screen.findByRole('button', { name: 'Вид: Копия' }).catch(() => null)
   expect(posted).toEqual([{ title: 'Копия', shared: true, config: { columns: [QTY] } }])
 })
 
 test('пользователь: общий вид не правит, «общий» не предлагается', async () => {
   setup(user)
   await screen.findByText('2 записи', { exact: false })
-  await userEvent.selectOptions(screen.getByLabelText('Вид'), '10')
-  expect(screen.queryByRole('button', { name: 'Удалить вид' })).toBeNull()
-  await userEvent.click(screen.getByRole('button', { name: 'Сохранить как…' }))
+  await pick('Много')
+  await viewMenu()
+  expect(screen.queryByRole('menuitem', { name: 'Удалить вид' })).toBeNull()
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Сохранить как…' }))
   expect(screen.queryByLabelText('общий')).toBeNull()
-  await userEvent.selectOptions(screen.getByLabelText('Вид'), '12')
-  expect(screen.getByRole('button', { name: 'Удалить вид' })).toBeInTheDocument()
+  await pick('Мой')
+  await viewMenu()
+  expect(screen.getByRole('menuitem', { name: 'Удалить вид' })).toBeInTheDocument()
 })
 
 test('группировка из панели: заголовки групп в сетке; клик по группе не нужен для проверки порядка', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
+  await userEvent.click(screen.getByRole('button', { name: 'Группировка' }))
   await userEvent.selectOptions(screen.getByLabelText('Группировка'), 'f_fld00000000000004')
   expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],2,[На складе],1')
   expect(screen.getByText('не сохранено')).toBeInTheDocument()
@@ -100,8 +110,9 @@ test('выгрузка CSV — видимые колонки и отфильтр
   try {
     setup()
     await screen.findByText('2 записи', { exact: false })
-    await userEvent.selectOptions(screen.getByLabelText('Вид'), '10')   // фильтр qty > 6
-    await userEvent.click(screen.getByRole('button', { name: 'Выгрузить CSV' }))
+    await pick('Много')   // фильтр qty > 6
+    await viewMenu()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Выгрузить CSV' }))
     const csv = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsText(blobs[0]) })
     expect(csv).toContain('Наименование;Кол-во')
     expect(csv).toContain('Втулка;7')
@@ -114,13 +125,14 @@ test('выгрузка CSV — видимые колонки и отфильтр
 test('«любое из» — значения через «;»; второй уровень группировки появляется после первого', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
-  await userEvent.click(screen.getByRole('button', { name: 'Фильтры' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Фильтр' }))
   await userEvent.click(screen.getByRole('button', { name: '+ условие' }))
   await userEvent.selectOptions(screen.getByLabelText('Условие'), 'any_of')
   await userEvent.type(screen.getByLabelText('Значение фильтра'), 'втулка; гайка')
   expect(await screen.findByText('1 запись', { exact: false })).toBeInTheDocument()
   expect(screen.getByLabelText('Значение фильтра').value).toBe('втулка; гайка')
 
+  await userEvent.click(screen.getByRole('button', { name: /Группировка/ }))
   expect(screen.queryByLabelText('Группировка, уровень 2')).toBeNull()
   await userEvent.selectOptions(screen.getByLabelText('Группировка'), NAME)
   await userEvent.selectOptions(screen.getByLabelText('Группировка, уровень 2'), QTY)

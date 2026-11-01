@@ -13,9 +13,7 @@ test('счётчик записей и первичное поле первым'
   expect(order.startsWith('f_fld00000000000001')).toBe(true)
 })
 
-test('поиск фильтрует строки (счётчик меняется)', async () => {
-  const user = (await import('@testing-library/user-event')).default
-  render(<Grid fields={fields} rows={records1} primaryField="f_fld00000000000001" onEdit={vi.fn()} onOpen={vi.fn()} />)
-  await user.type(screen.getByPlaceholderText('Поиск'), 'Кольцо')
+test('поиск (из панели вида) фильтрует строки — счётчик меняется', () => {
+  render(<Grid fields={fields} rows={records1} primaryField="f_fld00000000000001" onEdit={vi.fn()} onOpen={vi.fn()} search="Кольцо" />)
   expect(screen.getByText('1 запись', { exact: false })).toBeInTheDocument()
 })

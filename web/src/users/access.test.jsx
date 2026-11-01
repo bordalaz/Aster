@@ -29,7 +29,7 @@ test('временный пароль — сначала смена пароля
   await userEvent.type(screen.getByLabelText('Новый пароль'), 'my-own-pass')
   await userEvent.type(screen.getByLabelText('Новый пароль ещё раз'), 'my-own-pass')
   await userEvent.click(screen.getByRole('button', { name: 'Сменить пароль' }))
-  expect(await screen.findByRole('button', { name: 'Ведомость ЗИП' })).toBeInTheDocument()
+  expect(await screen.findByRole('tab', { name: 'Ведомость ЗИП' })).toBeInTheDocument()
 })
 
 test('несовпадающие пароли не отправляются', async () => {
@@ -58,7 +58,7 @@ test('вход вне офиса — сообщение сервера (E2)', as
 test('кнопка «Пользователи» — только админам', async () => {
   server.use(http.get('/api/auth/me', () => HttpResponse.json({ id: 3, login: 'petr', name: 'Пётр', role: 'user', must_change_password: false })))
   render(<App />)
-  await screen.findByRole('button', { name: 'Ведомость ЗИП' })
+  await screen.findByRole('tab', { name: 'Ведомость ЗИП' })
   expect(screen.queryByRole('button', { name: 'Пользователи' })).toBeNull()
 })
 

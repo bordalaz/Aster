@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { useRecords } from '../record/useRecords.js'
 import Grid from './Grid.jsx'
 import Card from '../card/Card.jsx'
-import ViewBar from '../views/ViewBar.jsx'
+import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
   const { fields, rows, loading, patch, patchMany, refresh } = useRecords(tableId)
@@ -12,6 +12,9 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   const [views, setViews] = useState([])
   const [current, setCurrent] = useState(null)   // id вида; null — «Все записи»
   const [config, setConfig] = useState({})
+  const [side, setSide] = useState(false)      // список видов слева (☰), по умолчанию свёрнут, как у владельца в Airtable
+  const [search, setSearch] = useState('')
+  const exportRef = useRef(null)
 
   // Перечитать виды и выбрать нужный (после сохранения/удаления).
   const reload = useCallback(async select => {
@@ -61,10 +64,14 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {error && <div className="err" style={{ padding: '6px 16px' }}>{error}</div>}
       <ViewBar tableId={tableId} fields={fields} primaryField={primaryField} user={user} views={views} current={current}
-        config={config} setConfig={setConfig} onSelect={select} reload={reload} />
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
-          onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={setOpen} />
+        config={config} setConfig={setConfig} reload={reload} side={side} onToggleSide={() => setSide(!side)}
+        search={search} onSearch={setSearch} onExport={() => exportRef.current?.()} />
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        {side && <ViewsSide views={views} current={current} onSelect={select} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
+            onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={setOpen} search={search} exportRef={exportRef} />
+        </div>
       </div>
       {open && (
         <Card
