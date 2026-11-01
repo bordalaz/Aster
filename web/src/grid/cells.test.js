@@ -91,3 +91,23 @@ test('число показывается с точностью поля, без
   const noPrec = { kind: 'rollup', editable: false, options: { result: { type: 'number' } } }
   expect(toCell(noPrec, 0.1 + 0.2).displayData).toBe('0.3')
 })
+
+describe('длительность (как в Airtable: хранится секундами, показывается ч:мм)', () => {
+  const dur = { kind: 'duration', editable: true, options: { durationFormat: 'h:mm' } }
+  const sum = { kind: 'formula', options: { result: { type: 'duration', options: { durationFormat: 'h:mm' } } } }
+  it('показ', () => {
+    expect(displayValue(dur, 308400)).toBe('85:40')
+    expect(displayValue(dur, 0)).toBe('0:00')
+    expect(displayValue(sum, 2614288 * 60 + 15)).toBe('43571:28')   // большие часы, секунды отброшены
+    expect(displayValue({ ...dur, options: { durationFormat: 'h:mm:ss' } }, 3725)).toBe('1:02:05')
+  })
+  it('правка в сетке — текст ч:мм, обратно секунды; мусор не сохраняем', () => {
+    const cell = toCell(dur, 308400)
+    expect(cell.displayData).toBe('85:40')
+    expect(fromCell(dur, { ...cell, data: '90:00' })).toBe(324000)
+    expect(fromCell(dur, { ...cell, data: '1:02:05' })).toBe(3725)
+    expect(fromCell(dur, { ...cell, data: '85' })).toBe(306000)        // число без «:» — часы
+    expect(fromCell(dur, { ...cell, data: '' })).toBe(null)
+    expect(fromCell(dur, { ...cell, data: 'abc' })).toBe(undefined)
+  })
+})
