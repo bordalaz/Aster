@@ -50,6 +50,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tab[aria-selected="true"] { background: #fff; color: var(--text); font-weight: 500; border-radius: 3px 3px 0 0; box-shadow: 0 0 0 1px var(--line); clip-path: inset(-1px -1px 0 -1px); }
 .tab[aria-selected="true"]::before, .tab[aria-selected="true"] + .tab::before { display: none; }
 .tabs .all { flex: none; margin-left: 4px; }
+.tab-active { display: inline-flex; align-items: center; flex: none; height: 32px; background: #fff; border-radius: 3px 3px 0 0; box-shadow: 0 0 0 1px var(--line); clip-path: inset(-1px -1px 0 -1px); }
+.tab-active .tab { background: none; box-shadow: none; clip-path: none; padding-right: 4px; }
+.tab-active + .tab::before { display: none; }
+.tab-caret { border: 0; background: none; height: 22px; width: 22px; margin-right: 4px; border-radius: 4px; display: grid; place-items: center; color: var(--text2); cursor: pointer; }
+.tab-caret:hover { background: var(--hover); }
 
 /* --- панель вида --- */
 .viewbar { height: 44px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 8px; background: #fff; border-bottom: 1px solid var(--line-strong); }

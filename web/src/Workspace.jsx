@@ -53,7 +53,11 @@ export default function Workspace({ user, onLogout }) {
           <button className="quiet" onClick={onLogout} aria-label="Выход" title="Выход"><Icon name="signOut" /></button>
         </div>
       </header>
-      {screen === 'table' && <TableTabs tables={tables} activeId={activeId} onPick={setActiveId} />}
+      {screen === 'table' && <TableTabs tables={tables} activeId={activeId} onPick={setActiveId}
+        onHide={isAdmin ? async (id, hidden) => {
+          await api(`/api/tables/${id}`, { method: 'PATCH', body: { hidden } })
+          setTables(ts => ts.map(t => (t.id === id ? { ...t, hidden } : t)))
+        } : undefined} />}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {screen === 'forms' && <Forms />}
         {screen === 'calibration' && <Calibration user={user} />}
