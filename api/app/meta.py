@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 
+from . import links
 from .access import can_edit, can_read, table_title
 from .auth import active_user
 from .db import engine
@@ -25,6 +26,9 @@ def fields(table_id: int, user: dict = Depends(active_user)):
                 "where table_id = :t order by sort_order, id"
             ),
             {"t": table_id},
-        )
-        # editable — с учётом роли: интерфейс по нему решает, давать ли правку
-        return [{**r._asdict(), "editable": r.editable and edit} for r in rows]
+        ).all()
+        targets = links.link_tables(c, rows, user)
+        # editable — с учётом роли: интерфейс по нему решает, давать ли правку;
+        # link_table — куда ведёт ссылка (None — таблица скрыта от роли)
+        return [{**r._asdict(), "editable": r.editable and edit,
+                 **({"link_table": targets[r.column_name]} if r.column_name in targets else {})} for r in rows]

@@ -7,8 +7,9 @@ const INLINE = new Set([
   'number', 'currency', 'percent', 'rating', 'duration', 'checkbox', 'date',
 ])
 const COMPUTED = new Set(['formula', 'rollup', 'multipleLookupValues'])
-// Lookup связей и вложений API отдаёт id записей/вложений — показывать нечего до этапа 2 (связи).
-const HIDDEN_LOOKUP = new Set(['multipleRecordLinks', 'multipleAttachments'])
+// Lookup вложений API отдаёт id вложений — показывать нечего. Связи и их lookup приходят как [{id, name}].
+const HIDDEN_LOOKUP = new Set(['multipleAttachments'])
+export const isLink = f => kindOf(f) === 'multipleRecordLinks'
 const SPECIAL = { NaN: 'NaN', Infinity: '∞', '-Infinity': '−∞' }
 
 // Тип, по которому показываем: у формул/rollup/lookup — тип результата, count — число.

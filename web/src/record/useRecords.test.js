@@ -5,13 +5,13 @@ import { useRecords } from './useRecords.js'
 import { server } from '../test/server.js'
 import { records1 } from '../test/fixtures.js'
 
-test('грузит поля (связь отсеяна, формула — нет) и записи', async () => {
+test('грузит поля (связи и формулы — да, прочие виртуальные — нет) и записи', async () => {
   const { result } = renderHook(() => useRecords(1))
   await waitFor(() => expect(result.current.loading).toBe(false))
   const kinds = result.current.fields.map(f => f.kind)
   expect(kinds).toContain('formula')
-  expect(kinds).not.toContain('multipleRecordLinks')
-  expect(result.current.fields).toHaveLength(6)
+  expect(kinds).toContain('multipleRecordLinks')
+  expect(result.current.fields).toHaveLength(7)
   expect(result.current.rows).toHaveLength(2)
 })
 

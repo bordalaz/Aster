@@ -5,7 +5,7 @@ import Grid from './Grid.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar from '../views/ViewBar.jsx'
 
-export default function TableView({ tableId, primaryField, user, title }) {
+export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
   const { fields, rows, loading, patch, patchMany } = useRecords(tableId)
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
   const [error, setError] = useState('')
@@ -22,6 +22,14 @@ export default function TableView({ tableId, primaryField, user, title }) {
     setConfig(v ? v.config : {})
   }, [tableId])
   useEffect(() => { reload(null) }, [reload])
+
+  // Пришли по связи из другой таблицы — открыть карточку нужной записи, когда строки загрузятся.
+  useEffect(() => {
+    if (openId == null || loading) return
+    const r = rows.find(x => x.id === openId)
+    if (r) setOpen(r)
+    onOpened?.()
+  }, [openId, loading, rows, onOpened])
 
   const select = id => {
     setCurrent(id)
@@ -69,6 +77,7 @@ export default function TableView({ tableId, primaryField, user, title }) {
             catch (e) { setError(e.status === 409 ? 'Запись изменил другой пользователь — показана свежая версия' : 'Не удалось сохранить'); throw e }
           }}
           onClose={() => setOpen(null)}
+          onOpenLink={onOpenLink}
         />
       )}
     </div>

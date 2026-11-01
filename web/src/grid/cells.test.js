@@ -64,9 +64,12 @@ test('NaN, Infinity и #ERROR! показываются текстом', () => {
   expect(toCell(fFormulaText, { error: '#ERROR!' }).displayData).toBe('#ERROR!')
 })
 
-test('lookup текста — через запятую; lookup связи — пусто до этапа 2 (там id записей)', () => {
+test('lookup текста — через запятую; связи и lookup связи — названиями записей', () => {
   expect(toCell(fLookupText, ['a', 'b']).displayData).toBe('a, b')
-  expect(toCell(fLookupLink, ['recA']).displayData).toBe('')
+  expect(toCell(fLookupLink, [{ id: 1, name: 'Кольцо' }, { id: 2, name: 'Втулка' }]).displayData).toBe('Кольцо, Втулка')
+  const link = { kind: 'multipleRecordLinks', editable: false, options: {} }
+  expect(toCell(link, [{ id: 7, name: 'МИР 295' }]).displayData).toBe('МИР 295')
+  expect(toCell(link, null).displayData).toBe('')   // таблица скрыта от роли
 })
 
 test('displayValue для карточки', () => {

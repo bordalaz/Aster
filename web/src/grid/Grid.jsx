@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { DataEditor, GridCellKind } from '@glideapps/glide-data-grid'
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
-import { toCell, fromCell } from './cells.js'
+import { displayValue, isLink, toCell, fromCell } from './cells.js'
 import { columnTotal, groupRows, parsePastedBool, parsePastedNumber, toCSV } from './layout.js'
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 
@@ -30,7 +30,10 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
 
   const table = useReactTable({
     data,
-    columns: useMemo(() => cols.map(c => ({ accessorKey: c.column_name })), [cols]),
+    // связи — [{id, name}]: сортировка и поиск по названиям
+    columns: useMemo(() => cols.map(c => (isLink(c)
+      ? { id: c.column_name, accessorFn: r => (r[c.column_name]?.length ? displayValue(c, r[c.column_name]) : '') }
+      : { accessorKey: c.column_name })), [cols]),
     state: { sorting, globalFilter },
     onSortingChange: up => {
       const next = typeof up === 'function' ? up(sorting) : up

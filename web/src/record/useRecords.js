@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 
-// Вычисляемые поля API считает сам и отдаёт; связи и вложения — пока нет (этап 2).
-const COMPUTED = new Set(['formula', 'rollup', 'multipleLookupValues', 'count'])
+// Виртуальные поля, которые API отдаёт: вычисляемые (считает сам) и связи (названиями). Вложения — пока нет.
+const SERVED = new Set(['formula', 'rollup', 'multipleLookupValues', 'count', 'multipleRecordLinks'])
 // Сервер пересчитывает формулы в фоне (~6 с на всю базу) — после правки перечитываем строки.
 // ponytail: фиксированная задержка; если пересчёт станет дольше — отдавать версию расчёта и ждать её
 const REFRESH_MS = 7000
@@ -19,7 +19,7 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
       api(`/api/tables/${tableId}/fields`),
       api(`/api/tables/${tableId}/records`),
     ])
-    setFields(fs.filter(f => !f.options?.virtual || COMPUTED.has(f.kind)))
+    setFields(fs.filter(f => !f.options?.virtual || SERVED.has(f.kind)))
     setRows(rs)
     setLoading(false)
   }, [tableId])

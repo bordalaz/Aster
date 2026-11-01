@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from './api.js'
 import TableList from './tables/TableList.jsx'
 import TableView from './grid/TableView.jsx'
@@ -9,6 +9,9 @@ export default function Workspace({ user, onLogout }) {
   const [tables, setTables] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [screen, setScreen] = useState('table')   // 'table' | 'users' | 'password'
+  const [jump, setJump] = useState(null)          // id записи, открыть после перехода по связи
+  const openLink = useCallback((tableId, recordId) => { setActiveId(tableId); setJump(recordId); setScreen('table') }, [])
+  const opened = useCallback(() => setJump(null), [])
   const isAdmin = user?.role === 'superadmin' || user?.role === 'admin'
 
   useEffect(() => {
@@ -31,7 +34,8 @@ export default function Workspace({ user, onLogout }) {
         </header>
         {screen === 'users' && <Users me={user} />}
         {screen === 'password' && <ChangePassword onDone={() => setScreen('table')} onCancel={() => setScreen('table')} />}
-        {screen === 'table' && activeId && <TableView key={activeId} user={user} tableId={activeId} title={tables.find(t => t.id === activeId)?.title} primaryField={tables.find(t => t.id === activeId)?.primary_field} />}
+        {screen === 'table' && activeId && <TableView key={activeId} user={user} tableId={activeId} title={tables.find(t => t.id === activeId)?.title} primaryField={tables.find(t => t.id === activeId)?.primary_field}
+          openId={jump} onOpened={opened} onOpenLink={openLink} />}
       </main>
     </div>
   )

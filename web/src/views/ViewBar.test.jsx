@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -125,4 +125,12 @@ test('«любое из» — значения через «;»; второй у
   await userEvent.selectOptions(screen.getByLabelText('Группировка'), NAME)
   await userEvent.selectOptions(screen.getByLabelText('Группировка, уровень 2'), QTY)
   expect(screen.getByLabelText('Группировка, уровень 3')).toBeInTheDocument()
+})
+
+test('переход по связи: таблица открывается сразу с карточкой нужной записи', async () => {
+  server.use(http.get('/api/tables/1/views', () => HttpResponse.json([])))
+  const onOpened = vi.fn()
+  render(<TableView tableId={1} primaryField={NAME} user={admin} openId={2} onOpened={onOpened} />)
+  expect(await screen.findByText('Запись №2')).toBeInTheDocument()
+  expect(onOpened).toHaveBeenCalled()
 })

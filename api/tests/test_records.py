@@ -86,8 +86,8 @@ def test_patch_wrong_kind_values(logged, zip_table):
         assert r.status_code == 422, bad
 
 
-def test_records_computed_in_links_not(logged, loaded_fixture):
-    # вычисляемые поля считает движок и отдаёт; связи — пока нет (этап 2)
+def test_records_computed_and_links(logged, loaded_fixture):
+    # вычисляемые поля считает движок и отдаёт; связи — названиями (подробно — test_links.py)
     from migrate.names import column_name
 
     r = logged.get(f"/api/tables/{loaded_fixture['tblBBBBBBBBBBBBBB']}/records")
@@ -95,7 +95,7 @@ def test_records_computed_in_links_not(logged, loaded_fixture):
     keys = set(r.json()[0])
     assert column_name("fldBinv0000000000") in keys
     assert column_name("fldBformula000000") in keys
-    assert column_name("fldBnom0000000000") not in keys
+    assert column_name("fldBnom0000000000") in keys
 
 
 def test_records_skip_virtual_even_if_column_exists(logged, loaded_fixture):

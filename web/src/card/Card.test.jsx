@@ -35,3 +35,14 @@ test('закрытие', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }))
   expect(onClose).toHaveBeenCalled()
 })
+
+test('связанные записи — кнопками; щелчок ведёт в связанную таблицу', async () => {
+  const onOpenLink = vi.fn()
+  const link = { column_name: 'lnk', title: 'Номенклатура', kind: 'multipleRecordLinks', editable: false, options: {}, link_table: 5 }
+  const hidden = { ...link, column_name: 'h', title: 'Договор', link_table: null }
+  render(<Card record={{ id: 1, lnk: [{ id: 9, name: 'Кольцо' }], h: null }} fields={[link, hidden]}
+    onSave={vi.fn()} onClose={vi.fn()} onOpenLink={onOpenLink} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Кольцо' }))
+  expect(onOpenLink).toHaveBeenCalledWith(5, 9)
+  expect(screen.getByText('Договор').parentElement.textContent).toContain('—')
+})
