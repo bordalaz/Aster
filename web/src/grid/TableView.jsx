@@ -79,6 +79,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           onClose={() => setOpen(null)}
           onOpenLink={onOpenLink}
           onChanged={refresh}
+          equipment={title === 'Оборудование'}
         />
       )}
     </div>
