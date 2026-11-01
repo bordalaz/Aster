@@ -2,7 +2,7 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -12,7 +12,9 @@ from .db import engine
 
 router = APIRouter(prefix="/api")
 
-Op = Literal["eq", "neq", "contains", "not_contains", "empty", "not_empty", "gt", "gte", "lt", "lte"]
+Op = Literal["eq", "neq", "contains", "not_contains", "empty", "not_empty", "gt", "gte", "lt", "lte",
+             "any_of", "none_of", "contains_any"]
+LIST_OPS = {"any_of", "none_of", "contains_any"}   # значение — список (из Airtable «любое из» и ИЛИ по одной колонке)
 Col = Field(min_length=1, max_length=100)
 
 
@@ -28,7 +30,14 @@ class SortItem(Strict):
 class FilterItem(Strict):
     col: str = Col
     op: Op
-    value: bool | float | Annotated[str, Field(max_length=500)] | None = None
+    value: (bool | float | Annotated[str, Field(max_length=500)]
+            | Annotated[list[Annotated[str, Field(max_length=500)]], Field(max_length=50)] | None) = None
+
+    @model_validator(mode="after")
+    def _list_only_for_list_ops(self):
+        if self.value is not None and isinstance(self.value, list) != (self.op in LIST_OPS):
+            raise ValueError("список значений — только у условий «любое из»")
+        return self
 
 
 class ViewConfig(Strict):
@@ -36,12 +45,13 @@ class ViewConfig(Strict):
     widths: dict[str, int] | None = None
     sort: list[SortItem] | None = Field(None, max_length=10)
     filters: list[FilterItem] | None = Field(None, max_length=30)
-    group: str | None = Field(None, min_length=1, max_length=100)   # группировка по одной колонке
+    # группировка: до 3 уровней; строка — старый формат (один уровень)
+    group: Annotated[str, Col] | Annotated[list[Annotated[str, Col]], Field(min_length=1, max_length=3)] | None = None
     source: Literal["airtable"] | None = None
 
     def used_columns(self) -> set[str]:
         return (set(self.columns or ()) | set(self.widths or ()) | {s.col for s in self.sort or ()}
-                | {f.col for f in self.filters or ()} | ({self.group} if self.group else set()))
+                | {f.col for f in self.filters or ()} | set([self.group] if isinstance(self.group, str) else self.group or ()))
 
 
 def check_config(c, table_id: int, cfg: ViewConfig) -> dict:

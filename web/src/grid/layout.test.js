@@ -16,6 +16,16 @@ test('группировка: группы по названию, пустые �
   expect(groupRows(rows, null)).toHaveLength(4)
 })
 
+test('группировка в несколько уровней: вложенные заголовки, свёртка по пути', () => {
+  const big = { column_name: 'b', title: 'Крупно', kind: 'singleLineText', options: {} }
+  const rs = rows.map(r => ({ ...r, b: r.id < 3 ? 'А' : 'Б' }))
+  const show = items => items.map(i => (i.kind === 'group' ? `${'>'.repeat(i.depth)}[${i.key}:${i.count}]` : i.row.id))
+  expect(show(groupRows(rs, [big, status]))).toEqual(
+    ['[А:2]', '>[Брак:1]', 1, '>[В работе:1]', 2, '[Б:2]', '>[Брак:1]', 4, '>[—:1]', 3])
+  const folded = groupRows(rs, [big, status], new Set(['Б']))
+  expect(show(folded).slice(-1)).toEqual(['[Б:2]'])
+})
+
 test('итоги: сумма чисел с точностью поля; иначе — сколько заполнено', () => {
   expect(columnTotal(qty, rows)).toBe('Σ 6.50')
   expect(columnTotal(status, rows)).toBe('заполнено 3')

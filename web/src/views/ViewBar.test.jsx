@@ -34,11 +34,11 @@ test('выбор вида применяет его фильтры', async () =>
   expect(screen.queryByText('не сохранено')).toBeNull()
 })
 
-test('вид из Airtable: колонки применены, предупреждение про фильтры', async () => {
+test('вид из Airtable: колонки применены, без устаревшей подсказки про фильтры', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
   await userEvent.selectOptions(screen.getByLabelText('Вид'), '11')
-  expect(screen.getByText(/Фильтры и сортировку Airtable не отдаёт/)).toBeInTheDocument()
+  expect(screen.queryByText(/Airtable не отдаёт/)).toBeNull()
   expect(screen.getByTestId('col-order').textContent).toBe(`${NAME},${QTY}`)
 })
 
@@ -109,4 +109,20 @@ test('выгрузка CSV — видимые колонки и отфильтр
   } finally {
     URL.createObjectURL = orig
   }
+})
+
+test('«любое из» — значения через «;»; второй уровень группировки появляется после первого', async () => {
+  setup()
+  await screen.findByText('2 записи', { exact: false })
+  await userEvent.click(screen.getByRole('button', { name: 'Фильтры' }))
+  await userEvent.click(screen.getByRole('button', { name: '+ условие' }))
+  await userEvent.selectOptions(screen.getByLabelText('Условие'), 'any_of')
+  await userEvent.type(screen.getByLabelText('Значение фильтра'), 'втулка; гайка')
+  expect(await screen.findByText('1 запись', { exact: false })).toBeInTheDocument()
+  expect(screen.getByLabelText('Значение фильтра').value).toBe('втулка; гайка')
+
+  expect(screen.queryByLabelText('Группировка, уровень 2')).toBeNull()
+  await userEvent.selectOptions(screen.getByLabelText('Группировка'), NAME)
+  await userEvent.selectOptions(screen.getByLabelText('Группировка, уровень 2'), QTY)
+  expect(screen.getByLabelText('Группировка, уровень 3')).toBeInTheDocument()
 })

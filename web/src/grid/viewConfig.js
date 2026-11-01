@@ -4,8 +4,12 @@ import { displayValue } from './cells.js'
 export const OPS = {
   contains: 'содержит', not_contains: 'не содержит', eq: '=', neq: '≠',
   gt: '>', gte: '≥', lt: '<', lte: '≤', empty: 'пусто', not_empty: 'не пусто',
+  any_of: 'любое из', none_of: 'ни одно из', contains_any: 'содержит любое из',
 }
 export const NO_VALUE = new Set(['empty', 'not_empty'])
+// Значение — список (в поле ввода — через «;»); пришли из Airtable: «любое из» и ИЛИ по одной колонке.
+export const LIST_OPS = new Set(['any_of', 'none_of', 'contains_any'])
+const wantList = v => (Array.isArray(v) ? v : [v ?? '']).map(x => String(x).trim().toLowerCase()).filter(Boolean)
 
 // Колонки сетки: первичное поле всегда первое и видно (R9); дальше — порядок вида, иначе все.
 export function visibleColumns(fields, primaryField, columns) {
@@ -15,6 +19,9 @@ export function visibleColumns(fields, primaryField, columns) {
   const rest = order.filter(c => c !== primaryField && byName.has(c)).map(c => byName.get(c))
   return prim ? [prim, ...rest] : rest
 }
+
+// Колонки группировки: список (до 3 уровней); строка — старый формат вида.
+export const groupCols = g => (typeof g === 'string' ? [g] : g ?? [])
 
 const isEmpty = v => v == null || v === '' || (Array.isArray(v) && v.length === 0)
 
@@ -28,6 +35,14 @@ function compare(a, b) {
 export function matches(field, value, { op, value: want }) {
   if (op === 'empty') return isEmpty(value)
   if (op === 'not_empty') return !isEmpty(value)
+  if (LIST_OPS.has(op)) {
+    const wants = wantList(want)
+    // элементы ячейки: у multiSelect/ссылок — каждый по отдельности
+    const items = isEmpty(value) ? [] : (Array.isArray(value) ? value : [value]).map(v => displayValue(field, v).toLowerCase())
+    if (op === 'contains_any') return items.some(it => wants.some(w => it.includes(w)))
+    const hit = items.some(it => wants.includes(it))
+    return op === 'any_of' ? hit : !hit
+  }
   const shown = isEmpty(value) ? '' : displayValue(field, value).toLowerCase()
   const w = want == null ? '' : String(want).toLowerCase()
   if (op === 'contains') return shown.includes(w)
@@ -47,7 +62,8 @@ export function matches(field, value, { op, value: want }) {
 export function applyFilters(fields, rows, filters) {
   if (!filters?.length) return rows
   const byName = new Map(fields.map(f => [f.column_name, f]))
-  const active = filters.filter(f => byName.has(f.col) && (NO_VALUE.has(f.op) || (f.value ?? '') !== ''))
+  const active = filters.filter(f => byName.has(f.col) &&
+    (NO_VALUE.has(f.op) || (LIST_OPS.has(f.op) ? wantList(f.value).length > 0 : (f.value ?? '') !== '')))
   return rows.filter(r => active.every(f => matches(byName.get(f.col), r[f.col], f)))
 }
 

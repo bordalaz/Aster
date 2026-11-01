@@ -2,9 +2,11 @@ import { displayValue, kindOf, NUMBER, numText } from './cells.js'
 
 const keyCompare = (a, b) => a.localeCompare(b, 'ru', { numeric: true })
 
-// Строки сетки с группировкой по одной колонке: заголовок группы + её строки (свёрнутые — без строк).
+// Строки сетки с группировкой по одной или нескольким колонкам: заголовок группы + её строки (свёрнутые — без строк).
 // Порядок строк внутри группы — как пришёл (сортировка вида), группы — по названию, «—» (пусто) в конце.
-export function groupRows(rows, field, collapsed = new Set()) {
+// Свёрнутые группы — по пути ключей (верхний уровень — просто ключ).
+export function groupRows(rows, fields, collapsed = new Set(), depth = 0, path = []) {
+  const [field, ...rest] = (Array.isArray(fields) ? fields : [fields]).filter(Boolean)
   if (!field) return rows.map(row => ({ kind: 'row', row }))
   const groups = new Map()
   for (const row of rows) {
@@ -13,10 +15,13 @@ export function groupRows(rows, field, collapsed = new Set()) {
     groups.get(key).push(row)
   }
   const keys = [...groups.keys()].sort((a, b) => (a === '—') - (b === '—') || keyCompare(a, b))
-  return keys.flatMap(key => [
-    { kind: 'group', key, count: groups.get(key).length, collapsed: collapsed.has(key) },
-    ...(collapsed.has(key) ? [] : groups.get(key).map(row => ({ kind: 'row', row }))),
-  ])
+  return keys.flatMap(key => {
+    const p = [...path, key], id = p.join(''), folded = collapsed.has(id)
+    return [
+      { kind: 'group', key, id, depth, count: groups.get(key).length, collapsed: folded },
+      ...(folded ? [] : groupRows(groups.get(key), rest, collapsed, depth + 1, p)),
+    ]
+  })
 }
 
 const isNum = f => NUMBER.has(kindOf(f)) || f.kind === 'count'

@@ -34,12 +34,19 @@ def cmd_load() -> int:
         warnings = apply_schema(c, schema)
         res = load_snapshot(c, SNAP)
         views = SNAP / "views.json"   # свежее, чем схема снимка, если снимали `views` отдельно
-        res["views"] = load_views(c, json.loads(views.read_text(encoding="utf-8")) if views.exists() else schema)
+        res["views"] = load_views(c, json.loads(views.read_text(encoding="utf-8")) if views.exists() else schema,
+                                  _view_filters())
     for w in warnings:
         print("Внимание:", w)
     print(f"Загружено: записей {sum(res['records'].values())}, связей {res['links']} "
           f"(битых ссылок {res['dangling_links']}), вложений {res['attachments']}, видов {res['views']}")
     return 0
+
+
+def _view_filters() -> dict:
+    """Фильтры/сортировки/группировки видов, снятые из веб-клиента Airtable (публичный API их не отдаёт)."""
+    p = SNAP / "view_filters.json"
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
 
 
 def cmd_views() -> int:
@@ -51,8 +58,8 @@ def cmd_views() -> int:
     schema = AirtableClient(token, BASE).schema()
     (SNAP / "views.json").write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")
     with engine.begin() as c:
-        n = load_views(c, schema)
-    print(f"Видов перенесено: {n} (только grid; фильтры и сортировки API Airtable не отдаёт)")
+        n = load_views(c, schema, _view_filters())
+    print(f"Видов перенесено: {n} (только grid; фильтры — из {SNAP / 'view_filters.json'}, если он есть)")
     return 0
 
 
