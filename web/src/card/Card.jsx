@@ -2,9 +2,10 @@ import { useState } from 'react'
 import FieldEditor from './fields.jsx'
 import History from './History.jsx'
 import Files from '../files/Files.jsx'
+import CalibrationList from '../calibration/CalibrationList.jsx'
 import { api } from '../api.js'
 
-export default function Card({ tableId, record, fields, onSave, onClose, onOpenLink, onChanged }) {
+export default function Card({ tableId, record, fields, onSave, onClose, onOpenLink, onChanged, equipment }) {
   const [draft, setDraft] = useState({})   // только изменённые поля
   const [saving, setSaving] = useState(false)
 
@@ -52,6 +53,7 @@ export default function Card({ tableId, record, fields, onSave, onClose, onOpenL
         />
       ))}
       {fields.some(f => f.editable) && <button className="btn primary" disabled={saving} onClick={save}>Сохранить</button>}
+      {equipment && <CalibrationList equipmentId={record.id} />}
       {tableId && <History tableId={tableId} recordId={record.id} version={record.updated_at} fields={fields} />}
     </aside>
   )

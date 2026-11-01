@@ -70,6 +70,8 @@ def _visible(c, row, user) -> bool:
     """Привязанное — тем, кто видит таблицу и поле; непривязанное — только загрузившему."""
     if row.table_id is None:
         return row.uploaded_by == user["id"]
+    if row.table_id == "app_calibration":   # файлы калибровок — всем, кто видит Оборудование
+        return can_read(user, "Оборудование")
     t = c.execute(text("select id, title from app_table where airtable_id = :a"), {"a": row.table_id}).first()
     if t is None or not can_read(user, t.title):
         return False
