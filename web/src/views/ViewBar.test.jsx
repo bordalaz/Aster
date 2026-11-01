@@ -176,3 +176,17 @@ test('без права на правку «+» нет', async () => {
   await screen.findByText('2 записи', { exact: false })
   expect(screen.queryByRole('button', { name: 'Добавить запись' })).toBeNull()
 })
+
+test('список видов как в Airtable: разделы «Мои личные» и «Общие», сворачиваются; «+ Создать вид»', async () => {
+  const posted = setup()
+  await screen.findByText('2 записи', { exact: false })
+  await userEvent.click(screen.getByRole('button', { name: 'Список видов' }))
+  const side = within(screen.getByLabelText('Виды'))
+  expect(side.getByRole('button', { name: 'Мои личные виды' })).toBeInTheDocument()
+  await userEvent.click(side.getByRole('button', { name: 'Общие виды' }))
+  expect(side.queryByRole('button', { name: 'Много' })).toBeNull()
+  await userEvent.click(side.getByRole('button', { name: 'Создать вид' }))
+  await userEvent.type(side.getByLabelText('Название нового вида'), 'Мой новый{Enter}')
+  await screen.findByRole('button', { name: 'Вид: Мой новый' }).catch(() => null)
+  expect(posted[0]).toMatchObject({ title: 'Мой новый', shared: false })
+})

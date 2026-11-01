@@ -25,23 +25,41 @@ function useDismiss(open, close) {
   return ref
 }
 
-// Список видов слева (☰), как боковая панель видов Airtable.
-export function ViewsSide({ views, current, onSelect }) {
+// Список видов слева (☰), как в Airtable: «+ Создать вид», поиск, разделы «Мои личные» и «Общие» (сворачиваются).
+// onCreate(title) — новый личный вид из текущих настроек.
+export function ViewsSide({ views, current, onSelect, onCreate }) {
   const [q, setQ] = useState('')
+  const [closed, setClosed] = useState(new Set())
+  const [naming, setNaming] = useState(null)   // null | строка названия
   const match = v => v.title.toLowerCase().includes(q.trim().toLowerCase())
   const item = v => (
-    <button key={v.id ?? 'all'} aria-current={current === v.id ? 'true' : undefined} onClick={() => onSelect(v.id)}>
-      <Icon name="table" size={14} style={{ color: 'var(--accent)' }} />{v.title}
+    <button key={v.id ?? 'all'} className="vs-item" aria-current={current === v.id ? 'true' : undefined} onClick={() => onSelect(v.id)} title={v.title}>
+      <Icon name="table" size={16} style={{ color: 'var(--accent)' }} /><span>{v.title}</span>
     </button>
+  )
+  const section = (key, title, list) => list.length > 0 && (
+    <div key={key}>
+      <button className="vs-section" aria-expanded={!closed.has(key)}
+        onClick={() => setClosed(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })}>
+        <Icon name="caretDown" size={12} style={closed.has(key) ? { transform: 'rotate(-90deg)' } : undefined} />{title}
+      </button>
+      {!closed.has(key) && <div className="vs-list">{list.map(item)}</div>}
+    </div>
   )
   return (
     <aside className="views-side" aria-label="Виды">
-      <input aria-label="Найти вид" placeholder="Найти вид" value={q} onChange={e => setQ(e.target.value)} />
-      {item({ id: null, title: 'Все записи' })}
-      {views.some(v => v.shared && match(v)) && <h5>Общие</h5>}
-      {views.filter(v => v.shared && match(v)).map(item)}
-      {views.some(v => !v.shared && match(v)) && <h5>Мои</h5>}
-      {views.filter(v => !v.shared && match(v)).map(item)}
+      {onCreate && (naming === null
+        ? <button className="vs-create" onClick={() => setNaming('')}><Icon name="plus" size={14} />Создать вид</button>
+        : <form className="vs-create-form" onSubmit={e => { e.preventDefault(); if (naming.trim()) { onCreate(naming.trim()); setNaming(null) } }}>
+            <input autoFocus aria-label="Название нового вида" placeholder="Название вида" value={naming} maxLength={200}
+              onChange={e => setNaming(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setNaming(null) }} />
+          </form>)}
+      <label className="vs-search"><Icon name="search" size={14} />
+        <input aria-label="Найти вид" placeholder="Найти вид" value={q} onChange={e => setQ(e.target.value)} />
+      </label>
+      <div className="vs-list">{match({ title: 'Все записи' }) && item({ id: null, title: 'Все записи' })}</div>
+      {section('mine', 'Мои личные виды', views.filter(v => !v.shared && match(v)))}
+      {section('shared', 'Общие виды', views.filter(v => v.shared && match(v)))}
     </aside>
   )
 }
