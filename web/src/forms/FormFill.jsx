@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api.js'
 import FieldEditor from '../card/fields.jsx'
 import LinkPicker from './LinkPicker.jsx'
+import Files from '../files/Files.jsx'
 
 const newKey = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`.slice(0, 40))
 const empty = v => v == null || v === '' || (Array.isArray(v) && v.length === 0)
@@ -10,13 +11,14 @@ const empty = v => v == null || v === '' || (Array.isArray(v) && v.length === 0)
 export default function FormFill({ formId }) {
   const [form, setForm] = useState(null)
   const [values, setValues] = useState({})
+  const [staged, setStaged] = useState({})   // загруженные файлы по полю: [{id, name, size}]
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(false)
   const key = useRef(newKey())
 
   useEffect(() => {
-    setForm(null); setValues({}); setDone(false); setError(''); key.current = newKey()
+    setForm(null); setValues({}); setStaged({}); setDone(false); setError(''); key.current = newKey()
     api(`/api/forms/${formId}`).then(setForm, () => setError('Форма недоступна'))
   }, [formId])
 
@@ -42,7 +44,7 @@ export default function FormFill({ formId }) {
       <div style={{ padding: 16, display: 'grid', gap: 12, maxWidth: 560 }}>
         <strong>{form.title}</strong>
         <div>{form.after_message || 'Запись создана'}</div>
-        <div><button className="btn primary" onClick={() => { setValues({}); setDone(false); key.current = newKey() }}>Заполнить ещё</button></div>
+        <div><button className="btn primary" onClick={() => { setValues({}); setStaged({}); setDone(false); key.current = newKey() }}>Заполнить ещё</button></div>
       </div>
     )
   }
@@ -54,7 +56,11 @@ export default function FormFill({ formId }) {
         const title = f.required ? `${f.title} *` : f.title
         return (
           <div key={f.column_name}>
-            {f.kind === 'multipleRecordLinks'
+            {f.kind === 'multipleAttachments'
+              ? <Files title={title} files={staged[f.column_name]}
+                  onUpload={up => { const next = [...(staged[f.column_name] ?? []), ...up]; setStaged(s => ({ ...s, [f.column_name]: next })); set(f.column_name)(next.map(x => x.id)) }}
+                  onRemove={file => { const next = (staged[f.column_name] ?? []).filter(x => x.id !== file.id); setStaged(s => ({ ...s, [f.column_name]: next })); set(f.column_name)(next.map(x => x.id)) }} />
+              : f.kind === 'multipleRecordLinks'
               ? <LinkPicker field={f} title={title} value={values[f.column_name]} onChange={set(f.column_name)} />
               : <FieldEditor field={{ ...f, title, editable: true }} value={values[f.column_name] ?? null} onChange={set(f.column_name)} />}
             {f.help && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{f.help}</div>}
