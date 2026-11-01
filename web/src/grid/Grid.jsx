@@ -87,8 +87,9 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
 
   const onCellEdited = useCallback(([ci, ri], cell) => {
     const field = cols[ci], row = rowAt(ri)
-    if (!field.editable || !row) return
-    onEdit(row, field.column_name, fromCell(field, cell))
+    const v = fromCell(field, cell)
+    if (!field.editable || !row || v === undefined) return   // undefined — нераспознанный ввод
+    onEdit(row, field.column_name, v)
   }, [cols, items, onEdit])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Вставка из Excel (R9): несколько ячеек — одним пакетом; правимые поля, только строки данных.
@@ -97,9 +98,10 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     const byRow = new Map()
     for (const { location: [ci, ri], value } of edits) {
       const field = cols[ci], row = rowAt(ri)
-      if (!field?.editable || !row) continue
+      const v = field?.editable && row ? fromCell(field, value) : undefined
+      if (v === undefined) continue
       if (!byRow.has(row.id)) byRow.set(row.id, { row, values: {} })
-      byRow.get(row.id).values[field.column_name] = fromCell(field, value)
+      byRow.get(row.id).values[field.column_name] = v
     }
     if (byRow.size) onEditMany([...byRow.values()])
     return true

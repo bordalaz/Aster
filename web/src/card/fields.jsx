@@ -1,8 +1,8 @@
-import { displayValue, isLink } from '../grid/cells.js'
+import { displayValue, durText, isLink, parseDuration } from '../grid/cells.js'
 
 const TEXT = new Set(['singleLineText', 'email', 'url', 'phoneNumber'])
 const MULTILINE = new Set(['multilineText', 'richText'])
-const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'duration'])
+const NUMBER = new Set(['number', 'currency', 'percent', 'rating'])
 
 // Один редактор поля по его kind. Неэдитируемое — только показ.
 export default function FieldEditor({ field, value, onChange, onOpenLink }) {
@@ -46,6 +46,12 @@ export default function FieldEditor({ field, value, onChange, onOpenLink }) {
   if (field.kind === 'dateTime') {
     const local = value ? String(value).slice(0, 16) : ''
     return <div>{label}<input id={id} type="datetime-local" aria-label={field.title} value={local} onChange={e => onChange(e.target.value || null)} /></div>
+  }
+  if (field.kind === 'duration') {
+    // «ч:мм», как в Airtable; разбираем при уходе с поля, нераспознанное не сохраняем
+    const shown = value == null ? '' : durText(field, value)
+    return <div>{label}<input id={id} key={shown} aria-label={field.title} defaultValue={shown} placeholder="ч:мм"
+      onBlur={e => { const v = parseDuration(e.target.value); if (v === undefined) e.target.value = shown; else if (v !== value) onChange(v) }} /></div>
   }
   if (NUMBER.has(field.kind)) {
     return <div>{label}<input id={id} type="number" aria-label={field.title} value={value ?? ''} onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))} /></div>

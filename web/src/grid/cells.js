@@ -19,8 +19,28 @@ export function kindOf(field) {
   return field.kind
 }
 
+// Длительность Airtable хранит секундами, показывает «ч:мм» (или «ч:мм:сс»).
+const durFormat = f => (COMPUTED.has(f.kind) ? f.options?.result?.options : f.options)?.durationFormat ?? 'h:mm'
+
+export function durText(field, sec) {
+  const s = Math.round(Math.abs(sec)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60
+  const pad = x => String(x).padStart(2, '0')
+  return (sec < 0 ? '-' : '') + `${h}:${pad(m)}` + (durFormat(field) === 'h:mm' ? '' : `:${pad(s % 60)}`)
+}
+
+// «85:40» / «1:02:05» → секунды; число без «:» — часы. '' → null, мусор → undefined (не сохраняем).
+export function parseDuration(text) {
+  const t = String(text ?? '').trim().replace(',', '.')
+  if (t === '') return null
+  const hm = /^(\d+):([0-5]?\d)(?::([0-5]?\d))?$/.exec(t)
+  if (hm) return +hm[1] * 3600 + +hm[2] * 60 + +(hm[3] ?? 0)
+  const n = Number(t)
+  return Number.isFinite(n) ? Math.round(n * 3600) : undefined
+}
+
 // Число → текст: точность поля как в Airtable; без неё — срезаем шум float (0.1+0.2).
 export function numText(field, n) {
+  if (kindOf(field) === 'duration') return durText(field, n)
   const p = field.kind === 'count' ? 0
     : COMPUTED.has(field.kind) ? field.options?.result?.options?.precision : field.options?.precision
   return p == null ? String(Number(n.toPrecision(15))) : n.toFixed(p)
@@ -48,6 +68,10 @@ export function toCell(field, value) {
   if (kind === 'checkbox') {
     return { kind: GridCellKind.Boolean, data: !!value, allowOverlay: false, readonly: !field.editable }
   }
+  if (kind === 'duration' && (value == null || typeof value === 'number')) {
+    const text = value == null ? '' : durText(field, value)
+    return { kind: GridCellKind.Text, data: text, displayData: text, allowOverlay: editable }
+  }
   if (NUMBER.has(kind) && (value == null || typeof value === 'number')) {
     return {
       kind: GridCellKind.Number, data: value ?? undefined,
@@ -60,6 +84,7 @@ export function toCell(field, value) {
 
 export function fromCell(field, cell) {
   if (field.kind === 'checkbox') return !!cell.data
+  if (field.kind === 'duration') return parseDuration(cell.data)
   if (NUMBER.has(field.kind)) return cell.data ?? null
   return cell.data === '' ? null : cell.data
 }
