@@ -19,10 +19,18 @@ test('число — Number-ячейка', () => {
   expect(toCell(fNum, 5).kind).toBe(GridCellKind.Number)
 })
 
-test('checkbox — Boolean-ячейка', () => {
-  const c = toCell(fCheck, true)
-  expect(c.kind).toBe(GridCellKind.Boolean)
-  expect(c.data).toBe(true)
+test('checkbox — галочка как в Airtable (своя ячейка), клик меняет значение', () => {
+  const c = toCell({ ...fCheck, options: { color: 'greenBright' } }, true)
+  expect(c.kind).toBe(GridCellKind.Custom)
+  expect(c.data).toMatchObject({ kind: 'check', value: true, color: '#20c933' })
+  expect(fromCell(fCheck, { ...c, data: { ...c.data, value: false } })).toBe(false)
+})
+
+test('выбор — цветная плашка по цвету варианта из Airtable', () => {
+  const f = { kind: 'singleSelect', editable: true, options: { choices: [{ name: 'Брак', color: 'redBright' }, { name: 'Склад', color: 'greenLight2' }] } }
+  expect(toCell(f, 'Брак').data.items).toEqual([{ text: 'Брак', bg: '#f82b60', fg: '#ffffff' }])
+  expect(toCell({ ...f, kind: 'multipleSelects' }, ['Склад', 'Брак']).data.items.map(i => i.bg)).toEqual(['#d1f7c4', '#f82b60'])
+  expect(toCell(f, null).data.items).toEqual([])
 })
 
 test('неэдитируемое поле — allowOverlay false', () => {
@@ -39,7 +47,6 @@ test('null → пустая строка', () => {
 
 test('fromCell достаёт data', () => {
   expect(fromCell(fNum, { kind: GridCellKind.Number, data: 9 })).toBe(9)
-  expect(fromCell(fCheck, { kind: GridCellKind.Boolean, data: false })).toBe(false)
 })
 
 const fFormulaNum = { kind: 'formula', editable: false, options: { result: { type: 'number' } } }
@@ -66,10 +73,10 @@ test('NaN, Infinity и #ERROR! показываются текстом', () => {
 
 test('lookup текста — через запятую; связи и lookup связи — названиями записей', () => {
   expect(toCell(fLookupText, ['a', 'b']).displayData).toBe('a, b')
-  expect(toCell(fLookupLink, [{ id: 1, name: 'Кольцо' }, { id: 2, name: 'Втулка' }]).displayData).toBe('Кольцо, Втулка')
+  expect(toCell(fLookupLink, [{ id: 1, name: 'Кольцо' }, { id: 2, name: 'Втулка' }]).copyData).toBe('Кольцо, Втулка')
   const link = { kind: 'multipleRecordLinks', editable: false, options: {} }
-  expect(toCell(link, [{ id: 7, name: 'МИР 295' }]).displayData).toBe('МИР 295')
-  expect(toCell(link, null).displayData).toBe('')   // таблица скрыта от роли
+  expect(toCell(link, [{ id: 7, name: 'МИР 295' }]).data.items.map(i => i.text)).toEqual(['МИР 295'])   // «таблетка»
+  expect(toCell(link, null).copyData).toBe('')   // таблица скрыта от роли
 })
 
 test('displayValue для карточки', () => {

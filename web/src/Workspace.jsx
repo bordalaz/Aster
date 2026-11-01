@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api.js'
-import TableList from './tables/TableList.jsx'
+import TableTabs from './tables/TableTabs.jsx'
 import TableView from './grid/TableView.jsx'
 import Users from './users/Users.jsx'
 import Forms from './forms/Forms.jsx'
 import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
+import { Icon } from './ui/icons.jsx'
 
+// Оболочка как в Airtable: верхняя полоса базы с разделами, под ней вкладки таблиц.
 export default function Workspace({ user, onLogout }) {
   const [tables, setTables] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -23,25 +25,36 @@ export default function Workspace({ user, onLogout }) {
     })
   }, [])
 
+  const section = s => (screen === s ? 'page' : undefined)
+  const active = tables.find(t => t.id === activeId)
+
   return (
-    <div style={{ display: 'flex', height: '100vh' }}>
-      <TableList tables={tables} activeId={screen === 'table' ? activeId : null} onPick={id => { setActiveId(id); setScreen('table') }} />
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--line)' }}>
-          <strong>{screen === 'forms' ? 'Формы' : screen === 'calibration' ? 'Калибровка' : screen === 'users' ? 'Пользователи' : screen === 'password' ? 'Смена пароля' : tables.find(t => t.id === activeId)?.title ?? ''}</strong>
-          <span style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{user?.name}</span>
-          <button className="btn" aria-pressed={screen === 'forms'} onClick={() => setScreen('forms')}>Формы</button>
-          {/* ponytail: калибровка скрыта до конца переноса Airtable 1:1; вернуть — раскомментировать кнопку и блок в Card */}
-          {isAdmin && <button className="btn" onClick={() => setScreen('users')}>Пользователи</button>}
-          <button className="btn" onClick={() => setScreen('password')}>Пароль</button>
-          <button className="btn" onClick={onLogout}>Выход</button>
-        </header>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <header className="topbar" style={{ position: 'relative' }}>
+        <div className="base">
+          <span className="base-mark"><Icon name="database" size={16} /></span>
+          <span>Воркспэйс гидроканал</span>
+        </div>
+        <nav aria-label="Разделы">
+          <button aria-current={section('table')} onClick={() => setScreen('table')}>Данные</button>
+          <button aria-current={section('forms')} onClick={() => setScreen('forms')}>Формы</button>
+        </nav>
+        <div className="right">
+          {/* ponytail: калибровка скрыта до конца переноса Airtable 1:1 */}
+          {isAdmin && <button className="quiet" aria-current={section('users')} onClick={() => setScreen('users')}><Icon name="users" />Пользователи</button>}
+          <button className="quiet" onClick={() => setScreen('password')}><Icon name="key" />Пароль</button>
+          <span style={{ color: 'var(--muted)', padding: '0 4px' }}>{user?.name}</span>
+          <button className="quiet" onClick={onLogout} aria-label="Выход" title="Выход"><Icon name="signOut" /></button>
+        </div>
+      </header>
+      {screen === 'table' && <TableTabs tables={tables} activeId={activeId} onPick={setActiveId} />}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {screen === 'forms' && <Forms />}
         {screen === 'calibration' && <Calibration user={user} />}
         {screen === 'users' && <Users me={user} />}
         {screen === 'password' && <ChangePassword onDone={() => setScreen('table')} onCancel={() => setScreen('table')} />}
-        {screen === 'table' && activeId && <TableView key={activeId} user={user} tableId={activeId} title={tables.find(t => t.id === activeId)?.title} primaryField={tables.find(t => t.id === activeId)?.primary_field}
-          openId={jump} onOpened={opened} onOpenLink={openLink} />}
+        {screen === 'table' && active && <TableView key={activeId} user={user} tableId={activeId} title={active.title}
+          primaryField={active.primary_field} openId={jump} onOpened={opened} onOpenLink={openLink} />}
       </main>
     </div>
   )
