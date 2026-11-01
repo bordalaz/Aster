@@ -140,6 +140,12 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       return n === undefined ? cell : { ...cell, data: n ?? undefined }
     }
     if (cell.kind === GridCellKind.Custom && cell.data?.kind === 'check') return { ...cell, data: { ...cell.data, value: parsePastedBool(val) } }
+    if (cell.kind === GridCellKind.Custom && cell.data?.choices) {   // выбор: только существующие варианты
+      const names = new Set(cell.data.choices.map(c => c.name))
+      const vals = String(val).split(cell.data.multi ? /\s*[,;]\s*/ : /$^/).map(v => v.trim()).filter(Boolean)
+      if (!vals.every(v => names.has(v))) return cell   // нет такого варианта — ячейку не трогаем
+      return { ...cell, data: { ...cell.data, value: cell.data.multi ? vals : vals[0] ?? null } }
+    }
     return undefined   // текст — как есть
   }, [])
 

@@ -34,6 +34,7 @@ import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw'
 import copy from '@phosphor-icons/core/assets/regular/copy.svg?raw'
 import plus from '@phosphor-icons/core/assets/regular/plus.svg?raw'
 import x from '@phosphor-icons/core/assets/regular/x.svg?raw'
+import check from '@phosphor-icons/core/assets/regular/check.svg?raw'
 import database from '@phosphor-icons/core/assets/regular/database.svg?raw'
 import signOut from '@phosphor-icons/core/assets/regular/sign-out.svg?raw'
 import key from '@phosphor-icons/core/assets/regular/key.svg?raw'
@@ -43,7 +44,7 @@ import textbox from '@phosphor-icons/core/assets/regular/textbox.svg?raw'
 export const ICONS = {
   aa, target, textLeft, hash, clock, fn, caretCircle, listBullets, checkSquare, calendar, paperclip, link, at, phone,
   binoculars, sigma, numbers, percent, star, rub, user, search, eyeSlash, funnel, list, rows, sort, caretDown,
-  table, download, floppy, trash, copy, plus, x, database, signOut, key, users, textbox,
+  table, download, floppy, trash, copy, plus, x, check, database, signOut, key, users, textbox,
 }
 
 // Значок типа поля — как в заголовках Airtable.

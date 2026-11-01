@@ -116,3 +116,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* «+» внизу слева сетки, как в Airtable */
 .add-row { position: absolute; left: 10px; bottom: 6px; z-index: 2; width: 30px; height: 22px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--text2); display: grid; place-items: center; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
 .add-row:hover { color: var(--text); border-color: #c4c7cd; }
+
+/* список вариантов в ячейке, как в Airtable */
+.sel-editor { width: 280px; background: #fff; border-radius: 6px; box-shadow: var(--shadow-pop); padding: 6px; display: grid; gap: 4px; }
+.sel-editor input { height: 30px; border: 1px solid var(--line); border-radius: 4px; padding: 0 8px; }
+.sel-editor ul { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; }
+.sel-editor li { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 4px; cursor: pointer; }
+.sel-editor li:hover, .sel-editor li[aria-selected="true"] { background: #f1f5ff; }
+.sel-editor li.empty { color: var(--muted); cursor: default; }
+.sel-editor .link { border: 0; background: none; color: var(--accent); cursor: pointer; justify-self: start; padding: 4px 6px; }

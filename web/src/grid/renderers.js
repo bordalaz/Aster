@@ -1,4 +1,5 @@
 import { GridCellKind } from '@glideapps/glide-data-grid'
+import SelectEditor from './SelectEditor.jsx'
 
 // Палитра Airtable по имени цвета варианта (options.choices[].color).
 const HUES = {
@@ -47,6 +48,8 @@ const pills = {
     ctx.restore()
     return true
   },
+  // свои поля выбора: список вариантов поверх ячейки
+  provideEditor: c => (c.data.choices ? { editor: SelectEditor, disablePadding: true, disableStyling: true } : undefined),
 }
 
 // Галочка как в Airtable: цветная ✓ без рамки; пусто — ничего. Клик переключает.
