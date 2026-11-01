@@ -123,7 +123,7 @@ def current_user(request: Request) -> dict:
         with engine.connect() as c:
             u = c.execute(
                 text(
-                    "select u.id, u.login, u.name, u.role, u.must_change_password from app_session s "
+                    "select u.id, u.login, u.name, u.role, u.must_change_password, u.finance_access from app_session s "
                     "join app_user u on u.id = s.user_id "
                     "where s.token = :t and s.expires_at > now() and not u.blocked"
                 ),

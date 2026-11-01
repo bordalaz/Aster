@@ -25,7 +25,7 @@ def check_target_role(actor: dict, role: str) -> None:
 def list_users(actor: dict = Depends(admin_user)):
     with engine.connect() as c:
         rows = c.execute(text(
-            "select id, login, name, role, blocked, must_change_password, created_at from app_user order by login"
+            "select id, login, name, role, blocked, must_change_password, finance_access, created_at from app_user order by login"
         ))
         return [r._asdict() for r in rows]
 
@@ -60,6 +60,7 @@ class UserPatch(BaseModel):
     role: Role | Literal["superadmin"] | None = None
     blocked: bool | None = None
     password: str | None = Field(None, min_length=8, max_length=200)   # сброс: снова временный
+    finance_access: bool | None = None   # просмотр финансов — выдаёт только суперадмин
 
 
 @router.patch("/{user_id}")
@@ -73,10 +74,12 @@ def patch_user(user_id: int, body: UserPatch, actor: dict = Depends(admin_user))
         if body.role == "superadmin":
             raise HTTPException(403, "Суперадмин один")
         check_target_role(actor, target)
+        if body.finance_access is not None and actor["role"] != "superadmin":
+            raise HTTPException(403, "Доступ к финансам выдаёт только суперадмин")
         if body.role:
             check_target_role(actor, body.role)
         sets, params = [], {"i": user_id}
-        for col in ("name", "role", "blocked"):
+        for col in ("name", "role", "blocked", "finance_access"):
             if getattr(body, col) is not None:
                 sets.append(f"{col} = :{col}")   # col — из фиксированного списка, не из запроса
                 params[col] = getattr(body, col)

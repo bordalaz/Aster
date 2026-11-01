@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 
 from . import links
-from .access import can_edit, can_read, table_title
+from .access import can_edit, can_read, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
 
@@ -27,6 +27,8 @@ def fields(table_id: int, user: dict = Depends(active_user)):
             ),
             {"t": table_id},
         ).all()
+        hidden = hidden_columns(c, user, table_id)   # данные из финансов — только тем, кто их видит
+        rows = [r for r in rows if r.column_name not in hidden]
         targets = links.link_tables(c, rows, user)
         # editable — с учётом роли: интерфейс по нему решает, давать ли правку;
         # link_table — куда ведёт ссылка (None — таблица скрыта от роли)
