@@ -79,9 +79,13 @@ export function toCell(field, value) {
     return { kind: GridCellKind.Custom, allowOverlay: false, readonly: !field.editable, copyData: value ? 'да' : '',
       data: { kind: 'check', value: !!value, color } }
   }
-  if (SELECT.has(kind)) {   // плашки цвета варианта, как в Airtable
-    const colors = Object.fromEntries(choicesOf(field).map(c => [c.name, c.color]))
-    return pillsCell(asList(value).filter(v => v != null && v !== '').map(v => ({ text: String(v), ...choiceColor(colors[v]) })), true)
+  if (SELECT.has(kind)) {   // плашки цвета варианта, как в Airtable; свои поля выбора правятся списком в ячейке
+    const choices = choicesOf(field)
+    const colors = Object.fromEntries(choices.map(c => [c.name, c.color]))
+    const cell = pillsCell(asList(value).filter(v => v != null && v !== '').map(v => ({ text: String(v), ...choiceColor(colors[v]) })), true)
+    if (!(field.editable && SELECT.has(field.kind))) return cell
+    return { ...cell, allowOverlay: true, readonly: false,
+      data: { ...cell.data, choices, multi: field.kind === 'multipleSelects', value: value ?? (field.kind === 'multipleSelects' ? [] : null) } }
   }
   if (kind === 'multipleRecordLinks') {   // связи — «таблетки» с названиями записей
     return pillsCell(asList(value).filter(v => v?.name).map(v => ({ text: v.name, ...LINK_PILL })), false)
@@ -102,6 +106,7 @@ export function toCell(field, value) {
 
 export function fromCell(field, cell) {
   if (field.kind === 'checkbox') return !!(cell.kind === GridCellKind.Custom ? cell.data.value : cell.data)
+  if (SELECT.has(field.kind)) return cell.kind === GridCellKind.Custom ? cell.data.value : undefined
   if (field.kind === 'duration') return parseDuration(cell.data)
   if (NUMBER.has(field.kind)) return cell.data ?? null
   return cell.data === '' ? null : cell.data

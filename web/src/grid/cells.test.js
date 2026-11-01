@@ -6,7 +6,6 @@ const fText = { kind: 'singleLineText', editable: true }
 const fNum = { kind: 'number', editable: true }
 const fCheck = { kind: 'checkbox', editable: true }
 const fAuto = { kind: 'autoNumber', editable: false }
-const fSelect = { kind: 'singleSelect', editable: true }
 
 test('текст — редактируемая Text-ячейка', () => {
   const c = toCell(fText, 'Кольцо')
@@ -35,10 +34,6 @@ test('выбор — цветная плашка по цвету вариант�
 
 test('неэдитируемое поле — allowOverlay false', () => {
   expect(toCell(fAuto, 3).allowOverlay).toBe(false)
-})
-
-test('singleSelect редактируется в карточке — в сетке не оверлеим', () => {
-  expect(toCell(fSelect, 'Брак').allowOverlay).toBe(false)
 })
 
 test('null → пустая строка', () => {
@@ -117,4 +112,15 @@ describe('длительность (как в Airtable: хранится сек�
     expect(fromCell(dur, { ...cell, data: '' })).toBe(null)
     expect(fromCell(dur, { ...cell, data: 'abc' })).toBe(undefined)
   })
+})
+
+test('выбор правится прямо в ячейке: список вариантов, значение — имя варианта', () => {
+  const f = { kind: 'singleSelect', editable: true, options: { choices: [{ name: 'Брак', color: 'redBright' }, { name: 'Склад', color: 'greenLight2' }] } }
+  const c = toCell(f, 'Брак')
+  expect(c.allowOverlay).toBe(true)
+  expect(c.readonly).toBe(false)
+  expect(c.data.choices.map(x => x.name)).toEqual(['Брак', 'Склад'])
+  expect(fromCell(f, { ...c, data: { ...c.data, value: 'Склад' } })).toBe('Склад')
+  const ro = toCell({ ...f, editable: false }, 'Брак')
+  expect(ro.allowOverlay).toBe(false)
 })

@@ -1,10 +1,11 @@
 import logging
+import uuid
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, MetaData, Table, bindparam, func, select, text, update
+from sqlalchemy import Boolean, MetaData, Table, bindparam, func, insert, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError
 
@@ -106,6 +107,20 @@ def _update(c, t, fields, table_id: int, record_id: int, body: PatchBody, user: 
             "values (:t, :r, :c, :o, :n, :u)"
         ).bindparams(bindparam("o", type_=JSONB), bindparam("n", type_=JSONB)), changes)
         automations.after_update(c, table_id, record_id, {ch["c"] for ch in changes})
+    return {"id": row.id, "updated_at": row.updated_at}
+
+
+@router.post("/{table_id}/records")
+def create_record(table_id: int, user: dict = Depends(active_user)):
+    """«+» внизу сетки, как в Airtable: пустая запись; поля дальше правятся обычной правкой."""
+    with engine.begin() as c:
+        t, _ = _editable_table(c, table_id, user, "новая запись")
+        extra = {"airtable_id": "aster" + uuid.uuid4().hex} if "airtable_id" in t.c else {}
+        extra |= {"created_at": func.now(), "created_by": user["id"]} if "created_by" in t.c else {}
+        row = c.execute(insert(t).values(**extra, updated_by=user["id"]).returning(t.c.id, t.c.updated_at)).first()
+        c.execute(text("insert into app_change (table_id, record_id, column_name, old, new, user_id) "
+                       "values (:t, :r, 'id', null, to_jsonb(:r), :u)"), {"t": table_id, "r": row.id, "u": user["id"]})
+    computed.invalidate()
     return {"id": row.id, "updated_at": row.updated_at}
 
 

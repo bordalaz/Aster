@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/server.js'
 import TableView from '../grid/TableView.jsx'
+import { fields1 } from '../test/fixtures.js'
 
 const QTY = 'f_fld00000000000002'
 const NAME = 'f_fld00000000000001'
@@ -145,4 +146,33 @@ test('переход по связи: таблица открывается ср
   render(<TableView tableId={1} primaryField={NAME} user={admin} openId={2} onOpened={onOpened} />)
   expect(await screen.findByRole('dialog', { name: 'Втулка' })).toBeInTheDocument()
   expect(onOpened).toHaveBeenCalled()
+})
+
+test('выбранный вид и его несохранённые настройки запоминаются для таблицы', async () => {
+  localStorage.clear()
+  server.use(http.get('/api/tables/1/views', () => HttpResponse.json(views)))
+  const first = render(<TableView tableId={1} primaryField={NAME} user={admin} />)
+  await screen.findByText('2 записи', { exact: false })
+  await pick('Мой')
+  await userEvent.click(screen.getByRole('button', { name: 'Группировка' }))
+  await userEvent.selectOptions(screen.getByLabelText('Группировка'), 'f_fld00000000000004')
+  first.unmount()                                            // ушли на другую таблицу
+  render(<TableView tableId={1} primaryField={NAME} user={admin} />)
+  expect(await screen.findByRole('button', { name: 'Вид: Мой' })).toBeInTheDocument()
+  expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],2,[На складе],1')
+})
+
+test('«+» добавляет запись и сразу открывает её карточку', async () => {
+  setup()
+  await screen.findByText('2 записи', { exact: false })
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить запись' }))
+  expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  expect(await screen.findByText('3 записи', { exact: false })).toBeInTheDocument()
+})
+
+test('без права на правку «+» нет', async () => {
+  server.use(http.get('/api/tables/1/fields', () => HttpResponse.json(fields1.map(f => ({ ...f, editable: false })))))
+  setup(user)
+  await screen.findByText('2 записи', { exact: false })
+  expect(screen.queryByRole('button', { name: 'Добавить запись' })).toBeNull()
 })

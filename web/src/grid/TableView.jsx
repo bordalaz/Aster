@@ -19,15 +19,28 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   const [search, setSearch] = useState('')
   const exportRef = useRef(null)
 
-  // Перечитать виды и выбрать нужный (после сохранения/удаления).
-  const reload = useCallback(async select => {
+  // Последний вид таблицы и его несохранённые настройки — у пользователя в браузере (как Airtable помнит вид).
+  // ponytail: localStorage, на одном устройстве; на сервер — если понадобится между устройствами
+  const KEY = `aster.view.${user?.id ?? 0}.${tableId}`
+  const ready = useRef(false)
+
+  // Перечитать виды и выбрать нужный (после сохранения/удаления); cfg — восстановить несохранённое.
+  const reload = useCallback(async (select, cfg) => {
     const vs = await api(`/api/tables/${tableId}/views`).catch(() => [])
     setViews(vs)
     const v = vs.find(x => x.id === select)
     setCurrent(v ? v.id : null)
-    setConfig(v ? v.config : {})
+    setConfig(cfg ?? (v ? v.config : {}))
   }, [tableId])
-  useEffect(() => { reload(null) }, [reload])
+  useEffect(() => {
+    let saved = null
+    try { saved = JSON.parse(localStorage.getItem(KEY)) } catch { /* нет хранилища — начнём с «Все записи» */ }
+    reload(saved?.view ?? null, saved?.config).then(() => { ready.current = true })
+  }, [reload, KEY])
+  useEffect(() => {
+    if (!ready.current) return
+    try { localStorage.setItem(KEY, JSON.stringify({ view: current, config })) } catch { /* приватный режим */ }
+  }, [KEY, current, config])
 
   // Пришли по связи из другой таблицы — открыть карточку нужной записи, когда строки загрузятся.
   useEffect(() => {
@@ -61,6 +74,16 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
     }
   }
 
+  // «+» как в Airtable: пустая запись, сразу открыть её карточку (в фильтр вида она может не попасть)
+  async function addRecord() {
+    setError('')
+    try {
+      const { id, updated_at } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      setOpen({ id, updated_at })   // карточку — сразу; формулы досчитаются, пока сетка перечитывается
+      await refresh()
+    } catch { setError('Не удалось добавить запись') }
+  }
+
   if (loading) return <div style={{ padding: 16 }}>Загрузка…</div>
 
   return (
@@ -73,7 +96,8 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
         {side && <ViewsSide views={views} current={current} onSelect={select} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
-            onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef} />
+            onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
+            onAdd={fields.some(f => f.editable) ? addRecord : undefined} />
         </div>
       </div>
       {open && (() => {
