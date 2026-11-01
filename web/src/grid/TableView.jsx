@@ -74,6 +74,16 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
     }
   }
 
+  // «+» как в Airtable: пустая запись, сразу открыть её карточку (в фильтр вида она может не попасть)
+  async function addRecord() {
+    setError('')
+    try {
+      const { id } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      await refresh()
+      setOpen({ id })
+    } catch { setError('Не удалось добавить запись') }
+  }
+
   if (loading) return <div style={{ padding: 16 }}>Загрузка…</div>
 
   return (
@@ -86,7 +96,8 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
         {side && <ViewsSide views={views} current={current} onSelect={select} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
-            onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef} />
+            onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
+            onAdd={fields.some(f => f.editable) ? addRecord : undefined} />
         </div>
       </div>
       {open && (() => {

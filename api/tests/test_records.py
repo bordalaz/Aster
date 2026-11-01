@@ -143,3 +143,22 @@ def test_records_include_live_computed(logged, tmp_path):
     assert r.status_code == 200
     computed.wait()   # фоновый пересчёт после записи
     assert logged.get(f"/api/tables/{tid}/records").json()[0]["f_fldomark000000000"] == "NEW!"
+
+
+def test_create_empty_record_like_airtable_plus(logged, zip_table):
+    """«+» внизу сетки: пустая запись, история «создана», дальше поля правятся как обычно."""
+    r = logged.post(f"/api/tables/{zip_table}/records")
+    assert r.status_code == 200
+    rid = r.json()["id"]
+    rows = logged.get(f"/api/tables/{zip_table}/records").json()
+    assert len(rows) == 3 and rows[-1]["id"] == rid and rows[-1]["name"] is None
+    h = logged.get(f"/api/tables/{zip_table}/records/{rid}/history").json()
+    assert h[0]["user"] == "Иван"
+    p = logged.patch(f"/api/tables/{zip_table}/records/{rid}", json={"updated_at": r.json()["updated_at"], "values": {"name": "Новая"}})
+    assert p.status_code == 200
+
+
+def test_create_record_needs_edit_right(zip_table):
+    from tests.test_access import as_user
+    u = as_user("petya", "user")
+    assert u.post(f"/api/tables/{zip_table}/records").status_code == 403

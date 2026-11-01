@@ -6,7 +6,7 @@ import { displayValue, isLink, kindOf, toCell, fromCell } from './cells.js'
 import { columnTotal, groupRows, parsePastedBool, parsePastedNumber, toCSV } from './layout.js'
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 import { renderers } from './renderers.js'
-import { fieldIcon, headerIcons } from '../ui/icons.jsx'
+import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
 
 function plural(n) {
   const a = n % 10, b = n % 100
@@ -33,7 +33,7 @@ const ROW_H = 32, GROUP_H = 44, NUMERIC = new Set(['number', 'currency', 'percen
 // Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
 // Без onConfigChange (тесты, простые места) держит конфиг сама. search — поиск из панели вида.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef }) {
+  search = '', exportRef, onAdd }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -97,7 +97,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     themeOverride: bold ? { baseFontStyle: '500 13px' } : undefined })
   const getCellContent = useCallback(([ci, ri]) => {
     if (ri === items.length) {                                         // строка итогов
-      return ci <= 1 ? { ...text(totals[0], false), span: [0, 1] } : text(totals[ci - 1], false)
+      return ci === 0 ? text('', false) : text(totals[ci - 1], false)   // в колонке номеров — кнопка «+»
     }
     const it = items[ri]
     if (it.kind === 'group') {
@@ -155,7 +155,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       <span role="status" className="sr-only">{view.length} {plural(view.length)}</span>
       <span data-testid="col-order" style={{ display: 'none' }}>{cols.map(c => c.column_name).join(',')}</span>
       <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        {onAdd && <button className="add-row" aria-label="Добавить запись" title="Добавить запись" onClick={onAdd}><Icon name="plus" size={14} /></button>}
         <DataEditor
           theme={THEME}
           headerIcons={headerIcons}

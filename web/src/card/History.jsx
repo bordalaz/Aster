@@ -30,7 +30,9 @@ export default function History({ tableId, recordId, version, fields }) {
             {items.map((e, i) => (
               <li key={i} style={{ fontSize: 12 }}>
                 <div style={{ color: 'var(--muted)' }}><span className="num">{when(e.at)}</span> · {e.user}</div>
-                <div><strong>{e.field}</strong>: {show(e.column_name, e.old)} → {show(e.column_name, e.new)}</div>
+                {e.column_name === 'id' && e.old == null
+                  ? <div>Запись создана</div>
+                  : <div><strong>{e.field}</strong>: {show(e.column_name, e.old)} → {show(e.column_name, e.new)}</div>}
               </li>
             ))}
           </ul>}

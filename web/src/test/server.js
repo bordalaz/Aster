@@ -16,6 +16,11 @@ export const handlers = [
   http.get('/api/tables', () => HttpResponse.json(tables)),
   http.get('/api/tables/1/fields', () => HttpResponse.json(fields1)),
   http.get('/api/tables/1/records', () => HttpResponse.json(recs)),
+  http.post('/api/tables/1/records', () => {
+    const r = { id: Math.max(...recs.map(x => x.id)) + 1, updated_at: '2026-11-01T10:00:00+00:00' }
+    recs.push(r)
+    return HttpResponse.json({ id: r.id, updated_at: r.updated_at })
+  }),
   http.get('/api/tables/1/records/:rid/history', () => HttpResponse.json([])),
   http.get('/api/tables/1/views', () => HttpResponse.json([])),
   http.patch('/api/tables/1/records/:rid', async ({ request, params }) => {

@@ -112,3 +112,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .link-card { text-align: left; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px 10px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .link-card:hover { border-color: #c4c7cd; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08); }
 @media (max-width: 640px) { .card-body { padding: 20px 16px; } .fld-inline { grid-template-columns: 1fr; gap: 4px; } }
+
+/* «+» внизу слева сетки, как в Airtable */
+.add-row { position: absolute; left: 10px; bottom: 6px; z-index: 2; width: 30px; height: 22px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--text2); display: grid; place-items: center; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+.add-row:hover { color: var(--text); border-color: #c4c7cd; }
