@@ -35,6 +35,7 @@ export function ViewsSide({ views, current, onSelect, onCreate }) {
   const item = v => (
     <button key={v.id ?? 'all'} className="vs-item" aria-current={current === v.id ? 'true' : undefined} onClick={() => onSelect(v.id)} title={v.title}>
       <Icon name="table" size={16} style={{ color: 'var(--accent)' }} /><span>{v.title}</span>
+      {v.config?.locked && <Icon name="lock" size={12} style={{ color: 'var(--faint)', marginLeft: 'auto' }} title="Закреплённый вид" />}
     </button>
   )
   const section = (key, title, list) => list.length > 0 && (
@@ -150,6 +151,7 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
           <button className="tool" aria-haspopup="menu" aria-label={`Вид: ${view?.title ?? 'Все записи'}`} aria-expanded={panel === 'menu'} onClick={() => toggle('menu')}>
             <Icon name="table" style={{ color: 'var(--accent)' }} />
             <span className="viewname">{view?.title ?? 'Все записи'}</span>
+            {view?.config?.locked && <Icon name="lock" size={12} style={{ color: 'var(--faint)' }} />}
             <Icon name="caretDown" size={12} />
           </button>
           {panel === 'menu' && (

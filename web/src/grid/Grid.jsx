@@ -3,7 +3,7 @@ import { CompactSelection, DataEditor, GridCellKind } from '@glideapps/glide-dat
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { displayValue, isLink, kindOf, toCell, fromCell } from './cells.js'
-import { columnTotal, groupRows, parsePastedBool, parsePastedNumber, toCSV } from './layout.js'
+import { columnTotal, groupRows, orderRows, parsePastedBool, parsePastedNumber, rowColor, summarize, toCSV } from './layout.js'
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 import { renderers } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
@@ -45,7 +45,7 @@ const THEME = {
   fontFamily: '-apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   editorFontSize: '13px', lineHeight: 1.4, headerIconSize: 16,
 }
-const ROW_H = 32, GROUP_H = 44, NUMERIC = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
+const ROW_H = { small: 32, medium: 56, large: 88, xlarge: 128 }, GROUP_H = 44, NUMERIC = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
 
 // Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
 // Без onConfigChange (тесты, простые места) держит конфиг сама. search — поиск из панели вида.
@@ -60,7 +60,9 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const cols = useMemo(() => visibleColumns(fields, primaryField, config.columns), [fields, primaryField, config.columns])
   const widths = config.widths ?? {}
   const sorting = useMemo(() => (config.sort ?? []).map(s => ({ id: s.col, desc: s.desc })), [config.sort])
-  const data = useMemo(() => applyFilters(fields, rows, config.filters), [fields, rows, config.filters])
+  // сортировка в Airtable выключена — записи в сохранённом порядке вида (rowOrder)
+  const data = useMemo(() => orderRows(applyFilters(fields, rows, config.filters), config.sort?.length ? null : config.rowOrder),
+    [fields, rows, config.filters, config.sort, config.rowOrder])
 
   const table = useReactTable({
     data,
@@ -84,8 +86,13 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const [collapsed, setCollapsed] = useState(new Set())
   const items = useMemo(() => groupRows(shownRows, groupFields, collapsed), [shownRows, groupFields, collapsed])
   // Итоги как у Airtable по умолчанию: суммы только у числовых полей, остальное пусто; слева — число записей.
-  const totals = useMemo(() => cols.map((c, i) => (i === 0 ? `${view.length} ${plural(view.length)}`
-    : NUMERIC.has(kindOf(c)) ? columnTotal(c, shownRows) : '')), [cols, shownRows, view.length])
+  // Итоги внизу — по настройке вида, как в Airtable; у «Все записи» (своего вида в Airtable нет) — суммы чисел.
+  const totals = useMemo(() => cols.map((c, i) => {
+    const count = `${view.length} ${plural(view.length)}`
+    const own = config.summary ? summarize(c, shownRows, config.summary[c.column_name])
+      : config.source !== 'airtable' && NUMERIC.has(kindOf(c)) ? columnTotal(c, shownRows) : ''
+    return i === 0 ? [count, own].filter(Boolean).join(' · ') : own
+  }), [cols, shownRows, view.length, config.summary, config.source])
   // ПКМ по заголовку группы — меню как в Airtable: свернуть/развернуть группу, развернуть все, свернуть все.
   const [groupMenu, setGroupMenu] = useState(null)   // {x, y, id, collapsed}
   const hovered = useRef(null)                        // ячейка под курсором — для ПКМ
@@ -127,10 +134,11 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
         data: { kind: 'group', label: groupFields[it.depth]?.title ?? '', value: String(it.key || '(пусто)'), count: it.count,
           collapsed: it.collapsed, depth: it.depth } }
     }
-    if (ci === 0) return { ...text(String(nums[ri]), false), contentAlign: 'center', themeOverride: { baseFontStyle: '11px', textDark: '#a0a4ab' } }
+    if (ci === 0) return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: String(nums[ri]),
+      data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row) } }
     const field = fieldAt(ci)
     return toCell(field, it.row[field.column_name])
-  }, [cols, items, totals, groupFields, nums])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cols, items, totals, groupFields, nums, config.color, fields])   // eslint-disable-line react-hooks/exhaustive-deps
   const rowAt = ri => (items[ri]?.kind === 'row' ? items[ri].row : null)
 
   const onCellEdited = useCallback(([ci, ri], cell) => {
@@ -202,7 +210,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           customRenderers={renderers}
           columns={gridColumns}
           rows={items.length + 1}
-          rowHeight={ri => (items[ri]?.kind === 'group' ? GROUP_H : ROW_H)}
+          rowHeight={ri => (items[ri]?.kind === 'group' ? GROUP_H : ROW_H[config.rowHeight] ?? ROW_H.small)}
           headerHeight={32}
           freezeTrailingRows={1}
           getCellContent={getCellContent}
@@ -228,7 +236,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
             patchConfig({ columns: names.filter(n => n !== primaryField) })
           }}
           rowMarkers="none"
-          freezeColumns={2}
+          freezeColumns={1 + Math.min(Math.max(config.frozen ?? 1, 1), cols.length)}   // номера + закреплённые поля вида
           width="100%"
           height="100%"
           smoothScrollY
