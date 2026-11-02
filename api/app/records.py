@@ -35,8 +35,13 @@ def load_table(c, table_id: int):
 
 # ponytail: отдаём все строки сразу (13,6 тыс. ≈ 3 МБ JSON) — сетке нужен весь набор; постранично — если упрёмся
 @router.get("/{table_id}/records")
-def list_records(table_id: int, fresh: bool = False, user: dict = Depends(active_user)):
-    """fresh — после правки: дождаться пересчёта вычисляемых полей (не дольше 20 с), отдать свежие."""
+def list_records(table_id: int, fresh: bool = False, ids: str | None = None, user: dict = Depends(active_user)):
+    """fresh — после правки: дождаться пересчёта вычисляемых полей (не дольше 20 с), отдать свежие.
+    ids — только эти записи (через запятую): мини-карточки связей в карточке."""
+    try:
+        only = [int(x) for x in ids.split(",")][:500] if ids else None
+    except ValueError:
+        raise HTTPException(422, "ids — числа через запятую")
     if fresh:
         computed.settle(20)
     with engine.connect() as c:
@@ -46,7 +51,8 @@ def list_records(table_id: int, fresh: bool = False, user: dict = Depends(active
         fields = [f for f in fields if f.column_name not in hidden]
         cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields if f.column_name in t.c and not f.options.get("virtual")]
         if "airtable_id" not in t.c:
-            return [dict(r) for r in c.execute(select(*cols).order_by(t.c.id)).mappings()]
+            q = select(*cols).order_by(t.c.id)
+            return [dict(r) for r in c.execute(q if only is None else q.where(t.c.id.in_(only))).mappings()]
         # вычисляемые поля — из движка (ключ — airtable_id записи, наружу его не отдаём)
         comp = computed.values()
         virt = [(f.column_name, comp.get(f.airtable_id, {})) for f in fields if f.kind in COMPUTED_KINDS]
@@ -57,7 +63,8 @@ def list_records(table_id: int, fresh: bool = False, user: dict = Depends(active
         files = [(f.column_name, f.airtable_id) for f in fields if f.kind == attachments.ATTACH]
         att = attachments.values_for(c, c.execute(text("select airtable_id from app_table where id = :t"), {"t": table_id}).scalar()) if files else {}
         out = []
-        for r in c.execute(select(*cols, t.c.airtable_id).order_by(t.c.id)).mappings():
+        q = select(*cols, t.c.airtable_id).order_by(t.c.id)
+        for r in c.execute(q if only is None else q.where(t.c.id.in_(only))).mappings():
             d = dict(r)
             at = d.pop("airtable_id")
             d.update((col, mappers[col](vals.get(at)) if col in mappers else vals.get(at)) for col, vals in virt)

@@ -162,3 +162,11 @@ def test_create_record_needs_edit_right(zip_table):
     from tests.test_access import as_user
     u = as_user("petya", "user")
     assert u.post(f"/api/tables/{zip_table}/records").status_code == 403
+
+
+def test_list_records_by_ids(logged, zip_table):
+    """ids — выборка для мини-карточек связей; мусор в ids — 422."""
+    all_ids = [r["id"] for r in logged.get(f"/api/tables/{zip_table}/records").json()]
+    r = logged.get(f"/api/tables/{zip_table}/records?ids={all_ids[0]}")
+    assert [x["id"] for x in r.json()] == [all_ids[0]]
+    assert logged.get(f"/api/tables/{zip_table}/records?ids=1;drop").status_code == 422
