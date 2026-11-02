@@ -17,3 +17,14 @@ test('поиск (из панели вида) фильтрует строки �
   render(<Grid fields={fields} rows={records1} primaryField="f_fld00000000000001" onEdit={vi.fn()} onOpen={vi.fn()} search="Кольцо" />)
   expect(screen.getByText('1 запись', { exact: false })).toBeInTheDocument()
 })
+
+test('свёрнутые группы запоминаются по виду (как в Airtable)', () => {
+  localStorage.setItem('aster.collapsed.k1', JSON.stringify(['Брак']))
+  const props = { fields, rows: records1, primaryField: 'f_fld00000000000001', onEdit: vi.fn(), onOpen: vi.fn(),
+    config: { group: 'f_fld00000000000004' }, onConfigChange: vi.fn() }
+  const { unmount } = render(<Grid {...props} collapseKey="aster.collapsed.k1" />)
+  expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],[На складе],1')
+  unmount()
+  render(<Grid {...props} collapseKey="aster.collapsed.other" />)   // другой вид — своё состояние
+  expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],2,[На складе],1')
+})

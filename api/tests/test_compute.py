@@ -398,3 +398,34 @@ def test_filter_not_equal_empty_cell_passes():
     assert _passes(f, lambda fid, t: (None, t))
     assert not _passes(f, lambda fid, t: ("На возврат", t))
     assert not _passes({"operator": "=", "operands": ["fldS", "На возврат"]}, lambda fid, t: (None, t))
+
+
+def test_compute_all_incremental_recomputes_only_dependents(tmp_path):
+    # Правка Номенклатура.Цена: пересчитываются rollup ЦенаИзНом и формула над ним;
+    # формула над Именем от правки не зависит — берётся из прошлого расчёта (prev) как есть.
+    from datetime import date
+    from migrate.compute import compute_all
+    schema, records = _two_tables()
+    schema[1]["fields"].append({"id": "fldOname000000000", "name": "Имя", "type": "formula", "options": {
+        "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+        "formula": '{fldOnom0000000000} & "_" & {fldOprice00000000}'}})
+    schema[0]["fields"].append({"id": "fldNbang000000000", "name": "Восклицание", "type": "formula", "options": {
+        "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+        "formula": '{fldNnm00000000000} & "!"'}})
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    aggs = {"Оборудование.ЦенаИзНом": "SUM"}
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        prev = compute_all(c, date(2026, 10, 31), aggs=aggs)
+        price = c.execute(text("select column_name from app_field where airtable_id = 'fldNprice00000000'")).scalar()
+        tbl = c.execute(text("select t.pg_name from app_table t join app_field f on f.table_id = t.id "
+                             "where f.airtable_id = 'fldNprice00000000'")).scalar()
+        c.execute(text(f"update {tbl} set {price} = 7"))
+        prev["fldNbang000000000"] = {"recN1": "из прошлого"}
+        out = compute_all(c, date(2026, 10, 31), aggs=aggs, prev=prev, changed={"fldNprice00000000"})
+        full = compute_all(c, date(2026, 10, 31), aggs=aggs)
+    assert out["fldOname000000000"] == full["fldOname000000000"] == {"recO1": "Кольцо_7", "recO2": "Кольцо_7"}
+    assert out["fldOprice00000000"] == full["fldOprice00000000"]
+    assert out["fldNbang000000000"] == {"recN1": "из прошлого"}   # не зависит от Цены — не пересчитано

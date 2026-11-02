@@ -1,4 +1,6 @@
 import { displayValue, kindOf, NUMBER, numText } from './cells.js'
+import { choiceColor, HUE_SHADES } from './renderers.js'
+import { applyFilters } from './viewConfig.js'
 
 const keyCompare = (a, b) => a.localeCompare(b, 'ru', { numeric: true })
 
@@ -76,4 +78,53 @@ export function parsePastedNumber(text) {
 
 export function parsePastedBool(text) {
   return /^(1|да|true|истина|yes|x|✓)$/i.test(String(text).trim())
+}
+
+// --- итоги внизу по настройке вида (summaryBarConfigs Airtable) ---
+const LABEL = { sum: 'Сумма', average: 'Средн.', median: 'Медиана', min: 'Мин.', max: 'Макс.', countUnique: 'Уникальных',
+  count: 'Заполнено', earliestDate: 'Самая ранняя', latestDate: 'Самая поздняя' }
+const ruDate = s => { const [y, m, d] = String(s).slice(0, 10).split('-'); return `${d}.${m}.${y}` }
+
+export function summarize(field, rows, fn) {
+  if (!LABEL[fn]) return ''
+  const vals = rows.map(r => r[field.column_name]).filter(v => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+  if (fn === 'count') return `${LABEL[fn]} ${vals.length}`
+  if (fn === 'countUnique') return `${LABEL[fn]} ${new Set(vals.map(v => JSON.stringify(v))).size}`
+  if (fn === 'earliestDate' || fn === 'latestDate') {
+    const ds = vals.map(String).sort()
+    return ds.length ? `${LABEL[fn]} ${ruDate(fn === 'earliestDate' ? ds[0] : ds[ds.length - 1])}` : ''
+  }
+  const ns = vals.filter(v => typeof v === 'number' && Number.isFinite(v)).sort((a, b) => a - b)
+  if (!ns.length) return ''
+  const sum = ns.reduce((a, b) => a + b, 0)
+  const v = fn === 'sum' ? sum : fn === 'average' ? sum / ns.length : fn === 'min' ? ns[0] : fn === 'max' ? ns[ns.length - 1]
+    : ns.length % 2 ? ns[(ns.length - 1) / 2] : (ns[ns.length / 2 - 1] + ns[ns.length / 2]) / 2
+  return `${LABEL[fn]} ${numText(field, v)}`
+}
+
+// --- цвет строки (colorConfig вида): по полю выбора или по первому сработавшему правилу ---
+const BAR = { Light: 1, Medium: 2, Dark: 3, Darker: 3 }   // оттенок полосы → ступень палитры Airtable
+export function rowColor(color, fields, row) {
+  if (!color) return null
+  if (color.kind === 'select') {
+    const f = fields.find(x => x.column_name === color.col)
+    const v = row[color.col]
+    const choice = (f?.options?.choices ?? []).find(c => c.name === (Array.isArray(v) ? v[0] : v))
+    return choice ? choiceColor(choice.color).bg : null
+  }
+  for (const r of color.rules ?? []) {
+    if (applyFilters(fields, [row], r.filters).length) {
+      const m = /^([a-z]+)(Light|Medium|Dark|Darker)?$/.exec(r.color ?? '')
+      if (!m) return null
+      return HUE_SHADES[m[1]]?.[m[2] ? BAR[m[2]] : 2] ?? null
+    }
+  }
+  return null
+}
+
+// --- ручной порядок вида: записи по rowOrder, новые (которых там нет) — в конце ---
+export function orderRows(rows, order) {
+  if (!order?.length) return rows
+  const pos = new Map(order.map((id, i) => [id, i]))
+  return [...rows].sort((a, b) => (pos.get(a.id) ?? Infinity) - (pos.get(b.id) ?? Infinity))
 }

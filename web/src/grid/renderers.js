@@ -9,6 +9,7 @@ const HUES = {
   red: ['#ffdce5', '#ff9eb7', '#f82b60', '#ba1e45'], pink: ['#ffdaf6', '#f99de2', '#ff08c2', '#b2158b'],
   purple: ['#ede2fe', '#cdb0ff', '#8b46ff', '#6b1cb0'], gray: ['#eeeeee', '#cccccc', '#666666', '#444444'],
 }
+export const HUE_SHADES = HUES
 const SHADE = { Light2: 0, Light1: 1, Bright: 2, Dark1: 3 }
 export function choiceColor(name) {
   const m = /^([a-z]+)(Light2|Light1|Bright|Dark1)$/.exec(name ?? '')
@@ -104,4 +105,21 @@ const group = {
   },
 }
 
-export const renderers = [pills, check, group]
+// Номер записи и цветная полоса строки (colorConfig вида) у правого края — как в Airtable.
+const rownum = {
+  kind: GridCellKind.Custom,
+  isMatch: c => c.data?.kind === 'rownum',
+  draw: ({ ctx, rect, theme }, cell) => {
+    ctx.save()
+    ctx.fillStyle = '#a0a4ab'; ctx.font = `11px ${theme.fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(cell.data.n, rect.x + rect.width / 2 - 3, rect.y + rect.height / 2)
+    if (cell.data.color) {
+      ctx.fillStyle = cell.data.color
+      roundRect(ctx, rect.x + rect.width - 7, rect.y + 4, 4, rect.height - 8, 2); ctx.fill()
+    }
+    ctx.restore()
+    return true
+  },
+}
+
+export const renderers = [pills, check, group, rownum]

@@ -5,7 +5,7 @@ def test_tables_require_login(client):
 def test_tables(logged, zip_table):
     r = logged.get("/api/tables")
     assert r.status_code == 200
-    assert r.json() == [{"id": zip_table, "title": "Ведомость ЗИП", "primary_field": "name"}]
+    assert r.json() == [{"id": zip_table, "title": "Ведомость ЗИП", "primary_field": "name", "hidden": False, "description": None}]
 
 
 def test_fields_in_order(logged, zip_table):

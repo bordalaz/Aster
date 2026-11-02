@@ -22,6 +22,9 @@ import rub from '@phosphor-icons/core/assets/regular/currency-rub.svg?raw'
 import user from '@phosphor-icons/core/assets/regular/user.svg?raw'
 import search from '@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw'
 import eyeSlash from '@phosphor-icons/core/assets/regular/eye-slash.svg?raw'
+import eye from '@phosphor-icons/core/assets/regular/eye.svg?raw'
+import lock from '@phosphor-icons/core/assets/regular/lock-simple.svg?raw'
+import info from '@phosphor-icons/core/assets/regular/info.svg?raw'
 import funnel from '@phosphor-icons/core/assets/regular/funnel.svg?raw'
 import list from '@phosphor-icons/core/assets/regular/list.svg?raw'
 import rows from '@phosphor-icons/core/assets/regular/rows.svg?raw'
@@ -44,11 +47,12 @@ import signOut from '@phosphor-icons/core/assets/regular/sign-out.svg?raw'
 import key from '@phosphor-icons/core/assets/regular/key.svg?raw'
 import users from '@phosphor-icons/core/assets/regular/users.svg?raw'
 import textbox from '@phosphor-icons/core/assets/regular/textbox.svg?raw'
+import chat from '@phosphor-icons/core/assets/regular/chats.svg?raw'
 
 export const ICONS = {
   aa, target, textLeft, hash, clock, fn, caretCircle, listBullets, checkSquare, calendar, paperclip, link, at, phone,
-  binoculars, sigma, numbers, percent, star, rub, user, search, eyeSlash, funnel, list, rows, sort, caretDown,
-  table, download, floppy, trash, copy, plus, x, check, expand, collapse, expandV, collapseV, database, signOut, key, users, textbox,
+  binoculars, sigma, numbers, percent, star, rub, user, search, eyeSlash, eye, lock, info, funnel, list, rows, sort, caretDown,
+  table, download, floppy, trash, copy, plus, x, check, expand, collapse, expandV, collapseV, database, signOut, key, users, textbox, chat,
 }
 
 // Значок типа поля — как в заголовках Airtable.

@@ -30,3 +30,13 @@ test('неэдитируемое: только текст, без поля вв�
   expect(screen.getByText('7')).toBeInTheDocument()
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
 })
+
+test('связь: мини-карточка с первыми полями связанной таблицы, как в Airtable', async () => {
+  const field = { kind: 'multipleRecordLinks', title: 'Позиции', column_name: 'x', link_table: 1, options: { virtual: true } }
+  render(<FieldEditor inline field={field} value={[{ id: 1, name: 'Кольцо' }]} />)
+  expect(screen.getByText('Кольцо')).toBeInTheDocument()
+  // первичное «Наименование» не повторяется; дальше по порядку полей: Кол-во, На складе, Статус
+  expect(await screen.findByText('Кол-во')).toBeInTheDocument()
+  expect(screen.getByText('Статус')).toBeInTheDocument()
+  expect(screen.queryByText('Наименование')).toBeNull()
+})
