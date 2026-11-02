@@ -78,6 +78,23 @@ def cmd_forms() -> int:
     return 0
 
 
+def cmd_pages() -> int:
+    """Страницы интерфейсов из обхода веб-клиента Airtable (at_pages.jsonl) → app_page; данные не трогает."""
+    from .pages import load_pages
+    p = SNAP / "at_pages.jsonl"
+    if not p.exists():
+        print(f"Нет {p}")
+        return 2
+    pages = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
+    schema = json.loads((SNAP / "at_base_schema.json").read_text(encoding="utf-8"))
+    with engine.begin() as c:
+        n, report = load_pages(c, pages, schema)
+    for line in report:
+        print(line)
+    print(f"Страниц интерфейсов перенесено: {n} из {len(pages)}")
+    return 0
+
+
 def cmd_views_full() -> int:
     """Полные настройки видов из обхода веб-клиента Airtable (at_view_datas.jsonl); данные не трогает."""
     from .view_meta import load_view_meta
@@ -152,11 +169,11 @@ def cmd_compute_verify() -> int:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m migrate", description=__doc__)
-    p.add_argument("command", choices=["fetch", "load", "views", "forms", "tables", "views-full", "verify", "compute-verify", "all"])
+    p.add_argument("command", choices=["fetch", "load", "views", "forms", "tables", "views-full", "pages", "verify", "compute-verify", "all"])
     p.add_argument("--no-files", action="store_true", help="без вложений; докачать — тот же fetch без флага")
     a = p.parse_args(argv)
     fetch = lambda: cmd_fetch(files=not a.no_files)  # noqa: E731
-    steps = {"fetch": [fetch], "load": [cmd_load], "views": [cmd_views], "forms": [cmd_forms], "tables": [cmd_tables], "views-full": [cmd_views_full], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
+    steps = {"fetch": [fetch], "load": [cmd_load], "views": [cmd_views], "forms": [cmd_forms], "tables": [cmd_tables], "views-full": [cmd_views_full], "pages": [cmd_pages], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
              "all": [fetch, cmd_load, cmd_verify]}[a.command]
     for step in steps:
         code = step()

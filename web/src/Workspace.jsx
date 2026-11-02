@@ -4,6 +4,7 @@ import TableTabs from './tables/TableTabs.jsx'
 import TableView from './grid/TableView.jsx'
 import Users from './users/Users.jsx'
 import Forms from './forms/Forms.jsx'
+import Pages from './pages/Pages.jsx'
 import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
 import { Icon } from './ui/icons.jsx'
@@ -42,7 +43,7 @@ function ProfileMenu({ user, isAdmin, onUsers, onPassword, onLogout }) {
 export default function Workspace({ user, onLogout }) {
   const [tables, setTables] = useState([])
   const [activeId, setActiveId] = useState(null)
-  const [screen, setScreen] = useState('table')   // 'table' | 'forms' | 'calibration' | 'users' | 'password'
+  const [screen, setScreen] = useState('table')   // 'table' | 'pages' | 'forms' | 'calibration' | 'users' | 'password'
   const [jump, setJump] = useState(null)          // id записи, открыть после перехода по связи
   const openLink = useCallback((tableId, recordId) => { setActiveId(tableId); setJump(recordId); setScreen('table') }, [])
   const opened = useCallback(() => setJump(null), [])
@@ -73,6 +74,7 @@ export default function Workspace({ user, onLogout }) {
         </div>
         <nav aria-label="Разделы">
           <button aria-current={section('table')} onClick={() => setScreen('table')}>Данные</button>
+          <button aria-current={section('pages')} onClick={() => setScreen('pages')}>Интерфейсы</button>
           <button aria-current={section('forms')} onClick={() => setScreen('forms')}>Формы</button>
         </nav>
         <div className="right">
@@ -85,6 +87,7 @@ export default function Workspace({ user, onLogout }) {
           setTables(ts => ts.map(t => (t.id === id ? { ...t, hidden } : t)))
         } : undefined} />}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {screen === 'pages' && <Pages />}
         {screen === 'forms' && <Forms />}
         {screen === 'calibration' && <Calibration user={user} />}
         {screen === 'users' && <Users me={user} />}
