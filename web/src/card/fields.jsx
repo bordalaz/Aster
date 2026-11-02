@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import DatePicker from '../ui/DatePicker.jsx'
 import { api } from '../api.js'
 import { displayValue, durText, isLink, kindOf, parseDuration } from '../grid/cells.js'
 import { choiceColor } from '../grid/renderers.js'
@@ -68,6 +69,30 @@ function MiniValue({ field, value }) {
   return <span className="link-card-val">{displayValue(field, value)}</span>
 }
 
+// Дата в карточке, как в Airtable: значение в формате поля, щелчок — календарь под полем.
+// Выбор дня (у даты) или Enter — сохранить; щелчок мимо — сохранить введённое; Esc — отменить.
+function DateField({ id, field, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const draft = useRef(value)
+  const box = useRef(null)
+  const done = v => { setOpen(false); if (v !== value) onChange(v) }
+  useEffect(() => {
+    if (!open) return
+    draft.current = value
+    const away = e => { if (!box.current?.contains(e.target)) done(draft.current) }
+    document.addEventListener('mousedown', away)
+    return () => document.removeEventListener('mousedown', away)
+  }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div ref={box} className="dp-field" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false) } }}>
+      <button id={id} type="button" className="fld-input dp-btn" aria-label={field.title} aria-expanded={open} onClick={() => setOpen(!open)}>
+        {value ? displayValue(field, value) : <span style={{ color: 'var(--faint)' }}>—</span>}
+      </button>
+      {open && <div className="dp-pop"><DatePicker field={field} value={value} onChange={v => { draft.current = v }} onDone={done} /></div>}
+    </div>
+  )
+}
+
 // Один редактор поля по его kind. Неэдитируемое — только показ.
 // inline — раскладка карточки Airtable (подпись слева); без него — подпись сверху (формы).
 export default function FieldEditor({ field, value, onChange, onOpenLink, inline = false }) {
@@ -132,12 +157,8 @@ export default function FieldEditor({ field, value, onChange, onOpenLink, inline
         </select>
       </div>)
   }
-  if (field.kind === 'date') {
-    return wrap(<input id={id} className="fld-input" style={{ width: 160 }} type="date" aria-label={field.title} value={value ?? ''} onChange={e => onChange(e.target.value || null)} />)
-  }
-  if (field.kind === 'dateTime') {
-    const local = value ? String(value).slice(0, 16) : ''
-    return wrap(<input id={id} className="fld-input" style={{ width: 220 }} type="datetime-local" aria-label={field.title} value={local} onChange={e => onChange(e.target.value || null)} />)
+  if (field.kind === 'date' || field.kind === 'dateTime') {
+    return wrap(<DateField id={id} field={field} value={value} onChange={onChange} />)
   }
   if (field.kind === 'duration') {
     // «ч:мм», как в Airtable; разбираем при уходе с поля, нераспознанное не сохраняем

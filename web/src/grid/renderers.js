@@ -1,5 +1,7 @@
 import { GridCellKind } from '@glideapps/glide-data-grid'
 import SelectEditor from './SelectEditor.jsx'
+import { GridDateEditor } from '../ui/DatePicker.jsx'
+import { parseDateText } from './cells.js'
 
 // Палитра Airtable по имени цвета варианта (options.choices[].color).
 const HUES = {
@@ -166,4 +168,22 @@ const rownum = {
   },
 }
 
-export const renderers = [pills, check, group, rownum]
+// Дата/время, которые можно править: текст в формате поля, редактор — календарь (как в Airtable).
+const date = {
+  kind: GridCellKind.Custom,
+  isMatch: c => c.data?.kind === 'date',
+  draw: ({ ctx, rect, theme }, cell) => {
+    ctx.save()
+    ctx.font = `${theme.baseFontStyle} ${theme.fontFamily}`; ctx.fillStyle = theme.textDark; ctx.textBaseline = 'middle'
+    ctx.fillText(fit(ctx, cell.data.text, rect.width - 2 * theme.cellHorizontalPadding), rect.x + theme.cellHorizontalPadding, rect.y + rect.height / 2)
+    ctx.restore()
+    return true
+  },
+  provideEditor: () => ({ editor: GridDateEditor, disablePadding: true, disableStyling: true }),
+  onPaste: (text, data) => {   // вставка из Excel: «23.3.2018», «2018-03-23 20:30»
+    const v = parseDateText(data.field, text)
+    return v === undefined ? undefined : { ...data, value: v }
+  },
+}
+
+export const renderers = [pills, check, group, rownum, date]
