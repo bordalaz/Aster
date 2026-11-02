@@ -25,6 +25,9 @@ def _parts(rows):
 
 def _visible(c, user: dict, cfg: dict) -> bool:
     used = set(_parts(cfg["rows"])) | {(f["table"], x["col"]) for f in cfg["filters"] for x in f["conds"]}
+    if lst := cfg.get("list"):   # «список + карточка»: колонки списка, его фильтр и сортировка
+        used |= {(lst["table"], f) for f in [*lst["columns"], *lst["header"], *(x["col"] for x in lst["filters"]),
+                                             *(x["col"] for x in lst["sort"])]}
     titles = dict(c.execute(text("select id, title from app_table")).all())
     for t in {t for t, _ in used}:
         if t not in titles or not can_read(user, titles[t]):

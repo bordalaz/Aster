@@ -55,4 +55,20 @@ describe('Интерфейсы', () => {
     expect(low.querySelector('td').style.boxShadow).toContain('inset 4px 0')
     expect(screen.getByText('100').closest('tr').querySelector('td').style.boxShadow).toBe('')
   })
+
+  it('список + карточка: фильтр и сортировка списка, поля выбранной записи', async () => {
+    const lc = { id: 1, title: 'Персонал', filters: [],
+      list: { table: 5, filters: [{ col: 'god', op: 'eq', value: '2025' }], sort: [{ col: 'm', desc: false }], columns: ['m', 'god'], header: ['m'] },
+      rows: [[[{ type: 'field', table: 5, col: 'god', readonly: true, w: 6 }]]] }
+    mock()
+    server.use(http.get('/api/pages/1', () => HttpResponse.json(lc)))
+    render(<Pages />)
+    const list = await screen.findByRole('navigation', { name: 'Записи' })
+    const items = within(list).getAllByRole('button')
+    expect(items.map(b => b.querySelector('.lc-title').textContent)).toEqual(['25', '50'])   // только 2025, по возрастанию
+    expect(screen.getByRole('heading', { name: '25' })).toBeInTheDocument()                  // первая выбрана
+    await userEvent.click(items[1])
+    expect(screen.getByRole('heading', { name: '50' })).toBeInTheDocument()
+    expect(screen.getByText('Год')).toBeInTheDocument()                                       // поле карточки
+  })
 })

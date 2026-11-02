@@ -25,3 +25,16 @@ def test_pages_listed_and_finance_hidden(zip_table):
     assert u.get(f"/api/pages/{ok}").json()["rows"][0][0][0]["agg"] == "sum"
     assert u.get(f"/api/pages/{secret}").status_code == 404
     assert u.get("/api/pages/999").status_code == 404
+
+
+def test_list_page_hidden_when_list_table_hidden(zip_table):
+    """«Список + карточка»: права проверяются и по таблице списка, даже если карточка пуста."""
+    with engine.begin() as c:
+        fin = c.execute(text("insert into app_table (title, pg_name, primary_field) values ('Договоры', 'x_fin2', 'name') "
+                             "returning id")).scalar()
+        cfg = {"title": "Персонал", "filters": [], "rows": [],
+               "list": {"table": fin, "filters": [], "sort": [], "columns": ["name"], "header": ["name"]}}
+        pid = c.execute(text("insert into app_page (title, config, sort_order) values ('Персонал', :c, 0) returning id")
+                        .bindparams(bindparam("c", type_=JSONB)), {"c": cfg}).scalar()
+    assert [p["title"] for p in as_user("a", "admin").get("/api/pages").json()] == ["Персонал"]
+    assert as_user("u", "user").get(f"/api/pages/{pid}").status_code == 404
