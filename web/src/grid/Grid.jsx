@@ -5,7 +5,7 @@ import '@glideapps/glide-data-grid/dist/index.css'
 import { displayValue, isLink, kindOf, toCell, fromCell } from './cells.js'
 import { columnTotal, groupRows, orderRows, parsePastedBool, parsePastedNumber, rowColor, summarize, toCSV } from './layout.js'
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
-import { renderers } from './renderers.js'
+import { renderers, rownumHit, ROWNUM_W } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
 
 function GroupMenu({ at, onClose, onToggle, onExpandAll, onCollapseAll }) {
@@ -49,6 +49,19 @@ const ROW_H = { small: 32, medium: 56, large: 88, xlarge: 128 }, GROUP_H = 44, N
 
 // Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
 // Без onConfigChange (тесты, простые места) держит конфиг сама. search — поиск из панели вида.
+const LINK_COLOR = '#166ee1'   // цвет ссылки на запись в Airtable
+const isSel = (sel, ci, ri) => sel.current?.cell?.[0] === ci && sel.current?.cell?.[1] === ri
+// Попал ли щелчок по тексту ячейки (отступ Glide 8px + ширина текста)
+let measureCtx
+function onText(cell, x) {
+  const text = cell.displayData ?? cell.copyData ?? ''
+  if (!text) return false
+  measureCtx ??= document.createElement('canvas').getContext('2d')
+  if (!measureCtx) return x < 200   // нет canvas (тесты) — считаем, что попали в начало текста
+  measureCtx.font = `${THEME.baseFontStyle} ${THEME.fontFamily}`
+  return x >= 8 && x <= 8 + measureCtx.measureText(String(text)).width
+}
+
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
   search = '', exportRef, onAdd, collapseKey }) {
   const [inner, setInner] = useState({})
@@ -99,6 +112,9 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // ПКМ по заголовку группы — меню как в Airtable: свернуть/развернуть группу, развернуть все, свернуть все.
   const [groupMenu, setGroupMenu] = useState(null)   // {x, y, id, collapsed}
   const hovered = useRef(null)                        // ячейка под курсором — для ПКМ
+  const [hoverRow, setHoverRow] = useState(null)      // строка под курсором — кнопка раскрытия, как в Airtable
+  const [selection, setSelection] = useState({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
+  const downCell = useRef(null)                       // выделенная ячейка до щелчка: второй щелчок по названию — карточка
   const [info, setInfo] = useState(null)             // описание поля по ⓘ в заголовке
   const allGroupIds = () => groupRows(shownRows, groupFields, new Set()).filter(i => i.kind === 'group').map(i => i.id)
   const toggleGroup = key => setCollapsed(prev => {
@@ -118,7 +134,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   useEffect(() => { if (exportRef) exportRef.current = exportCSV }, [exportRef, exportCSV])
 
   // Колонка 0 — номера записей (как в Airtable: группы не нумеруются); щелчок по номеру открывает карточку.
-  const gridColumns = useMemo(() => [{ id: '__n', title: '', width: 52 }, ...cols.map(c => ({
+  const gridColumns = useMemo(() => [{ id: '__n', title: '', width: ROWNUM_W }, ...cols.map(c => ({
     id: c.column_name, title: c.title, icon: `i-${fieldIcon(c.kind)}`,
     ...(c.description ? { hasMenu: true, menuIcon: 'i-info' } : {}),   // ⓘ описание поля, как в Airtable
     width: widths[c.column_name] ?? (c.column_name === primaryField ? 260 : 160),
@@ -140,10 +156,13 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           collapsed: it.collapsed, depth: it.depth } }
     }
     if (ci === 0) return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: String(nums[ri]),
-      data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row) } }
+      data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row), hover: ri === hoverRow } }
     const field = fieldAt(ci)
-    return toCell(field, it.row[field.column_name])
-  }, [cols, items, totals, groupFields, nums, config.color, fields])   // eslint-disable-line react-hooks/exhaustive-deps
+    const cell = toCell(field, it.row[field.column_name])
+    // название в выделенной ячейке — синяя ссылка на карточку, как в Airtable
+    if (ci === 1 && isSel(selection, ci, ri)) return { ...cell, themeOverride: { textDark: LINK_COLOR }, cursor: 'pointer' }
+    return cell
+  }, [cols, items, totals, groupFields, nums, config.color, fields, hoverRow, selection])   // eslint-disable-line react-hooks/exhaustive-deps
   const rowAt = ri => (items[ri]?.kind === 'row' ? items[ri].row : null)
 
   const onCellEdited = useCallback(([ci, ri], cell) => {
@@ -183,8 +202,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     return undefined   // текст — как есть
   }, [])
 
-  // Карточка открывается как в Airtable: щелчок по номеру записи или пробел на выделенной ячейке.
-  const [selection, setSelection] = useState({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
+  // Карточка открывается как в Airtable: щелчок по названию в выделенной ячейке, кнопка раскрытия у номера
+  // или пробел на выделенной ячейке.
   const onKeyDown = useCallback(e => {
     const cell = selection.current?.cell
     if (e.key === ' ' && cell && rowAt(cell[1])) { e.preventDefault(); onOpen(rowAt(cell[1]), shownRows.map(r => r.id)) }
@@ -195,7 +214,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       <span data-testid="col-order" style={{ display: 'none' }}>{cols.map(c => c.column_name).join(',')}</span>
       <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
       {/* ПКМ ловим на контейнере: в Glide 6.0.3 onCellContextMenu для мыши не срабатывает (слушатель вешается до появления элемента) */}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }} onContextMenu={e => {
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}
+        onPointerDownCapture={() => { downCell.current = selection.current?.cell ?? null }} onContextMenu={e => {
         const [ci, ri] = hovered.current ?? []
         const it = items[ri]
         if (ci === undefined || ci > 1 || it?.kind !== 'group') return
@@ -228,11 +248,19 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           onCellsEdited={onCellsEdited}
           coercePasteValue={coercePasteValue}
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
-          onItemHovered={a => { hovered.current = a.kind === 'cell' ? a.location : null }}
+          onItemHovered={a => {
+            hovered.current = a.kind === 'cell' ? a.location : null
+            const r = a.kind === 'cell' ? a.location[1] : null
+            setHoverRow(h => (h === r ? h : r))
+          }}
           onHeaderMenuClick={(ci, bounds) => setInfo({ text: cols[ci - 1]?.description, x: bounds.x + bounds.width - 260, y: bounds.y + bounds.height + 4 })}
-          onCellClicked={([ci, ri]) => {
+          onCellClicked={([ci, ri], e) => {
             if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
-            else if (ci === 0 && rowAt(ri)) onOpen(rowAt(ri), shownRows.map(r => r.id))
+            // карточка — по кнопке раскрытия у названия (как в Airtable), не по номеру строки
+            else if (ci === 0 && rowAt(ri) && rownumHit(e.localEventX) === 'expand') onOpen(rowAt(ri), shownRows.map(r => r.id))
+            // щелчок по тексту названия в уже выделенной ячейке — карточка; первый щелчок только выделяет
+            else if (ci === 1 && rowAt(ri) && downCell.current?.[0] === 1 && downCell.current?.[1] === ri
+              && onText(getCellContent([ci, ri]), e.localEventX)) onOpen(rowAt(ri), shownRows.map(r => r.id))
           }}
           gridSelection={selection}
           onGridSelectionChange={setSelection}

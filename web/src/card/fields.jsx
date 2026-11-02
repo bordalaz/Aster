@@ -102,12 +102,23 @@ export default function FieldEditor({ field, value, onChange, onOpenLink, inline
   }
   if (field.kind === 'multipleSelects') {
     const choices = field.options?.choices ?? []
-    const set = new Set(value ?? [])
-    const toggle = name => { const n = new Set(set); n.has(name) ? n.delete(name) : n.add(name); onChange([...n]) }
-    return wrap(<div id={id} className="fld-multi">{choices.map(c => (
-      <label key={c.id ?? c.name} className="row">
-        <input type="checkbox" checked={set.has(c.name)} onChange={() => toggle(c.name)} /><Pill name={c.name} color={c.color} />
-      </label>))}</div>)
+    // как в Airtable: выбранные плашки с крестиком, остальные варианты — в выпадающем списке
+    const chosen = value ?? []
+    const color = Object.fromEntries(choices.map(c => [c.name, c.color]))
+    const rest = choices.filter(c => !chosen.includes(c.name))
+    return wrap(
+      <div className="fld-input fld-select fld-multi">
+        {chosen.map(v => (
+          <span key={v} className="fld-chip"><Pill name={v} color={color[v]} />
+            <button type="button" className="fld-chip-x" aria-label={`Убрать ${v}`} onClick={() => onChange(chosen.filter(x => x !== v))}>×</button>
+          </span>))}
+        {!chosen.length && <span style={{ color: 'var(--faint)' }}>—</span>}
+        <Icon name="caretDown" size={12} style={{ marginLeft: 'auto', color: 'var(--muted)' }} />
+        <select id={id} aria-label={field.title} value="" onChange={e => e.target.value && onChange([...chosen, e.target.value])}>
+          <option value="">Добавить…</option>
+          {rest.map(c => <option key={c.id ?? c.name} value={c.name}>{c.name}</option>)}
+        </select>
+      </div>)
   }
   if (field.kind === 'date') {
     return wrap(<input id={id} className="fld-input" style={{ width: 160 }} type="date" aria-label={field.title} value={value ?? ''} onChange={e => onChange(e.target.value || null)} />)

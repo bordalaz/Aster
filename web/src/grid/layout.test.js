@@ -83,3 +83,12 @@ test('цвет строки: по полю выбора или по первом
 test('ручной порядок записей вида (сортировка в Airtable выключена); новые — в конце', () => {
   expect(orderRows([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }], [3, 1, 2]).map(r => r.id)).toEqual([3, 1, 2, 4])
 })
+
+describe('ячейка номера строки', () => {
+  it('карточку открывает только кнопка раскрытия справа от номера, как в Airtable', async () => {
+    const { rownumHit, ROWNUM_W } = await import('./renderers.js')
+    expect(rownumHit(10)).toBe('number')
+    expect(rownumHit(45)).toBe('expand')
+    expect(rownumHit(ROWNUM_W - 4)).toBe('number')   // полоса цвета у края — не кнопка
+  })
+})
