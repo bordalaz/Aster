@@ -6,9 +6,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from .view_meta import compact
 from .views import NO_VALUE, OPS, _filters, _value
 
-# дашборд и «список + карточка» (inbox — список, cellEditor — поле карточки);
-# вложения в карточке, галерея, queryContainer — отдельным шагом
-SUPPORTED = {"bigNumber", "chart", "filter", "grid", "inbox", "cellEditor"}
+# дашборд и «список + карточка» (inbox — список, cellEditor — поле карточки, attachmentCarousel — фото);
+# галерея, queryContainer — отдельным шагом
+SUPPORTED = {"bigNumber", "chart", "filter", "grid", "inbox", "cellEditor", "attachmentCarousel"}
 AGG = {"sum": "sum", "max": "max", "min": "min", "average": "avg", "avg": "avg",
        "countUnique": "unique", "distinct": "unique", "count": "filled", "rowCount": "count"}
 BUCKET = {"yearMonth": "month", "year": "year", "date": "day", "isoWeek": "week"}
@@ -31,9 +31,10 @@ def _agg(y: dict, cols: dict) -> dict:
 
 
 def _element(e: dict, tables: dict, cols: dict, names: dict) -> dict:
-    if e["type"] == "cellEditor":   # поле выбранной в списке записи
+    if e["type"] in ("cellEditor", "attachmentCarousel"):   # поле / фото выбранной в списке записи
         src = e.get("source") or {}
-        return {"type": "field", "table": tables.get(src.get("row", {}).get("tableId")), "col": cols.get(src.get("columnId")),
+        return {"type": "field" if e["type"] == "cellEditor" else "attachments",
+                "table": tables.get(src.get("row", {}).get("tableId")), "col": cols.get(src.get("columnId")),
                 "readonly": bool(e.get("isReadOnly"))}
     q = e.get("query") or {}
     base = {"table": tables.get(q.get("source", {}).get("tableId")),
