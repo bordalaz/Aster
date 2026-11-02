@@ -5,7 +5,8 @@ import { Icon } from '../ui/icons.jsx'
 const when = at => new Date(at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
 
 // Комментарии к записи — правая панель карточки, как в Airtable. Пишет всякий, кому видна таблица.
-export default function Comments({ tableId, recordId }) {
+// readOnly — удалённая запись в корзине: комментарии видны, писать и удалять нельзя
+export default function Comments({ tableId, recordId, readOnly = false }) {
   const url = `/api/tables/${tableId}/records/${recordId}/comments`
   const [items, setItems] = useState(null)
   const [draft, setDraft] = useState('')
@@ -39,15 +40,15 @@ export default function Comments({ tableId, recordId }) {
             : <ul>{items.map(c => (
                 <li key={c.id}>
                   <div className="muted"><strong>{c.user}</strong> · <span className="num">{when(c.at)}</span>
-                    {c.mine && <button className="quiet" aria-label="Удалить комментарий" onClick={() => remove(c.id)}><Icon name="trash" size={12} /></button>}
+                    {c.mine && !readOnly && <button className="quiet" aria-label="Удалить комментарий" onClick={() => remove(c.id)}><Icon name="trash" size={12} /></button>}
                   </div>
                   <div className="card-side-text">{c.text}</div>
                 </li>))}</ul>}
       </div>
       {error && <div className="err" role="alert">{error}</div>}
-      <textarea className="card-side-input" aria-label="Комментарий" placeholder="Оставьте комментарий" rows={2} maxLength={10000}
+      {!readOnly && <textarea className="card-side-input" aria-label="Комментарий" placeholder="Оставьте комментарий" rows={2} maxLength={10000}
         value={draft} onChange={e => setDraft(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />}
     </aside>
   )
 }

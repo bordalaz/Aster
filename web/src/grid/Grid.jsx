@@ -34,7 +34,7 @@ function RowMenu({ at, onClose }) {
       <div className="pop menu" role="menu" aria-label="Действия с записью" style={{ position: 'fixed', left: at.x, top: at.y, zIndex: 31 }}
         onKeyDown={e => { if (e.key === 'Escape') onClose() }}>
         {at.items.map((it, i) => (it === '-' ? <hr key={i} />
-          : <button key={it.label} role="menuitem" autoFocus={i === 0} onClick={run(it.run)}><Icon name={it.icon} />{it.label}</button>))}
+          : <button key={it.label} role="menuitem" autoFocus={i === 0} className={it.danger ? 'danger' : undefined} onClick={run(it.run)}><Icon name={it.icon} />{it.label}</button>))}
       </div>
     </>
   )
@@ -78,9 +78,9 @@ function onText(cell, x) {
 }
 
 // canReorder — можно двигать строки (вид без сортировки, правит тот, кто может менять вид); onReorder(ids) — новый порядок.
-// onInsert(row, 'above'|'below'|null), onDuplicate(row), onSend(rows, columns) — пункты меню записи.
+// onInsert(row, 'above'|'below'|null), onDuplicate(row), onSend(rows, columns), onDelete(rows) — пункты меню записи.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd, collapseKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend }) {
+  search = '', exportRef, onAdd, collapseKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend, onDelete }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -223,7 +223,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     const names = cols.map(c => c.column_name)
     if (checked.has(row.id) && checkedShown.length > 1) {
       const sel = shownRows.filter(r => checked.has(r.id))
-      return [onSend && { icon: 'send', label: 'Отправить выбранные (' + sel.length + ')', run: () => onSend(sel, names) }].filter(Boolean)
+      return [onSend && { icon: 'send', label: 'Отправить выбранные (' + sel.length + ')', run: () => onSend(sel, names) },
+        onDelete && '-', onDelete && { icon: 'trash', label: 'Удалить выбранные (' + sel.length + ')', danger: true, run: () => onDelete(sel) }].filter(Boolean)
     }
     const ins = onInsert && (movable
       ? [{ icon: 'arrowUp', label: 'Вставить запись выше', run: () => onInsert(row, 'above') },
@@ -236,6 +237,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       '-',
       { icon: 'chat', label: 'Добавить комментарий', run: () => onOpen(row, shownRows.map(r => r.id)) },
       onSend && { icon: 'send', label: 'Отправить запись', run: () => onSend([row], names) },
+      onDelete && '-',
+      onDelete && { icon: 'trash', label: 'Удалить запись', danger: true, run: () => onDelete([row]) },
     ].filter(Boolean)
   }
 
