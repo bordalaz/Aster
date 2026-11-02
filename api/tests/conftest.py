@@ -42,7 +42,7 @@ def clean():
     from app import auth
     auth.reset_login_limits()
     with engine.begin() as c:
-        c.execute(text("truncate app_user, app_session, app_table, app_field, app_view restart identity cascade"))
+        c.execute(text("truncate app_user, app_session, app_table, app_field, app_view, app_page restart identity cascade"))
         c.execute(text("drop table if exists zip_test"))
         c.execute(text("truncate attachment, at_computed, at_link_meta"))
         names = c.execute(text(
