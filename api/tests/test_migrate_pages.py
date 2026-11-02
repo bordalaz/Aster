@@ -120,17 +120,21 @@ def test_list_and_card_page():
         "hd": {"id": "hd", "type": "cellEditor", "source": {"row": row, "columnId": "fldC"}, "isReadOnly": True},
         "f1": {"id": "f1", "type": "cellEditor", "source": {"row": row, "columnId": "fldM"}, "isReadOnly": True},
         "f2": {"id": "f2", "type": "cellEditor", "source": {"row": row, "columnId": "fldYear"}, "isReadOnly": False},
+        "ph": {"id": "ph", "type": "attachmentCarousel", "source": {"row": row, "columnId": "fldD"}, "isReadOnly": True},
     }
     L["rootCanvasAreaId"] = "root"
     L["canvasAreaById"] = {"root": {"id": "root", "canvasId": "full"}}
     L["fullCanvasElementById"] = {"full": {"id": "full", "elementId": "in"}}
     L["horizontalBarElementById"] = {"b": {"id": "b", "index": "a0", "elementId": "hd"}}
     L["elementRowById"] = {"r2": {"id": "r2", "parentId": "cv", "index": "a1", "elementId": "f2", "widthUnits": 6},
-                           "r1": {"id": "r1", "parentId": "cv", "index": "a0", "elementId": "f1", "widthUnits": 6}}
+                           "r1": {"id": "r1", "parentId": "cv", "index": "a0", "elementId": "f1", "widthUnits": 6},
+                           "r3": {"id": "r3", "parentId": "cv", "index": "a2", "elementId": "ph", "widthUnits": 6,
+                                  "height": {"type": "provided", "heightUnits": 6}}}
     cfg, problems = convert_page(raw, TABLES, COLS, NAMES)
     assert problems == [] and cfg["filters"] == []
     assert cfg["list"] == {"table": 7, "filters": [{"col": "status", "op": "eq", "value": "Закончен"}],
                            "sort": [{"col": "zakazchik", "desc": False}], "columns": ["zakazchik", "status"],
                            "header": ["zakazchik"]}
-    assert [r[0][0]["col"] for r in cfg["rows"]] == ["metry", "god"]
+    assert [r[0][0]["col"] for r in cfg["rows"]] == ["metry", "god", "data"]
+    assert cfg["rows"][2][0][0] == {"type": "attachments", "table": 7, "col": "data", "readonly": True, "w": 6, "h": 6}
     assert cfg["rows"][1][0][0] == {"type": "field", "table": 7, "col": "god", "readonly": False, "w": 6, "h": None}

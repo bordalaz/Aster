@@ -42,7 +42,7 @@ function useTables(ids) {
       .then(all => live && setData(Object.fromEntries(all)))
     return () => { live = false }
   }, [key])   // eslint-disable-line react-hooks/exhaustive-deps
-  return data
+  return [data, setData]
 }
 
 function walk(rows, out = []) {
@@ -57,14 +57,14 @@ function Page({ id }) {
     api(`/api/pages/${id}`).then(c => { setCfg(c); setConds(Object.fromEntries(c.filters.map(f => [f.id, f.conds]))) })
   }, [id])
   const tableIds = useMemo(() => (cfg ? [...new Set([...walk(cfg.rows).map(e => e.table), cfg.list?.table].filter(Boolean))].sort() : []), [cfg])
-  const data = useTables(tableIds)
+  const [data, setData] = useTables(tableIds)
   if (!cfg) return <p style={{ padding: 16 }}>Загрузка…</p>
   const ready = tableIds.every(t => data[t])
   const rowsFor = el => {
     const t = data[el.table]
     return el.filter && conds[el.filter] ? applyConds(t.rows, t.fields, conds[el.filter]) : t.rows
   }
-  if (cfg.list) return ready ? <ListCard cfg={cfg} data={data} /> : <p style={{ padding: 16 }}>Загрузка данных…</p>
+  if (cfg.list) return ready ? <ListCard cfg={cfg} data={data} setData={setData} /> : <p style={{ padding: 16 }}>Загрузка данных…</p>
   return (
     <section className="dash" aria-label={cfg.title}>
       {/* как в Airtable: заголовка нет (страница выбрана слева), фильтры — панелями над элементами */}
@@ -93,7 +93,7 @@ function sortRows(rows, fields, sort) {
 
 // «Список + карточка», как в Airtable: слева записи (фильтр и сортировка страницы), справа выбранная —
 // заголовок (первичное поле) и поля карточки в раскладке Airtable.
-function ListCard({ cfg, data }) {
+function ListCard({ cfg, data, setData }) {
   const { list } = cfg
   const t = data[list.table]
   const items = useMemo(() => sortRows(applyFilters(Object.values(t.fields), t.rows, list.filters), t.fields, list.sort),
@@ -101,6 +101,11 @@ function ListCard({ cfg, data }) {
   const [sel, setSel] = useState(null)
   const record = items.find(r => r.id === sel) ?? items[0]
   const [first, ...rest] = list.columns.filter(c => t.fields[c])
+  // правка поля из карточки: точечный PATCH со свежим updated_at, как в карточке записи
+  const save = async (table, row, values) => {
+    const res = await api(`/api/tables/${table}/records/${row.id}`, { method: 'PATCH', body: { updated_at: row.updated_at, values } })
+    setData(d => ({ ...d, [table]: { ...d[table], rows: d[table].rows.map(r => (r.id === row.id ? { ...r, ...values, updated_at: res.updated_at } : r)) } }))
+  }
   return (
     <section className="lc" aria-label={cfg.title}>
       <nav className="lc-list" aria-label="Записи">
@@ -117,11 +122,53 @@ function ListCard({ cfg, data }) {
         {!record ? <p className="dash-empty">Нет записей</p> : (
           <>
             {list.header.filter(c => t.fields[c]).map(c => <h2 key={c} className="lc-head">{displayValue(t.fields[c], record[c])}</h2>)}
-            <Rows rows={cfg.rows} data={data} rowsFor={() => []} record={record} />
+            <Rows key={record.id} rows={cfg.rows} data={data} rowsFor={() => []} record={record} save={save} />
           </>
         )}
       </div>
     </section>
+  )
+}
+
+// сразу сохраняются — как в Airtable; текст и числа — при уходе с поля или Enter (как в карточке записи)
+const IMMEDIATE = new Set(['checkbox', 'singleSelect', 'multipleSelects', 'date', 'dateTime', 'duration'])
+
+// Поле выбранной записи. Править можно, если в Airtable поле не «только чтение» и роль правит таблицу.
+function PageField({ field, record, onSave }) {
+  const [draft, setDraft] = useState(undefined)
+  const [error, setError] = useState('')
+  const col = field.column_name
+  const commit = async v => {
+    if (v === undefined || v === record[col]) { setDraft(undefined); return }
+    setError('')
+    try { await onSave({ [col]: v }) } catch { setError('Не удалось сохранить — значение не изменено') }
+    setDraft(undefined)
+  }
+  return (
+    <div className="lc-field" onBlur={() => !IMMEDIATE.has(field.kind) && commit(draft)}
+      onKeyDown={e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.target.blur() }}>
+      <FieldEditor field={field} value={draft === undefined ? record[col] : draft}
+        onChange={v => { setDraft(v); if (IMMEDIATE.has(field.kind)) commit(v) }} />
+      {error && <div className="err" role="alert">{error}</div>}
+    </div>
+  )
+}
+
+// Фото записи по одному, как карусель Airtable: вписаны в рамку, листаются стрелками.
+function Carousel({ files, height }) {
+  const imgs = (files ?? []).filter(f => /^image\//.test(f.mime ?? ''))
+  const [i, setI] = useState(0)
+  if (!imgs.length) return <div className="lc-carousel empty" style={{ height }}>Нет фото</div>
+  const f = imgs[Math.min(i, imgs.length - 1)]
+  return (
+    <div className="lc-carousel" style={{ height }}>
+      <img src={`/api/attachments/${f.id}?inline=1`} alt={f.name} />
+      {imgs.length > 1 && <>
+        <button type="button" className="lc-prev" aria-label="Предыдущее фото" onClick={() => setI((i + imgs.length - 1) % imgs.length)}>‹</button>
+        <button type="button" className="lc-next" aria-label="Следующее фото" onClick={() => setI((i + 1) % imgs.length)}>›</button>
+        <span className="lc-pos">{(i % imgs.length) + 1} / {imgs.length}</span>
+      </>}
+    </div>
   )
 }
 
@@ -136,26 +183,28 @@ function Value({ field, value }) {
   })
 }
 
-function Rows({ rows, data, rowsFor, record }) {
+function Rows({ rows, data, rowsFor, record, save }) {
   return rows.map((r, i) => (
     <div key={i} className="dash-row">
       {r.map((col, j) => (
-        <div key={j} className="dash-col" style={{ flex: col[0]?.w ?? 1 }}>
+        // одна колонка в ряду — её ширина из 12 единиц Airtable; несколько — делят ряд пропорционально
+        <div key={j} className="dash-col" style={{ flex: col[0]?.w ?? 1, maxWidth: r.length === 1 && col[0]?.w ? `${(col[0].w / 12) * 100}%` : undefined }}>
           {col.map((it, k) => (it.rows
-            ? <Rows key={k} rows={it.rows} data={data} rowsFor={rowsFor} record={record} />
-            : <Element key={k} el={it} fields={data[it.table].fields} rows={rowsFor(it)} record={record} />))}
+            ? <Rows key={k} rows={it.rows} data={data} rowsFor={rowsFor} record={record} save={save} />
+            : <Element key={k} el={it} fields={data[it.table].fields} rows={rowsFor(it)} record={record} save={save} />))}
         </div>
       ))}
     </div>
   ))
 }
 
-function Element({ el, fields, rows, record }) {
-  if (el.type === 'field') {   // поле выбранной записи; правка из интерфейса — позже, пока только показ
+function Element({ el, fields, rows, record, save }) {
+  if (el.type === 'field') {
     const f = fields[el.col]
-    return f ? <div className="lc-field" style={{ maxWidth: `${((el.w ?? 12) / 12) * 100}%` }}>
-      <FieldEditor field={{ ...f, editable: false }} value={record?.[el.col]} /></div> : null
+    return f ? <PageField field={{ ...f, editable: f.editable && !el.readonly }} record={record}
+      onSave={values => save(el.table, record, values)} /> : null
   }
+  if (el.type === 'attachments') return <Carousel files={record?.[el.col]} height={(el.h ?? 6) * UNIT} />
   if (el.type === 'number') {
     return <Tile label={el.label} color={el.color} value={fmt(fields[el.col], aggregate(rows, fields[el.col], el.agg), el.agg)} />
   }

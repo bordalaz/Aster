@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
@@ -70,5 +70,33 @@ describe('Интерфейсы', () => {
     await userEvent.click(items[1])
     expect(screen.getByRole('heading', { name: '50' })).toBeInTheDocument()
     expect(screen.getByText('Год')).toBeInTheDocument()                                       // поле карточки
+  })
+
+  it('карточка: поле без «только чтение» правится и сохраняется при уходе с поля; фото — каруселью', async () => {
+    const lc = { id: 1, title: 'ЗИП', filters: [],
+      list: { table: 5, filters: [], sort: [], columns: ['m'], header: ['m'] },
+      rows: [[[{ type: 'field', table: 5, col: 'note', readonly: false, w: 6 }], [{ type: 'field', table: 5, col: 'god', readonly: true, w: 6 }]],
+             [[{ type: 'attachments', table: 5, col: 'foto', readonly: true, w: 6, h: 6 }]]] }
+    const fs = [...fields, { column_name: 'note', title: 'Примечание', kind: 'singleLineText', editable: true },
+      { column_name: 'foto', title: 'Фото', kind: 'multipleAttachments', editable: true }]
+    const rs = [{ id: 1, m: 100, god: '2024', note: 'старое', updated_at: 't1',
+      foto: [{ id: 'a', name: 'a.jpg', mime: 'image/jpeg' }, { id: 'b', name: 'b.png', mime: 'image/png' }] }]
+    let sent = null
+    mock()
+    server.use(
+      http.get('/api/pages/1', () => HttpResponse.json(lc)),
+      http.get('/api/tables/5/fields', () => HttpResponse.json(fs)),
+      http.get('/api/tables/5/records', () => HttpResponse.json(rs)),
+      http.patch('/api/tables/5/records/1', async ({ request }) => { sent = await request.json(); return HttpResponse.json({ updated_at: 't2' }) }),
+    )
+    render(<Pages />)
+    const note = await screen.findByRole('textbox', { name: 'Примечание' })
+    expect(screen.queryByRole('combobox', { name: 'Год' })).toBeNull()   // «только чтение» — без редактора
+    await userEvent.clear(note)
+    await userEvent.type(note, 'новое{Enter}')
+    await waitFor(() => expect(sent).toEqual({ updated_at: 't1', values: { note: 'новое' } }))
+    expect(screen.getByRole('img', { name: 'a.jpg' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Следующее фото' }))
+    expect(screen.getByRole('img', { name: 'b.png' })).toBeInTheDocument()
   })
 })

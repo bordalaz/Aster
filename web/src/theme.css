@@ -233,3 +233,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .lc-card { flex: 1; overflow: auto; padding: 16px 32px 32px; display: flex; flex-direction: column; gap: 12px; }
 .lc-head { font-size: 22px; font-weight: 600; margin: 0 0 8px; }
 .lc-field { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; }
+.lc-carousel { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.lc-carousel.empty { color: var(--muted); }
+.lc-carousel img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.lc-prev, .lc-next { position: absolute; top: 50%; transform: translateY(-50%); border: 0; border-radius: 50%; width: 32px; height: 32px; background: rgb(0 0 0 / 0.45); color: #fff; font-size: 20px; cursor: pointer; }
+.lc-prev { left: 8px; } .lc-next { right: 8px; }
+.lc-pos { position: absolute; bottom: 8px; right: 12px; background: rgb(0 0 0 / 0.45); color: #fff; border-radius: 10px; padding: 0 8px; font-size: 12px; }
+.lc-card .dash-col { gap: 12px; }
