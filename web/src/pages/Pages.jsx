@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
 import { displayValue, kindOf, NUMBER as NUM } from '../grid/cells.js'
 import { rowColor } from '../grid/layout.js'
-import { LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
+import { choiceColor } from '../grid/renderers.js'
+import { applyFilters, LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
+import FieldEditor from '../card/fields.jsx'
 import { aggregate, applyConds, series } from './dash.js'
 import { BarChart, PieChart, Tile, colorsFor, fmt } from './charts.jsx'
 
@@ -54,7 +56,7 @@ function Page({ id }) {
   useEffect(() => {
     api(`/api/pages/${id}`).then(c => { setCfg(c); setConds(Object.fromEntries(c.filters.map(f => [f.id, f.conds]))) })
   }, [id])
-  const tableIds = useMemo(() => (cfg ? [...new Set(walk(cfg.rows).map(e => e.table))].sort() : []), [cfg])
+  const tableIds = useMemo(() => (cfg ? [...new Set([...walk(cfg.rows).map(e => e.table), cfg.list?.table].filter(Boolean))].sort() : []), [cfg])
   const data = useTables(tableIds)
   if (!cfg) return <p style={{ padding: 16 }}>Загрузка…</p>
   const ready = tableIds.every(t => data[t])
@@ -62,6 +64,7 @@ function Page({ id }) {
     const t = data[el.table]
     return el.filter && conds[el.filter] ? applyConds(t.rows, t.fields, conds[el.filter]) : t.rows
   }
+  if (cfg.list) return ready ? <ListCard cfg={cfg} data={data} /> : <p style={{ padding: 16 }}>Загрузка данных…</p>
   return (
     <section className="dash" aria-label={cfg.title}>
       {/* как в Airtable: заголовка нет (страница выбрана слева), фильтры — панелями над элементами */}
@@ -74,21 +77,85 @@ function Page({ id }) {
   )
 }
 
-function Rows({ rows, data, rowsFor }) {
+// Сортировка как у вида: по каждому ключу, начиная с младшего; сравнение показанных значений.
+function sortRows(rows, fields, sort) {
+  const out = [...rows]
+  for (const s of [...sort].reverse()) {
+    const f = fields[s.col]
+    if (!f) continue
+    out.sort((a, b) => {
+      const d = displayValue(f, a[s.col]).localeCompare(displayValue(f, b[s.col]), 'ru', { numeric: true })
+      return s.desc ? -d : d
+    })
+  }
+  return out
+}
+
+// «Список + карточка», как в Airtable: слева записи (фильтр и сортировка страницы), справа выбранная —
+// заголовок (первичное поле) и поля карточки в раскладке Airtable.
+function ListCard({ cfg, data }) {
+  const { list } = cfg
+  const t = data[list.table]
+  const items = useMemo(() => sortRows(applyFilters(Object.values(t.fields), t.rows, list.filters), t.fields, list.sort),
+    [t, list])
+  const [sel, setSel] = useState(null)
+  const record = items.find(r => r.id === sel) ?? items[0]
+  const [first, ...rest] = list.columns.filter(c => t.fields[c])
+  return (
+    <section className="lc" aria-label={cfg.title}>
+      <nav className="lc-list" aria-label="Записи">
+        <div className="lc-count">{items.length} записей</div>
+        {items.map(r => (
+          <button key={r.id} type="button" className="lc-item" aria-current={r.id === record?.id ? 'true' : undefined}
+            onClick={() => setSel(r.id)}>
+            <span className="lc-title">{first ? displayValue(t.fields[first], r[first]) : `№${r.id}`}</span>
+            {rest.map(c => <span key={c} className="lc-sub"><Value field={t.fields[c]} value={r[c]} /></span>)}
+          </button>
+        ))}
+      </nav>
+      <div className="lc-card">
+        {!record ? <p className="dash-empty">Нет записей</p> : (
+          <>
+            {list.header.filter(c => t.fields[c]).map(c => <h2 key={c} className="lc-head">{displayValue(t.fields[c], record[c])}</h2>)}
+            <Rows rows={cfg.rows} data={data} rowsFor={() => []} record={record} />
+          </>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// Значение в списке: у полей выбора — плашки цвета варианта, как в Airtable; остальное — текстом.
+function Value({ field, value }) {
+  const choices = field.options?.choices ?? field.options?.result?.options?.choices
+  if (!choices || value == null || value === '') return displayValue(field, value)
+  const color = Object.fromEntries(choices.map(c => [c.name, c.color]))
+  return [].concat(value).map(v => {
+    const c = choiceColor(color[v])
+    return <span key={v} className="pill" style={{ background: c.bg, color: c.fg }}>{v}</span>
+  })
+}
+
+function Rows({ rows, data, rowsFor, record }) {
   return rows.map((r, i) => (
     <div key={i} className="dash-row">
       {r.map((col, j) => (
         <div key={j} className="dash-col" style={{ flex: col[0]?.w ?? 1 }}>
           {col.map((it, k) => (it.rows
-            ? <Rows key={k} rows={it.rows} data={data} rowsFor={rowsFor} />
-            : <Element key={k} el={it} fields={data[it.table].fields} rows={rowsFor(it)} />))}
+            ? <Rows key={k} rows={it.rows} data={data} rowsFor={rowsFor} record={record} />
+            : <Element key={k} el={it} fields={data[it.table].fields} rows={rowsFor(it)} record={record} />))}
         </div>
       ))}
     </div>
   ))
 }
 
-function Element({ el, fields, rows }) {
+function Element({ el, fields, rows, record }) {
+  if (el.type === 'field') {   // поле выбранной записи; правка из интерфейса — позже, пока только показ
+    const f = fields[el.col]
+    return f ? <div className="lc-field" style={{ maxWidth: `${((el.w ?? 12) / 12) * 100}%` }}>
+      <FieldEditor field={{ ...f, editable: false }} value={record?.[el.col]} /></div> : null
+  }
   if (el.type === 'number') {
     return <Tile label={el.label} color={el.color} value={fmt(fields[el.col], aggregate(rows, fields[el.col], el.agg), el.agg)} />
   }
@@ -114,17 +181,7 @@ function Element({ el, fields, rows }) {
 
 function PageGrid({ el, fields, rows }) {
   const cols = el.columns.filter(c => fields[c])
-  const sorted = useMemo(() => {
-    const out = [...rows]
-    for (const s of [...el.sort].reverse()) {
-      const f = fields[s.col]
-      out.sort((a, b) => {
-        const d = displayValue(f, a[s.col]).localeCompare(displayValue(f, b[s.col]), 'ru', { numeric: true })
-        return s.desc ? -d : d
-      })
-    }
-    return out
-  }, [rows, el.sort, fields])
+  const sorted = useMemo(() => sortRows(rows, fields, el.sort), [rows, el.sort, fields])
   const fs = Object.values(fields)
   const sum = (f, rs) => rs.reduce((a, r) => a + (typeof r[f.column_name] === 'number' ? r[f.column_name] : 0), 0)
   const sums = rs => cols.map(c => <td key={c} className="dash-sum">{NUM.has(kindOf(fields[c])) ? `Сумма ${fmt(fields[c], sum(fields[c], rs))}` : ''}</td>)

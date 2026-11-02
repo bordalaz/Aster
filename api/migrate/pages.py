@@ -6,8 +6,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from .view_meta import compact
 from .views import NO_VALUE, OPS, _filters, _value
 
-# дашборд — только эти элементы; «список + карточка» и галерея (inbox, gallery …) — отдельным шагом
-SUPPORTED = {"bigNumber", "chart", "filter", "grid"}
+# дашборд и «список + карточка» (inbox — список, cellEditor — поле карточки);
+# вложения в карточке, галерея, queryContainer — отдельным шагом
+SUPPORTED = {"bigNumber", "chart", "filter", "grid", "inbox", "cellEditor"}
 AGG = {"sum": "sum", "max": "max", "min": "min", "average": "avg", "avg": "avg",
        "countUnique": "unique", "distinct": "unique", "count": "filled", "rowCount": "count"}
 BUCKET = {"yearMonth": "month", "year": "year", "date": "day", "isoWeek": "week"}
@@ -30,6 +31,10 @@ def _agg(y: dict, cols: dict) -> dict:
 
 
 def _element(e: dict, tables: dict, cols: dict, names: dict) -> dict:
+    if e["type"] == "cellEditor":   # поле выбранной в списке записи
+        src = e.get("source") or {}
+        return {"type": "field", "table": tables.get(src.get("row", {}).get("tableId")), "col": cols.get(src.get("columnId")),
+                "readonly": bool(e.get("isReadOnly"))}
     q = e.get("query") or {}
     base = {"table": tables.get(q.get("source", {}).get("tableId")),
             "filter": (q.get("interactiveFilters") or {}).get("outputId")}
@@ -108,6 +113,8 @@ def convert_page(raw: dict, tables: dict, cols: dict, names: dict) -> tuple[dict
     filters = []
     for n in bar + sorted(in_canvas, key=lambda n: n["index"]):
         e = E[n["elementId"]]
+        if e["type"] != "filter":   # в полосе карточки — заголовок записи, не фильтр
+            continue
         out = e["outputs"]["interactiveFilters"]["id"]
         if out not in used:   # такой фильтр в Airtable ни на что не влияет
             continue
@@ -133,8 +140,24 @@ def convert_page(raw: dict, tables: dict, cols: dict, names: dict) -> tuple[dict
     # элемент прямо на холсте — ряд на всю ширину из одной колонки
     body = [row(n) if k == "columnsRowById" else [[el(n)]]
             for k, n in kids.get(canvas, []) if not is_filter(k, n)]
-    return {"title": raw["bundle"]["name"], "subtitle": raw["pageMeta"].get("name"),
-            "filters": filters, "rows": body}, problems
+    out = {"title": raw["bundle"]["name"], "subtitle": raw["pageMeta"].get("name"), "filters": filters, "rows": body}
+    # «список + карточка»: на весь корневой холст — список (inbox); его область — карточка выбранной записи:
+    # сверху полоса с заголовком (первичное поле), под ней — те же ряды, что у дашборда (body)
+    area = L.get("canvasAreaById", {}).get(L.get("rootCanvasAreaId"), {})
+    full = L.get("fullCanvasElementById", {}).get(area.get("canvasId"))
+    if full and E[full["elementId"]]["type"] == "inbox":
+        e = E[full["elementId"]]
+        q = e.get("query") or {}
+        header = [_element(E[n["elementId"]], tables, cols, names)["col"]
+                  for n in sorted(L.get("horizontalBarElementById", {}).values(), key=lambda n: n["index"])
+                  if E[n["elementId"]]["type"] == "cellEditor"]
+        out["list"] = {"table": tables.get(q.get("source", {}).get("tableId")),
+                       "filters": _filters(compact(q.get("filters")), cols, names, problems) if q.get("filters") else [],
+                       "sort": [{"col": cols[x["columnId"]], "desc": not x.get("ascending", True)}
+                                for x in q.get("sorts", []) if x["columnId"] in cols],
+                       "columns": [cols[c] for c in e.get("visibleColumnIds", []) if c in cols],
+                       "header": [c for c in header if c]}
+    return out, problems
 
 
 def load_pages(c, pages: list[dict], schema: dict) -> tuple[int, list[str]]:

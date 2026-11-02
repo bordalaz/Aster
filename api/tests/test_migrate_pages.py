@@ -105,3 +105,32 @@ def test_canvas_level_elements_and_inline_filter():
                               "color": {"kind": "rules", "rules": [{"color": "redDark", "filters": cfg["rows"][0][0][0]["color"]["rules"][0]["filters"]}]},
                               "w": None, "h": None}]]]
     assert cfg["rows"][0][0][0]["color"]["rules"][0]["filters"]   # условие «metry < 0» перенесено
+
+
+def test_list_and_card_page():
+    """«Список + карточка»: список на весь корневой холст, в его области — заголовок записи и поля карточки."""
+    row = {"type": "row", "tableId": "tblR", "outputId": "peoRow"}
+    raw = _page([], [])
+    L = raw["page"]["publishedLayout"]
+    L["elementById"] = {
+        "in": {"id": "in", "type": "inbox", "visibleColumnIds": ["fldC", "fldS"],
+               "query": {"source": {"type": "table", "tableId": "tblR"},
+                         "filters": {"conjunction": "and", "filterSet": [{"columnId": "fldS", "operator": "=", "value": "selDone"}]},
+                         "sorts": [{"columnId": "fldC", "ascending": True}]}},
+        "hd": {"id": "hd", "type": "cellEditor", "source": {"row": row, "columnId": "fldC"}, "isReadOnly": True},
+        "f1": {"id": "f1", "type": "cellEditor", "source": {"row": row, "columnId": "fldM"}, "isReadOnly": True},
+        "f2": {"id": "f2", "type": "cellEditor", "source": {"row": row, "columnId": "fldYear"}, "isReadOnly": False},
+    }
+    L["rootCanvasAreaId"] = "root"
+    L["canvasAreaById"] = {"root": {"id": "root", "canvasId": "full"}}
+    L["fullCanvasElementById"] = {"full": {"id": "full", "elementId": "in"}}
+    L["horizontalBarElementById"] = {"b": {"id": "b", "index": "a0", "elementId": "hd"}}
+    L["elementRowById"] = {"r2": {"id": "r2", "parentId": "cv", "index": "a1", "elementId": "f2", "widthUnits": 6},
+                           "r1": {"id": "r1", "parentId": "cv", "index": "a0", "elementId": "f1", "widthUnits": 6}}
+    cfg, problems = convert_page(raw, TABLES, COLS, NAMES)
+    assert problems == [] and cfg["filters"] == []
+    assert cfg["list"] == {"table": 7, "filters": [{"col": "status", "op": "eq", "value": "Закончен"}],
+                           "sort": [{"col": "zakazchik", "desc": False}], "columns": ["zakazchik", "status"],
+                           "header": ["zakazchik"]}
+    assert [r[0][0]["col"] for r in cfg["rows"]] == ["metry", "god"]
+    assert cfg["rows"][1][0][0] == {"type": "field", "table": 7, "col": "god", "readonly": False, "w": 6, "h": None}
