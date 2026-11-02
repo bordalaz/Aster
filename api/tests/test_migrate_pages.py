@@ -86,7 +86,10 @@ def test_canvas_level_elements_and_inline_filter():
         "f1": {"id": "f1", "type": "filter", "tableId": "tblR", "outputs": {"interactiveFilters": {"id": "peoA"}},
                "filters": {"conjunction": "and", "filterSet": [{"columnId": "fldS", "operator": "=", "value": "selDone"}]}},
         "g1": {"id": "g1", "type": "grid", "query": _q() | {"sorts": [{"columnId": "fldM", "ascending": False}]},
-               "visibleColumnIds": ["fldC", "fldM", "fldGone"]},
+               "visibleColumnIds": ["fldC", "fldM", "fldGone"], "groupLevels": [{"columnId": "fldC", "ascending": True}],
+               "widthByColumnId": {"fldC": 260, "fldGone": 90},
+               "colorConfig": {"type": "colorDefinitions", "colorDefinitions": [{"conjunction": "and", "color": "redDark",
+                               "filterSet": [{"columnId": "fldM", "operator": "<", "value": 0}]}]}},
     }
     L["elementRowById"] = {"ef": {"id": "ef", "parentId": "cv", "index": "a0", "elementId": "f1"},
                            "eg": {"id": "eg", "parentId": "cv", "index": "a1", "elementId": "g1"}}
@@ -94,4 +97,8 @@ def test_canvas_level_elements_and_inline_filter():
     assert problems == []
     assert [f["id"] for f in cfg["filters"]] == ["peoA"]
     assert cfg["rows"] == [[[{"type": "grid", "table": 7, "filter": "peoA", "columns": ["zakazchik", "metry"],
-                              "sort": [{"col": "metry", "desc": True}], "w": None, "h": None}]]]
+                              "sort": [{"col": "metry", "desc": True}], "groups": [{"col": "zakazchik", "desc": False}],
+                              "widths": {"zakazchik": 260},
+                              "color": {"kind": "rules", "rules": [{"color": "redDark", "filters": cfg["rows"][0][0][0]["color"]["rules"][0]["filters"]}]},
+                              "w": None, "h": None}]]]
+    assert cfg["rows"][0][0][0]["color"]["rules"][0]["filters"]   # условие «metry < 0» перенесено

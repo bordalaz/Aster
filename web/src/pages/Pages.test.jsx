@@ -39,4 +39,20 @@ describe('Интерфейсы', () => {
     expect(within(tile('Пробурено метров')).getByText('75')).toBeInTheDocument()
     expect(within(tile('Всего')).getByText('2')).toBeInTheDocument()
   })
+
+  it('сетка: группы по полю с суммами, итог внизу, красная метка по правилу', async () => {
+    const grid = { id: 1, title: 'Договоры', filters: [], rows: [[[{ type: 'grid', table: 5, columns: ['god', 'm'], sort: [],
+      groups: [{ col: 'god', desc: false }], widths: { god: 200 },
+      color: { kind: 'rules', rules: [{ color: 'redDark', filters: [{ col: 'm', op: 'lt', value: 60 }] }] } }]]] }
+    mock()
+    server.use(http.get('/api/pages/1', () => HttpResponse.json(grid)))
+    render(<Pages />)
+    const g2025 = (await screen.findByText('2025', { selector: '.dash-group th, .dash-group th *' })).closest('tr')
+    expect(within(g2025).getByText('2')).toBeInTheDocument()            // записей в группе
+    expect(within(g2025).getByText('Сумма 75')).toBeInTheDocument()
+    expect(screen.getByText('Сумма 175')).toBeInTheDocument()           // итог внизу
+    const low = screen.getByText('25').closest('tr')
+    expect(low.querySelector('td').style.boxShadow).toContain('inset 4px 0')
+    expect(screen.getByText('100').closest('tr').querySelector('td').style.boxShadow).toBe('')
+  })
 })

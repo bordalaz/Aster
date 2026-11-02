@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
-import { displayValue } from '../grid/cells.js'
+import { displayValue, kindOf, NUMBER as NUM } from '../grid/cells.js'
+import { rowColor, summarize } from '../grid/layout.js'
 import { LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
 import { aggregate, applyConds, series } from './dash.js'
 import { BarChart, PieChart, Tile, colorsFor, fmt } from './charts.jsx'
@@ -122,13 +123,42 @@ function PageGrid({ el, fields, rows }) {
     }
     return out
   }, [rows, el.sort, fields])
+  const fs = Object.values(fields)
+  const sums = rs => cols.map(c => <td key={c} className="dash-sum">{NUM.has(kindOf(fields[c])) ? summarize(fields[c], rs, 'sum') : ''}</td>)
+  const body = (rs, levels, depth = 0) => {
+    const [g, ...rest] = levels
+    if (!g) {
+      return rs.map(r => {
+        const bar = rowColor(el.color, fs, r)
+        return <tr key={r.id}>{cols.map((c, i) => <td key={c} style={i === 0 && bar ? { boxShadow: `inset 4px 0 ${bar}` } : undefined}>{displayValue(fields[c], r[c])}</td>)}</tr>
+      })
+    }
+    const f = fields[g.col]
+    const by = new Map()
+    for (const r of rs) { const k = displayValue(f, r[g.col]); by.set(k, [...(by.get(k) ?? []), r]) }
+    const keys = [...by.keys()].sort((a, b) => (a === '—') - (b === '—') || a.localeCompare(b, 'ru', { numeric: true }) * (g.desc ? -1 : 1))
+    return keys.flatMap(k => [
+      <tr key={`g${depth}:${k}`} className="dash-group">
+        <th style={{ paddingLeft: 8 + depth * 16 }}><small>{f.title}</small>{k} <span>{by.get(k).length}</span></th>
+        {sums(by.get(k)).slice(1)}
+      </tr>,
+      ...body(by.get(k), rest, depth + 1),
+    ])
+  }
+  const colgroup = <colgroup>{cols.map(c => <col key={c} style={{ width: el.widths?.[c] }} />)}</colgroup>
   return (
     <div className="dash-card dash-grid">
-      <table>
-        <thead><tr>{cols.map(c => <th key={c}>{fields[c].title}</th>)}</tr></thead>
-        <tbody>{sorted.map(r => <tr key={r.id}>{cols.map(c => <td key={c}>{displayValue(fields[c], r[c])}</td>)}</tr>)}</tbody>
-      </table>
-      <div className="dash-count">{rows.length} записей</div>
+      <div className="dash-grid-scroll">
+        <table>
+          {colgroup}
+          <thead><tr>{cols.map(c => <th key={c}>{fields[c].title}</th>)}</tr></thead>
+          <tbody>{body(sorted, (el.groups ?? []).filter(g => fields[g.col]))}</tbody>
+        </table>
+      </div>
+      {/* итоги — отдельной таблицей под прокруткой, с теми же колонками */}
+      <div className="dash-grid-foot">
+        <table>{colgroup}<tbody><tr><td className="dash-count">{rows.length} записей</td>{sums(rows).slice(1)}</tr></tbody></table>
+      </div>
     </div>
   )
 }

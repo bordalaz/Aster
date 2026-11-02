@@ -4,7 +4,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from .view_meta import compact
-from .views import NO_VALUE, OPS, _value
+from .views import NO_VALUE, OPS, _filters, _value
 
 # дашборд — только эти элементы; «список + карточка» и галерея (inbox, gallery …) — отдельным шагом
 SUPPORTED = {"bigNumber", "chart", "filter", "grid"}
@@ -29,7 +29,7 @@ def _agg(y: dict, cols: dict) -> dict:
     return {"agg": AGG.get(y.get("aggregationFunction"), "count"), "col": cols.get(y.get("columnId"))}
 
 
-def _element(e: dict, tables: dict, cols: dict) -> dict:
+def _element(e: dict, tables: dict, cols: dict, names: dict) -> dict:
     q = e.get("query") or {}
     base = {"table": tables.get(q.get("source", {}).get("tableId")),
             "filter": (q.get("interactiveFilters") or {}).get("outputId")}
@@ -51,11 +51,22 @@ def _element(e: dict, tables: dict, cols: dict) -> dict:
         if d["type"] == "pie":
             del out["bucket"], out["group"]
         return out
-    # grid
+    # grid: колонки, сортировка, группы (суммы по группам), ширины, цвет строк по правилам — как вид
+    rules = []
+    cc = e.get("colorConfig") or {}
+    for d in cc.get("colorDefinitions") or [] if cc.get("type") == "colorDefinitions" else []:
+        problems: list[str] = []
+        f = _filters(compact(d), cols, names, problems)
+        if f and not problems:
+            rules.append({"color": d["color"], "filters": f})
     return {"type": "grid", "table": base["table"], "filter": base["filter"],
             "columns": [cols[c] for c in e.get("visibleColumnIds", []) if c in cols],
             "sort": [{"col": cols[s["columnId"]], "desc": not s.get("ascending", True)}
-                     for s in q.get("sorts", []) if s["columnId"] in cols]}
+                     for s in q.get("sorts", []) if s["columnId"] in cols],
+            "groups": [{"col": cols[g["columnId"]], "desc": not g.get("ascending", True)}
+                       for g in e.get("groupLevels") or [] if g["columnId"] in cols],
+            "widths": {cols[c]: w for c, w in (e.get("widthByColumnId") or {}).items() if c in cols},
+            "color": {"kind": "rules", "rules": rules} if rules else None}
 
 
 def _conds(fs: dict, cols: dict, names: dict, problems: list) -> list[dict]:
@@ -102,7 +113,7 @@ def convert_page(raw: dict, tables: dict, cols: dict, names: dict) -> tuple[dict
                         "conds": _conds(e.get("filters"), cols, names, problems)})
 
     def el(it):
-        return _element(E[it["elementId"]], tables, cols) | {
+        return _element(E[it["elementId"]], tables, cols, names) | {
             "w": it.get("widthUnits"), "h": (it.get("height") or {}).get("heightUnits")}
 
     def is_filter(kind, n):

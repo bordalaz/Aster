@@ -2,8 +2,6 @@ import { displayValue } from '../grid/cells.js'
 import { matches } from '../grid/viewConfig.js'
 
 const EMPTY = '(пусто)'
-const OTHER = 'Другое'
-const MAX_SERIES = 9   // столько цветов в палитре; хвост — в «Другое», новых оттенков не придумываем
 
 const isEmpty = v => v == null || v === '' || (Array.isArray(v) && v.length === 0)
 const items = v => (isEmpty(v) ? [] : Array.isArray(v) ? v : [v])
@@ -51,23 +49,12 @@ export function series(rows, fields, { x, bucket, group, y, empty }) {
       }
     }
   }
-  const cell = new Map([...buckets].map(([k, rs]) => [k, aggregate(rs, fields[y.col], y.agg) ?? 0]))
-  const xs = [...new Set([...buckets.keys()].map(k => k.split('\u0000')[0]))].sort(cmp)
-  let groups = [null]
-  let fold = new Map()
-  if (group) {
-    const total = new Map()
-    for (const [k, v] of cell) { const g = k.split('\u0000')[1]; total.set(g, (total.get(g) ?? 0) + v) }
-    const all = [...total.keys()].sort(cmp)
-    if (all.length > MAX_SERIES) {
-      const keep = new Set([...all].sort((a, b) => total.get(b) - total.get(a)).slice(0, MAX_SERIES - 1))
-      fold = new Map(all.filter(g => !keep.has(g)).map(g => [g, OTHER]))
-      groups = [...all.filter(g => keep.has(g)), OTHER]
-    } else groups = all
-  }
-  const value = (kx, kg) => {
-    if (kg !== OTHER) return cell.get(`${kx}\u0000${kg}`) ?? 0
-    return [...fold.keys()].reduce((s, g) => s + (cell.get(`${kx}\u0000${g}`) ?? 0), 0)
-  }
+  // Корзина без единого числа (сумма по пустым ячейкам) не попадает на ось — Airtable её не рисует.
+  const cell = new Map([...buckets].map(([k, rs]) => [k, aggregate(rs, fields[y.col], y.agg)]).filter(([, v]) => v != null))
+  const part = (k, i) => k.split('\u0000')[i]
+  const xs = [...new Set([...cell.keys()].map(k => part(k, 0)))].sort(cmp)
+  // Все серии, сколько есть, — как в Airtable; в «Другое» не сворачиваем.
+  const groups = group ? [...new Set([...cell.keys()].map(k => part(k, 1)))].sort(cmp) : [null]
+  const value = (kx, kg) => cell.get(`${kx}\u0000${kg}`) ?? 0
   return { xs, groups, value }
 }

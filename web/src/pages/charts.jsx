@@ -3,10 +3,9 @@ import { HUE_SHADES } from '../grid/renderers.js'
 import { numText } from '../grid/cells.js'
 
 // Оттенки Airtable в порядке, который проходит проверки различимости (в т.ч. при дальтонизме) —
-// dataviz/validate_palette.js: все PASS. Порядок фиксированный, по кругу не идёт (больше 9 — «Другое»).
+// dataviz/validate_palette.js: все PASS. Серий больше 9 — цвета идут по кругу (в «Другое» не сворачиваем, как Airtable).
 export const PALETTE = ['#2d7ff9', '#d74d26', '#06a09b', '#b2158b', '#b87503', '#8b46ff', '#338a17', '#f82b60', '#0b76b7']
 const HUE_SLOT = { blue: 0, orange: 1, teal: 2, pink: 3, yellow: 4, purple: 5, green: 6, red: 7, cyan: 8 }
-const OTHER_COLOR = '#888c94'
 
 // Цвет следует за значением, а не за местом: у вариантов выбора — их оттенок из Airtable.
 export function colorsFor(groups, field) {
@@ -15,7 +14,6 @@ export function colorsFor(groups, field) {
   let next = 0
   const used = new Set()
   return groups.map(g => {
-    if (g === 'Другое') return OTHER_COLOR
     const slot = HUE_SLOT[choice[g]]
     if (slot != null && !used.has(slot)) { used.add(slot); return PALETTE[slot] }
     while (used.has(next % PALETTE.length) && used.size < PALETTE.length) next++
@@ -135,22 +133,12 @@ export function BarChart({ s, colors, show, height }) {
 }
 
 // Круговая: срезы по убыванию, 2px зазор цвета фона, подписи — в легенде с долей.
-// Больше 9 срезов — хвост в «Другое», как серии у столбцов: цвета не повторяются.
-export function pieParts(s) {
-  const all = s.xs.map(x => ({ x, v: s.value(x, null) })).filter(p => p.v > 0).sort((a, b) => b.v - a.v)
-  if (all.length <= PALETTE.length) return all
-  const keep = all.slice(0, PALETTE.length - 1)
-  return [...keep, { x: 'Другое', v: all.slice(PALETTE.length - 1).reduce((a, p) => a + p.v, 0) }]
-}
-
 export function PieChart({ s, colorsOf, show, height }) {
   const [tip, setTip] = useState(null)
-  const ps = pieParts(s)
-  // цвета раздаём в алфавитном порядке, как у столбцов, — одно значение одного цвета на всей странице
-  const names = ps.map(p => p.x).filter(x => x !== 'Другое').sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }))
+  // Все срезы, как в Airtable; цвета по алфавиту, как у столбцов, — одно значение одного цвета на странице.
+  const names = s.xs.filter(x => s.value(x, null) > 0)
   const cs = colorsOf(names)
-  const byName = Object.fromEntries(names.map((x, i) => [x, cs[i]]))
-  const parts = ps.map(p => ({ ...p, c: byName[p.x] ?? OTHER_COLOR }))
+  const parts = names.map((x, i) => ({ x, v: s.value(x, null), c: cs[i] })).sort((a, b) => b.v - a.v)
   const total = parts.reduce((a, p) => a + p.v, 0)
   const R = Math.min(height, 260) / 2 - 4
   let a0 = -Math.PI / 2
@@ -171,7 +159,7 @@ export function PieChart({ s, colorsOf, show, height }) {
       </svg>
       {tip && <div className="dash-tip" style={{ left: tip.x + 12, top: tip.y + 12 }}>
         <strong>{tip.p.x}</strong><span>{show(tip.p.v)} · {Math.round((100 * tip.p.v) / total)}%</span></div>}
-      <ul className="dash-legend vertical">
+      <ul className="dash-legend vertical" style={{ maxHeight: 2 * R }}>
         {parts.map(p => <li key={p.x}><i style={{ background: p.c }} />{p.x}<b>{show(p.v)}</b></li>)}
       </ul>
     </div>

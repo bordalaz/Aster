@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { aggregate, applyConds, series } from './dash.js'
-import { pieParts } from './charts.jsx'
 
 const F = {
   m: { column_name: 'm', kind: 'number', options: { precision: 0 } },
@@ -50,21 +49,16 @@ describe('дашборд: серии графика', () => {
     expect(s.xs).toEqual(['2024-01', '2024-02'])
     expect(s.value('2024-01', null)).toBe(15)
   })
-  it('больше 9 серий — хвост в «Другое»', () => {
+  it('все серии, сколько есть, — без «Другое», как в Airtable', () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ id: i, g: `г${i}`, x: 'a', n: 12 - i }))
     const fs = { g: { column_name: 'g', kind: 'singleLineText' }, x: { column_name: 'x', kind: 'singleLineText' }, n: { column_name: 'n', kind: 'number' } }
     const s = series(many, fs, { x: 'x', group: 'g', y: { agg: 'sum', col: 'n' } })
-    expect(s.groups).toHaveLength(9)
-    expect(s.groups.at(-1)).toBe('Другое')
-    expect(s.value('a', 'Другое')).toBe(4 + 3 + 2 + 1)
+    expect(s.groups).toHaveLength(12)
+    expect(s.groups).not.toContain('Другое')
   })
-})
-
-describe('pieParts', () => {
-  it('больше 9 срезов — хвост в «Другое»', () => {
-    const xs = Array.from({ length: 12 }, (_, i) => `x${i}`)
-    const p = pieParts({ xs, value: x => 12 - Number(x.slice(1)) })
-    expect(p).toHaveLength(9)
-    expect(p.at(-1)).toEqual({ x: 'Другое', v: 4 + 3 + 2 + 1 })
+  it('месяц, где сумма только по пустым ячейкам, на ось не попадает', () => {
+    const rs = [{ id: 1, d: '2024-01-05', m: 3 }, { id: 2, d: '2024-05-01', m: null }]
+    expect(series(rs, F, { x: 'd', bucket: 'month', y: { agg: 'sum', col: 'm' } }).xs).toEqual(['2024-01'])
+    expect(series(rs, F, { x: 'd', bucket: 'month', y: { agg: 'count', col: null } }).xs).toEqual(['2024-01', '2024-05'])
   })
 })
