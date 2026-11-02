@@ -176,3 +176,16 @@ def test_airtable_view_settings_survive_save(tables):
     assert a.patch(f"/api/views/{vid}", json={"config": cfg}).status_code == 200
     assert a.get(f"/api/tables/{tables['eq']}/views").json()[0]["config"] == cfg
     assert a.patch(f"/api/views/{vid}", json={"config": {"summary": {"nope": "sum"}}}).status_code == 422
+
+
+def test_gallery_view_listed_with_kind_and_cover(tables):
+    """Галереи из Airtable отдаются вместе с табличными видами; обложка — колонка таблицы, иначе 422."""
+    with engine.begin() as c:
+        c.execute(text("insert into app_view (table_id, title, kind, config) values (:t, 'Галерея', 'gallery', "
+                       "'{\"columns\": [\"name\"], \"cover\": \"name\"}')"), {"t": tables["eq"]})
+    u = as_user("u", "user")
+    got = u.get(f"/api/tables/{tables['eq']}/views").json()
+    g = next(v for v in got if v["title"] == "Галерея")
+    assert g["kind"] == "gallery" and g["config"]["cover"] == "name"
+    assert create(u, tables["eq"], config={"cover": "nosuch"}).status_code == 422
+    assert create(u, tables["eq"], config={"cover": "name"}).status_code == 200

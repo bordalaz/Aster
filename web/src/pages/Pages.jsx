@@ -3,7 +3,7 @@ import { api } from '../api.js'
 import { displayValue, kindOf, NUMBER as NUM, sortKey } from '../grid/cells.js'
 import { rowColor } from '../grid/layout.js'
 import { choiceColor } from '../grid/renderers.js'
-import { applyFilters, LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
+import { applyFilters, LIST_OPS, NO_VALUE, OPS, sortRows } from '../grid/viewConfig.js'
 import FieldEditor from '../card/fields.jsx'
 import Comments from '../card/Comments.jsx'
 import { DownloadAll } from '../files/Files.jsx'
@@ -79,20 +79,6 @@ function Page({ id }) {
       {!ready ? <p>Загрузка данных…</p> : <Rows rows={cfg.rows} data={data} rowsFor={rowsFor} />}
     </section>
   )
-}
-
-// Сортировка как у вида: по каждому ключу, начиная с младшего; сравнение показанных значений.
-function sortRows(rows, fields, sort) {
-  const out = [...rows]
-  for (const s of [...sort].reverse()) {
-    const f = fields[s.col]
-    if (!f) continue
-    out.sort((a, b) => {
-      const d = sortKey(f, a[s.col]).localeCompare(sortKey(f, b[s.col]), 'ru', { numeric: true })
-      return s.desc ? -d : d
-    })
-  }
-  return out
 }
 
 // «Список + карточка», как в Airtable: слева записи (фильтр и сортировка страницы), справа выбранная —
@@ -173,13 +159,7 @@ function Gallery({ cfg, data }) {
           {g.cover && <Carousel files={r[g.cover]} height={147} dots />}
           <div className="gl-body">
             <button type="button" className="gl-name" onClick={e => { e.stopPropagation(); setOpen(r.id) }}>{title(r)}</button>
-            {g.fields.filter(c => t.fields[c]).map(c => (
-              <div key={c} className="gl-val">{r[c] == null || r[c] === '' || (Array.isArray(r[c]) && !r[c].length)
-                ? <span className="gl-blank" aria-label={`${t.fields[c].title}: пусто`} />
-                : t.fields[c].kind === 'multipleRecordLinks'
-                  ? [].concat(r[c]).map(v => <span key={v.id ?? v} className="pill gl-link">{v.name ?? v}</span>)
-                  : <Value field={t.fields[c]} value={r[c]} />}</div>
-            ))}
+            {g.fields.filter(c => t.fields[c]).map(c => <div key={c} className="gl-val"><CardValue field={t.fields[c]} value={r[c]} /></div>)}
           </div>
         </article>
       ))}
@@ -212,14 +192,15 @@ function PageField({ field, record, onSave }) {
 }
 
 // Фото записи по одному, как карусель Airtable: вписаны в рамку, листаются стрелками.
-function Carousel({ files, height, dots = false }) {
+export function Carousel({ files, height, dots = false }) {
   const imgs = (files ?? []).filter(f => /^image\//.test(f.mime ?? ''))
   const [i, setI] = useState(0)
-  if (!imgs.length) return <div className="lc-carousel empty" style={{ height }}>Нет фото</div>
+  // на карточке галереи — пустая серая обложка, как в Airtable
+  if (!imgs.length) return <div className="lc-carousel empty" style={{ height }}>{dots ? null : 'Нет фото'}</div>
   const f = imgs[Math.min(i, imgs.length - 1)]
   return (
     <div className="lc-carousel" style={{ height }}>
-      <img src={`/api/attachments/${f.id}?inline=1`} alt={f.name} />
+      <img src={`/api/attachments/${f.id}?inline=1`} alt={f.name} loading="lazy" />
       {imgs.length > 1 && <>
         <button type="button" className="lc-prev" aria-label="Предыдущее фото" onClick={e => { e.stopPropagation(); setI((i + imgs.length - 1) % imgs.length) }}>‹</button>
         <button type="button" className="lc-next" aria-label="Следующее фото" onClick={e => { e.stopPropagation(); setI((i + 1) % imgs.length) }}>›</button>
@@ -231,14 +212,23 @@ function Carousel({ files, height, dots = false }) {
   )
 }
 
+// Значение на карточке галереи, как в Airtable: пусто — серая черта, связи — плашки, галочка — ✓.
+export function CardValue({ field, value }) {
+  if (value == null || value === '' || (Array.isArray(value) && !value.length)) return <span className="gl-blank" aria-label={`${field.title}: пусто`} />
+  if (field.kind === 'multipleRecordLinks') return [].concat(value).map(v => <span key={v.id ?? v} className="pill gl-link">{v.name ?? v}</span>)
+  if (kindOf(field) === 'checkbox') return value ? <span className="link-card-check" aria-label="да">✓</span> : <span className="gl-blank" />
+  if (field.kind === 'multipleAttachments') return <span>{value.length} файл.</span>
+  return <span className="gl-text"><Value field={field} value={value} /></span>
+}
+
 // Значение в списке: у полей выбора — плашки цвета варианта, как в Airtable; остальное — текстом.
-function Value({ field, value }) {
+export function Value({ field, value }) {
   const choices = field.options?.choices ?? field.options?.result?.options?.choices
   if (!choices || value == null || value === '') return displayValue(field, value)
   const color = Object.fromEntries(choices.map(c => [c.name, c.color]))
   return [].concat(value).map(v => {
     const c = choiceColor(color[v])
-    return <span key={v} className="pill" style={{ background: c.bg, color: c.fg }}>{v}</span>
+    return <span key={v} className="pill" style={{ background: c.bg, color: c.fg, borderRadius: 999 }}>{v}</span>
   })
 }
 
