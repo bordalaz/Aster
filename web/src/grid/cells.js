@@ -20,6 +20,36 @@ export function kindOf(field) {
   return field.kind
 }
 
+// Даты как в Airtable у владельца (сверено в живом Airtable 2026-11-02): local — «23.3.2018»,
+// friendly — «23 Ноября 2021 г.»; время 24hour — «20:30», 12hour — «3:58дня»; дата и время — «23.3.2018 20:30».
+// Зона: utc — по UTC, client — браузера, иначе — указанная в поле.
+export const DATE_KINDS = new Set(['date', 'dateTime', 'createdTime', 'lastModifiedTime'])
+const MONTHS = ['Января', 'Февраля', 'Марта', 'Апреля', 'Мая', 'Июня', 'Июля', 'Августа', 'Сентября', 'Октября', 'Ноября', 'Декабря']
+const fmtOpts = f => f.options?.result?.options ?? f.options ?? {}   // у формул, createdTime, lastModifiedTime — в result
+const pad2 = x => String(x).padStart(2, '0')
+const meridiem = h => (h < 4 ? 'ночи' : h < 12 ? 'утра' : h < 17 ? 'дня' : 'вечера')   // как moment ru
+
+export function dateText(field, value) {
+  const o = fmtOpts(field)
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
+  let y, m, d, h, mi
+  if (dateOnly) [y, m, d] = value.split('-').map(Number)
+  else {
+    const t = new Date(value)
+    if (Number.isNaN(t.getTime())) return String(value)
+    const timeZone = o.timeZone === 'utc' ? 'UTC' : o.timeZone && o.timeZone !== 'client' ? o.timeZone : undefined
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric',
+      day: 'numeric', hour: 'numeric', minute: 'numeric' }).formatToParts(t).map(x => [x.type, x.value]))
+    ;[y, m, d, h, mi] = [p.year, p.month, p.day, p.hour, p.minute].map(Number)
+  }
+  const f = o.dateFormat?.name
+  const date = f === 'friendly' ? `${d} ${MONTHS[m - 1]} ${y} г.` : f === 'us' ? `${m}/${d}/${y}`
+    : f === 'european' ? `${d}/${m}/${y}` : f === 'iso' ? `${y}-${pad2(m)}-${pad2(d)}` : `${d}.${m}.${y}`
+  if (dateOnly || h == null || !o.timeFormat) return date
+  const time = o.timeFormat.name === '12hour' ? `${h % 12 || 12}:${pad2(mi)}${meridiem(h)}` : `${pad2(h)}:${pad2(mi)}`
+  return `${date} ${time}`
+}
+
 // Длительность Airtable хранит секундами, показывает «ч:мм» (или «ч:мм:сс»).
 const durFormat = f => (COMPUTED.has(f.kind) ? f.options?.result?.options : f.options)?.durationFormat ?? 'h:mm'
 
@@ -56,11 +86,18 @@ function asText(field, value) {
   if (typeof value === 'object' && !Array.isArray(value) && value.name) return value.name   // пользователь Airtable
   if (Array.isArray(value)) return value.map(v => asText(field, v)).filter(Boolean).join(', ')
   if (typeof value === 'number') return numText(field, value)
+  if (DATE_KINDS.has(kindOf(field)) && typeof value === 'string') return dateText(field, value)
   return String(value)
 }
 
 export function displayValue(field, value) {
   return asText(field, value) || '—'
+}
+
+// Ключ для сортировки групп и строк: у дат — сырое ISO (по показанному «23.3.2018» порядок сломается), иначе — текст.
+export function sortKey(field, value) {
+  const v = Array.isArray(value) ? value[0] : value
+  return DATE_KINDS.has(kindOf(field)) && typeof v === 'string' ? v : displayValue(field, value)
 }
 
 const SELECT = new Set(['singleSelect', 'multipleSelects'])
@@ -101,6 +138,9 @@ export function toCell(field, value) {
     }
   }
   const text = asText(field, value)
+  if (DATE_KINDS.has(kind) && typeof value === 'string') {   // правится ISO, показывается как в Airtable
+    return { kind: GridCellKind.Text, data: value, displayData: text, allowOverlay: editable }
+  }
   return { kind: GridCellKind.Text, data: text, displayData: text, allowOverlay: editable }
 }
 

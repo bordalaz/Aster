@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
-import { displayValue, kindOf, NUMBER as NUM } from '../grid/cells.js'
+import { displayValue, kindOf, NUMBER as NUM, sortKey } from '../grid/cells.js'
 import { rowColor } from '../grid/layout.js'
 import { choiceColor } from '../grid/renderers.js'
 import { applyFilters, LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
@@ -87,7 +87,7 @@ function sortRows(rows, fields, sort) {
     const f = fields[s.col]
     if (!f) continue
     out.sort((a, b) => {
-      const d = displayValue(f, a[s.col]).localeCompare(displayValue(f, b[s.col]), 'ru', { numeric: true })
+      const d = sortKey(f, a[s.col]).localeCompare(sortKey(f, b[s.col]), 'ru', { numeric: true })
       return s.desc ? -d : d
     })
   }
@@ -300,9 +300,9 @@ function PageGrid({ el, fields, rows }) {
       })
     }
     const f = fields[g.col]
-    const by = new Map()
-    for (const r of rs) { const k = displayValue(f, r[g.col]); by.set(k, [...(by.get(k) ?? []), r]) }
-    const keys = [...by.keys()].sort((a, b) => (a === '—') - (b === '—') || a.localeCompare(b, 'ru', { numeric: true }) * (g.desc ? -1 : 1))
+    const by = new Map(), sk = new Map()
+    for (const r of rs) { const k = displayValue(f, r[g.col]); by.set(k, [...(by.get(k) ?? []), r]); sk.has(k) || sk.set(k, sortKey(f, r[g.col])) }
+    const keys = [...by.keys()].sort((a, b) => (a === '—') - (b === '—') || sk.get(a).localeCompare(sk.get(b), 'ru', { numeric: true }) * (g.desc ? -1 : 1))
     return keys.flatMap(k => [
       <tr key={`g${depth}:${k}`} className="dash-group">
         <th style={{ paddingLeft: 8 + depth * 16 }}><small>{f.title}</small>{k} <span>{by.get(k).length}</span></th>
