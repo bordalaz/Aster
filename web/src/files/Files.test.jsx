@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { server } from '../test/server.js'
 import Card from '../card/Card.jsx'
 import Forms from '../forms/Forms.jsx'
+import Files from './Files.jsx'
 
 const photo = { column_name: 'ph', title: 'Фото', kind: 'multipleAttachments', editable: false, options: {} }
 const name = { column_name: 'n', title: 'Название', kind: 'singleLineText', editable: true, options: {} }
@@ -55,4 +56,12 @@ test('форма: файлы загружаются заранее, в отпр�
   await userEvent.click(screen.getByRole('button', { name: 'Отправить' }))
   await screen.findByText('Принято')
   expect(posts[0].values).toEqual({ ph: [41] })
+})
+
+test('«Скачать все (N)» — ZIP поля, только если файлов больше одного', () => {
+  const two = [{ id: 1, name: 'a.jpg', size: 10 }, { id: 2, name: 'b.jpg', size: 20 }]
+  const { rerender } = render(<Files title="Фото" files={two} zipUrl="/api/tables/5/records/7/attachments/foto/zip" />)
+  expect(screen.getByRole('link', { name: 'Скачать все (2)' })).toHaveAttribute('href', '/api/tables/5/records/7/attachments/foto/zip')
+  rerender(<Files title="Фото" files={two.slice(0, 1)} zipUrl="/x" />)
+  expect(screen.queryByRole('link', { name: /Скачать все/ })).toBeNull()
 })

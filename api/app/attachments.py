@@ -5,11 +5,14 @@
 import logging
 import mimetypes
 import os
+import tempfile
 import uuid
+import zipfile
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -95,6 +98,45 @@ def download(att_id: int, inline: bool = False, user: dict = Depends(active_user
                         filename=row.filename or "файл", content_disposition_type="inline" if show else "attachment",
                         headers={"X-Content-Type-Options": "nosniff",
                                  "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self'; object-src 'self'"})
+
+
+@router.get("/tables/{table_id}/records/{record_id}/attachments/{column}/zip")
+def download_all(table_id: int, record_id: int, column: str, user: dict = Depends(active_user)):
+    """«Скачать все» (Download all в Airtable): файлы поля записи одним ZIP, права — как на чтение записи."""
+    with engine.connect() as c:
+        title = table_title(c, table_id, user)
+        if column in hidden_columns(c, user, table_id):
+            raise HTTPException(404, "Нет такого поля или записи")
+        t = c.execute(text("select pg_name, airtable_id from app_table where id = :t"), {"t": table_id}).first()
+        f = c.execute(text("select airtable_id, title from app_field where table_id = :t and column_name = :c and kind = :k"),
+                      {"t": table_id, "c": column, "k": ATTACH}).first()
+        rec = c.execute(text(f"select airtable_id from {t.pg_name} where id = :r"), {"r": record_id}).scalar() if f else None
+        if rec is None:
+            raise HTTPException(404, "Нет такого поля или записи")
+        files = c.execute(text("select filename, path from attachment where table_id = :t and record_airtable_id = :r "
+                               "and field_id = :f order by pos, id"), {"t": t.airtable_id, "r": rec, "f": f.airtable_id}).all()
+    if not files:
+        raise HTTPException(404, "В поле нет файлов")
+    # ponytail: собираем во временный файл (в памяти до 32 МБ, дальше — на диске); фото уже сжаты — без сжатия
+    tmp = tempfile.SpooledTemporaryFile(max_size=32 * 1024 * 1024)
+    seen: dict[str, int] = {}
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
+        for name, rel in files:
+            path = ROOT / rel
+            if not path.is_file():
+                continue
+            name = os.path.basename(name or "файл") or "файл"   # имя из базы — только как имя, не путь
+            n = seen[name] = seen.get(name, 0) + 1
+            if n > 1:
+                stem, ext = os.path.splitext(name)
+                name = f"{stem} ({n}){ext}"
+            z.write(path, name)
+    tmp.seek(0)
+    out = f"{title} №{record_id} — {f.title}.zip".replace("/", "-")
+    log.info("скачать все: %s, таблица %s, запись %s, %s, файлов %d", user["login"], table_id, record_id, column, len(files))
+    return StreamingResponse(tmp, media_type="application/zip", headers={
+        "Content-Disposition": f"attachment; filename=\"files.zip\"; filename*=UTF-8''{quote(out)}",
+        "X-Content-Type-Options": "nosniff"})
 
 
 def values_for(c, table_at: str) -> dict:

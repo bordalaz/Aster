@@ -6,6 +6,7 @@ import { choiceColor } from '../grid/renderers.js'
 import { applyFilters, LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
 import FieldEditor from '../card/fields.jsx'
 import Comments from '../card/Comments.jsx'
+import { DownloadAll } from '../files/Files.jsx'
 import { Icon } from '../ui/icons.jsx'
 import { aggregate, applyConds, series } from './dash.js'
 import { BarChart, PieChart, Tile, colorsFor, fmt } from './charts.jsx'
@@ -153,7 +154,9 @@ function Gallery({ cfg, data }) {
             if (!f) return null
             return el.type === 'attachments'
               ? <div key={el.col} className="fld fld-inline"><span className="fld-label">{f.title}</span>
-                  <div className="fld-value"><Carousel files={record[el.col]} height={(el.h ?? 8) * UNIT} /></div></div>
+                  <div className="fld-value">
+                    {(record[el.col] ?? []).length > 1 && <DownloadAll url={`/api/tables/${g.table}/records/${record.id}/attachments/${el.col}/zip`} n={record[el.col].length} />}
+                    <Carousel files={record[el.col]} height={(el.h ?? 8) * UNIT} /></div></div>
               : <FieldEditor key={el.col} inline field={{ ...f, editable: false }} value={record[el.col]} onChange={() => {}} />
           })}
         </div>

@@ -1,4 +1,4 @@
-import { displayValue } from './cells.js'
+import { DATE_KINDS, dateParts, displayValue, kindOf } from './cells.js'
 
 // Условия фильтра; value не нужен для «пусто/не пусто».
 export const OPS = {
@@ -51,7 +51,9 @@ export function matches(field, value, { op, value: want }) {
     const b = w === 'true' || w === 'да'
     return op === 'eq' ? value === b : op === 'neq' ? value !== b : false
   }
-  const raw = typeof value === 'number' ? value : shown
+  // даты — по дню «YYYY-MM-DD» (у даты со временем — день в зоне поля), а не по показанному «22.8.2024»
+  const day = DATE_KINDS.has(kindOf(field)) && dateParts(field, Array.isArray(value) ? value[0] : value)
+  const raw = typeof value === 'number' ? value : day ? `${day.y}-${String(day.m).padStart(2, '0')}-${String(day.d).padStart(2, '0')}` : shown
   if (op === 'eq') return compare(raw, w) === 0
   if (op === 'neq') return compare(raw, w) !== 0
   if (isEmpty(value)) return false
