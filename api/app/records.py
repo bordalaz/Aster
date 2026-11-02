@@ -35,7 +35,10 @@ def load_table(c, table_id: int):
 
 # ponytail: отдаём все строки сразу (13,6 тыс. ≈ 3 МБ JSON) — сетке нужен весь набор; постранично — если упрёмся
 @router.get("/{table_id}/records")
-def list_records(table_id: int, user: dict = Depends(active_user)):
+def list_records(table_id: int, fresh: bool = False, user: dict = Depends(active_user)):
+    """fresh — после правки: дождаться пересчёта вычисляемых полей (не дольше 20 с), отдать свежие."""
+    if fresh:
+        computed.settle(20)
     with engine.connect() as c:
         table_title(c, table_id, user)
         t, fields = load_table(c, table_id)
@@ -120,7 +123,7 @@ def create_record(table_id: int, user: dict = Depends(active_user)):
         row = c.execute(insert(t).values(**extra, updated_by=user["id"]).returning(t.c.id, t.c.updated_at)).first()
         c.execute(text("insert into app_change (table_id, record_id, column_name, old, new, user_id) "
                        "values (:t, :r, 'id', null, to_jsonb(:r), :u)"), {"t": table_id, "r": row.id, "u": user["id"]})
-    computed.invalidate()
+    computed.invalidate(full=True)   # новая запись — во всех формулах таблицы и итогах по связям
     return {"id": row.id, "updated_at": row.updated_at}
 
 

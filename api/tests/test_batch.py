@@ -56,10 +56,10 @@ def test_invalidate_coalesces(monkeypatch):
     """Много правок подряд — не по пересчёту на каждую: идущий расчёт + не больше одного следующего."""
     calls, gate = [], threading.Event()
 
-    def slow():
+    def slow(full=True):
         calls.append(1)
         gate.wait(5)
-        return {"n": len(calls)}
+        return {"n": len(calls)}, 0
 
     monkeypatch.setattr(computed, "_compute", slow)
     for _ in range(50):
@@ -69,3 +69,11 @@ def test_invalidate_coalesces(monkeypatch):
     computed.wait()
     assert len(calls) == 2
     assert computed._values == {"n": 2}   # последний расчёт видел все правки
+
+
+def test_settle_waits_for_recompute(monkeypatch):
+    """GET /records?fresh=1 после правки ждёт конца пересчёта — сетка получает свежие формулы."""
+    monkeypatch.setattr(computed, "_compute", lambda full=True: (time.sleep(0.2), ({"n": 1}, 0))[1])
+    computed.invalidate()
+    computed.settle(5)
+    assert not computed._running and computed._values == {"n": 1}

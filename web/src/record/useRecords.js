@@ -3,9 +3,9 @@ import { api } from '../api.js'
 
 // Виртуальные поля, которые API отдаёт: вычисляемые (считает сам), связи (названиями), вложения.
 const SERVED = new Set(['formula', 'rollup', 'multipleLookupValues', 'count', 'multipleRecordLinks', 'multipleAttachments'])
-// Сервер пересчитывает формулы в фоне (~6 с на всю базу) — после правки перечитываем строки.
-// ponytail: фиксированная задержка; если пересчёт станет дольше — отдавать версию расчёта и ждать её
-const REFRESH_MS = 7000
+// Сервер пересчитывает зависящие от правки формулы в фоне (обычно < 1 с) — после правки перечитываем
+// строки с ?fresh=1: сервер отвечает, когда пересчёт закончен. Пауза склеивает серию правок в одно чтение.
+const REFRESH_MS = 300
 
 // Поля таблицы + строки + точечный PATCH.
 export function useRecords(tableId, refreshMs = REFRESH_MS) {
@@ -28,7 +28,7 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
 
   // тихо, без «Загрузка…»: строки меняются на месте
   const refreshRows = useCallback(async () => {
-    setRows(await api(`/api/tables/${tableId}/records`))
+    setRows(await api(`/api/tables/${tableId}/records?fresh=1`))
   }, [tableId])
   const timer = useRef(null)
   useEffect(() => () => clearTimeout(timer.current), [])
