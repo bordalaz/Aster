@@ -104,7 +104,8 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
         <div style={{ flex: 1, minWidth: 0 }}>
           <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
-            onAdd={fields.some(f => f.editable) ? addRecord : undefined} />
+            onAdd={fields.some(f => f.editable) ? addRecord : undefined}
+            collapseKey={`aster.collapsed.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`} />
         </div>
       </div>
       {open && (() => {

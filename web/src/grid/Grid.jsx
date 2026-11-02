@@ -50,7 +50,7 @@ const ROW_H = { small: 32, medium: 56, large: 88, xlarge: 128 }, GROUP_H = 44, N
 // Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
 // Без onConfigChange (тесты, простые места) держит конфиг сама. search — поиск из панели вида.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd }) {
+  search = '', exportRef, onAdd, collapseKey }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -83,7 +83,13 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // Группировка (R9) и строка итогов, закреплённая внизу.
   const groupFields = useMemo(() => groupCols(config.group).map(c => fields.find(f => f.column_name === c)).filter(Boolean),
     [config.group, fields])
-  const [collapsed, setCollapsed] = useState(new Set())
+  // Свёрнутые группы помнятся по виду у пользователя в браузере, как в Airtable (collapseKey — таблица+вид).
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(collapseKey)) ?? []) } catch { return new Set() }
+  })
+  useEffect(() => {
+    if (collapseKey) try { localStorage.setItem(collapseKey, JSON.stringify([...collapsed])) } catch { /* приватный режим */ }
+  }, [collapseKey, collapsed])
   const items = useMemo(() => groupRows(shownRows, groupFields, collapsed), [shownRows, groupFields, collapsed])
   // Итоги как у Airtable по умолчанию: суммы только у числовых полей, остальное пусто; слева — число записей.
   // Итоги внизу — по настройке вида, как в Airtable; у «Все записи» (своего вида в Airtable нет) — суммы чисел.
