@@ -5,12 +5,13 @@ import TableView from './grid/TableView.jsx'
 import Users from './users/Users.jsx'
 import Forms from './forms/Forms.jsx'
 import Pages from './pages/Pages.jsx'
+import Trash from './trash/Trash.jsx'
 import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
 import { Icon } from './ui/icons.jsx'
 
 // Профиль, как в Airtable: кружок с инициалом → имя, «Пользователи» (админы), «Сменить пароль», «Выйти».
-function ProfileMenu({ user, isAdmin, onUsers, onPassword, onLogout }) {
+function ProfileMenu({ user, isAdmin, onUsers, onTrash, onPassword, onLogout }) {
   const [open, setOpen] = useState(false)
   const box = useRef(null)
   useEffect(() => {
@@ -30,6 +31,7 @@ function ProfileMenu({ user, isAdmin, onUsers, onPassword, onLogout }) {
           <div className="profile-head"><strong>{user?.name}</strong><span>{user?.login}</span></div>
           <div className="sep" />
           {isAdmin && <button role="menuitem" onClick={go(onUsers)}><Icon name="users" />Пользователи</button>}
+          {isAdmin && <button role="menuitem" onClick={go(onTrash)}><Icon name="trash" />Корзина</button>}
           <button role="menuitem" onClick={go(onPassword)}><Icon name="key" />Сменить пароль</button>
           <div className="sep" />
           <button role="menuitem" onClick={go(onLogout)}><Icon name="signOut" />Выйти</button>
@@ -78,7 +80,7 @@ export default function Workspace({ user, onLogout }) {
           <button aria-current={section('forms')} onClick={() => setScreen('forms')}>Формы</button>
         </nav>
         <div className="right">
-          <ProfileMenu user={user} isAdmin={isAdmin} onUsers={() => setScreen('users')} onPassword={() => setScreen('password')} onLogout={onLogout} />
+          <ProfileMenu user={user} isAdmin={isAdmin} onUsers={() => setScreen('users')} onTrash={() => setScreen('trash')} onPassword={() => setScreen('password')} onLogout={onLogout} />
         </div>
       </header>
       {screen === 'table' && <TableTabs tables={tables} activeId={activeId} onPick={setActiveId}
@@ -91,6 +93,7 @@ export default function Workspace({ user, onLogout }) {
         {screen === 'forms' && <Forms />}
         {screen === 'calibration' && <Calibration user={user} />}
         {screen === 'users' && <Users me={user} />}
+        {screen === 'trash' && isAdmin && <Trash user={user} />}
         {screen === 'password' && <ChangePassword onDone={() => setScreen('table')} onCancel={() => setScreen('table')} />}
         {screen === 'table' && active && <TableView key={activeId} user={user} tableId={activeId} title={active.title}
           primaryField={active.primary_field} openId={jump} onOpened={opened} onOpenLink={openLink} />}

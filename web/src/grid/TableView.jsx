@@ -9,12 +9,14 @@ import { moveRows, orderRows } from './layout.js'
 import SendDialog from './SendDialog.jsx'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
-  const { fields, rows, loading, patch, patchMany, refresh } = useRecords(tableId)
+  const { fields, rows, loading, patch, patchMany, refresh, dropRows } = useRecords(tableId)
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
   const [order, setOrder] = useState([])   // id строк сетки по порядку — для ▲▼ в карточке
   const openRow = useCallback((row, ids) => { setOpen(row); if (ids) setOrder(ids) }, [])
   const [error, setError] = useState('')
   const [sending, setSending] = useState(null)   // {rows, columns} — окно «Отправить запись»
+  const [asking, setAsking] = useState(null)     // строки — «Удалить N записей?»
+  const [undo, setUndo] = useState(null)         // {trash: [...], n} — «Запись удалена · Отменить» на 10 с
   const [views, setViews] = useState([])
   const [current, setCurrent] = useState(null)   // id вида; null — «Все записи»
   const [config, setConfig] = useState({})
@@ -133,6 +135,29 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
     } catch { setError('Не удалось дублировать запись') }
   }
 
+  // Удаление — в корзину (решения владельца): одна запись — сразу, несколько — после вопроса; 10 с «Отменить».
+  async function remove(rs) {
+    setError(''); setAsking(null)
+    try {
+      const { trash } = await api(`/api/tables/${tableId}/records/delete`, { method: 'POST', body: { ids: rs.map(r => r.id) } })
+      if (open && rs.some(r => r.id === open.id)) setOpen(null)
+      setUndo({ trash, n: rs.length })
+      dropRows(rs.map(r => r.id))
+      await refresh()
+    } catch { setError(rs.length > 1 ? 'Не удалось удалить записи' : 'Не удалось удалить запись') }
+  }
+  useEffect(() => {
+    if (!undo) return
+    const t = setTimeout(() => setUndo(null), 10000)
+    return () => clearTimeout(t)
+  }, [undo])
+  async function restore() {
+    const u = undo
+    setUndo(null)
+    try { await api('/api/trash/restore', { method: 'POST', body: { ids: u.trash } }); await refresh(false); refresh() }
+    catch { setError('Не удалось вернуть — запись в корзине, её можно восстановить оттуда') }
+  }
+
   if (loading) return <div style={{ padding: 16 }}>Загрузка…</div>
 
   return (
@@ -158,9 +183,28 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             onInsert={fields.some(f => f.editable) ? insertNear : undefined}
             onDuplicate={fields.some(f => f.editable) ? duplicate : undefined}
             onSend={(rs, columns) => setSending({ rows: rs, columns })}
+            onDelete={fields.some(f => f.editable) ? rs => (rs.length > 1 ? setAsking(rs) : remove(rs)) : undefined}
             collapseKey={`aster.collapsed.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`} />
         </div>
       </div>
+      {asking && (
+        <div className="card-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setAsking(null) }}>
+          <div className="confirm" role="alertdialog" aria-modal="true" aria-label="Удалить записи">
+            <h2>Удалить {asking.length} {asking.length % 10 === 1 && asking.length % 100 !== 11 ? 'запись' : [2, 3, 4].includes(asking.length % 10) && ![12, 13, 14].includes(asking.length % 100) ? 'записи' : 'записей'}?</h2>
+            <p>Записи уйдут в корзину — их можно будет восстановить в течение года.</p>
+            <div className="send-foot">
+              <button type="button" className="btn" autoFocus onClick={() => setAsking(null)}>Отмена</button>
+              <button type="button" className="btn danger-fill" onClick={() => remove(asking)}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {undo && (
+        <div className="toast" role="status">
+          <span>{undo.n === 1 ? 'Запись удалена' : `Удалено записей: ${undo.n}`}</span>
+          <button type="button" onClick={restore}>Отменить</button>
+        </div>
+      )}
       {sending && <SendDialog tableId={tableId} table={title} rows={sending.rows} columns={sending.columns} fields={fields}
         user={user} onClose={() => setSending(null)} />}
       {open && (() => {
