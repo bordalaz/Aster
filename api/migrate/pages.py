@@ -45,9 +45,13 @@ def _element(e: dict, tables: dict, cols: dict, names: dict) -> dict:
         else:
             x, y, group = d.get("xAxisColumnId"), d.get("yAxis") or {}, cols.get(d.get("yAxisGroupColumnId"))
             bucket = BUCKET.get(d.get("xAxisDateBucketUnit"))
+        cs = d.get("colorScheme") or {}
         out = {"type": "chart", "kind": d["type"], "table": base["table"], "title": e.get("title"),
                "x": cols.get(x), "bucket": bucket, "group": group, "y": _agg(y, cols),
-               "empty": bool(d.get("shouldIncludeEmpty")), "filter": base["filter"]}
+               "empty": bool(d.get("shouldIncludeEmpty")), "filter": base["filter"],
+               # палитра графика Airtable: схема + цвет одиночной серии; fieldColors — цвета вариантов поля
+               "colors": {"scheme": cs.get("colorSchemeName", "airtable"), "primary": cs.get("primaryColorIndex", 3),
+                          "field": d.get("colorMode") == "fieldColors"}}
         if d["type"] == "pie":
             del out["bucket"], out["group"]
         return out

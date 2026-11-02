@@ -38,11 +38,11 @@ describe('дашборд: серии графика', () => {
   it('столбцы по X со стопкой по группе; пустые X — только если включены', () => {
     const s = series(R, F, { x: 'god', group: 'who', y: { agg: 'count', col: null }, empty: false })
     expect(s.xs).toEqual(['2024', '2025'])
-    expect(s.groups).toEqual(['ГПНХ', 'Роснефть', '(пусто)'])
+    expect(s.groups).toEqual(['(пусто)', 'ГПНХ', 'Роснефть'])   // «(пусто)» первым, как в Airtable
     expect(s.value('2024', 'ГПНХ')).toBe(2)
     expect(s.value('2024', 'Роснефть')).toBe(1)
     expect(s.value('2025', '(пусто)')).toBe(1)
-    expect(series(R, F, { x: 'god', y: { agg: 'count', col: null }, empty: true }).xs).toEqual(['2024', '2025', '(пусто)'])
+    expect(series(R, F, { x: 'god', y: { agg: 'count', col: null }, empty: true }).xs).toEqual(['(пусто)', '2024', '2025'])
   })
   it('даты по месяцам, сумма по полю', () => {
     const s = series(R, F, { x: 'd', bucket: 'month', y: { agg: 'sum', col: 'm' } })
@@ -60,5 +60,33 @@ describe('дашборд: серии графика', () => {
     const rs = [{ id: 1, d: '2024-01-05', m: 3 }, { id: 2, d: '2024-05-01', m: null }]
     expect(series(rs, F, { x: 'd', bucket: 'month', y: { agg: 'sum', col: 'm' } }).xs).toEqual(['2024-01'])
     expect(series(rs, F, { x: 'd', bucket: 'month', y: { agg: 'count', col: null } }).xs).toEqual(['2024-01', '2024-05'])
+  })
+})
+
+describe('дашборд: цвета и числа как в Airtable', () => {
+  it('серия i — scheme[i % n], одиночная серия — primary, fieldColors — цвет варианта', async () => {
+    const { colorsFor, SCHEMES } = await import('./charts.jsx')
+    const names = Array.from({ length: 8 }, (_, i) => `s${i}`)
+    expect(colorsFor(names, null, { scheme: 'airtable' })).toEqual([...SCHEMES.airtable, ...SCHEMES.airtable.slice(0, 2)])
+    expect(colorsFor([null], null, { scheme: 'airtable', primary: 3 })).toEqual(['#4787cd'])
+    const f = { options: { choices: [{ name: 'a', color: 'redBright' }] } }
+    expect(colorsFor(['a', 'b'], f, { scheme: 'category', field: true })[1]).toBe(SCHEMES.category[1])
+    expect(colorsFor(['a'], f, { scheme: 'category', field: true })[0]).not.toBe(SCHEMES.category[0])
+  })
+  it('деньги — с «,» по тысячам и точностью поля; десятичные — как есть; счётчики — с пробелом', async () => {
+    const { fmt } = await import('./charts.jsx')
+    expect(fmt({ kind: 'currency', options: { precision: 2, symbol: '' } }, 45684888.8, 'sum')).toBe('45,684,888.80')
+    expect(fmt({ kind: 'currency', options: { precision: 2, symbol: '$' } }, -1234.5, 'sum')).toBe('-$1,234.50')
+    expect(fmt({ kind: 'number', options: { precision: 2 } }, 1609452.8, 'sum')).toBe('1609452.80')
+    expect(fmt(null, 2301, 'count')).toBe((2301).toLocaleString('ru-RU'))
+  })
+})
+
+describe('дашборд: шкала', () => {
+  it('деления как у Airtable', async () => {
+    const { niceTicks } = await import('./charts.jsx')
+    expect(niceTicks(330)).toEqual([0, 50, 100, 150, 200, 250, 300, 350])
+    expect(niceTicks(45684888.8).at(-1)).toBe(50000000)
+    expect(niceTicks(27)).toEqual([0, 5, 10, 15, 20, 25, 30])
   })
 })

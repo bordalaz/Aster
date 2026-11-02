@@ -34,7 +34,14 @@ function keys(field, v, bucket) {
   return its.map(x => displayValue(field, x))
 }
 
-const cmp = (a, b) => (a === EMPTY) - (b === EMPTY) || a.localeCompare(b, 'ru', { numeric: true })
+// Порядок серий и оси, как в Airtable: «(пусто)» первым, у одиночного выбора — порядок вариантов
+// (множественный выбор и подстановки Airtable сортирует по алфавиту),
+// остальное — по алфавиту, латиница раньше кириллицы.
+const order = field => {
+  const pos = new Map((field?.kind === 'singleSelect' ? field.options?.choices ?? [] : []).map((c, i) => [c.name, i]))
+  return (a, b) => (b === EMPTY) - (a === EMPTY) || (pos.get(a) ?? Infinity) - (pos.get(b) ?? Infinity)
+    || a.localeCompare(b, 'en')   // без числового сравнения: «WPR 120» раньше «WPR 89», как в Airtable
+}
 
 // → { xs, groups, value(x, group) }. Без разбивки — одна серия, group = null.
 export function series(rows, fields, { x, bucket, group, y, empty }) {
@@ -52,9 +59,9 @@ export function series(rows, fields, { x, bucket, group, y, empty }) {
   // Корзина без единого числа (сумма по пустым ячейкам) не попадает на ось — Airtable её не рисует.
   const cell = new Map([...buckets].map(([k, rs]) => [k, aggregate(rs, fields[y.col], y.agg)]).filter(([, v]) => v != null))
   const part = (k, i) => k.split('\u0000')[i]
-  const xs = [...new Set([...cell.keys()].map(k => part(k, 0)))].sort(cmp)
+  const xs = [...new Set([...cell.keys()].map(k => part(k, 0)))].sort(order(bucket ? null : fields[x]))
   // Все серии, сколько есть, — как в Airtable; в «Другое» не сворачиваем.
-  const groups = group ? [...new Set([...cell.keys()].map(k => part(k, 1)))].sort(cmp) : [null]
+  const groups = group ? [...new Set([...cell.keys()].map(k => part(k, 1)))].sort(order(fields[group])) : [null]
   const value = (kx, kg) => cell.get(`${kx}\u0000${kg}`) ?? 0
   return { xs, groups, value }
 }

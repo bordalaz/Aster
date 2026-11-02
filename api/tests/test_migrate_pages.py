@@ -37,9 +37,10 @@ def test_dashboard_converted():
         {"id": "c1", "type": "chart", "query": _q(), "title": "По годам",
          "definition": {"type": "bar", "xAxisColumnId": "fldD", "xAxisDateBucketUnit": "yearMonth",
                         "yAxis": {"type": "column", "columnId": "fldM", "aggregationFunction": "sum"},
-                        "yAxisGroupColumnId": "fldC", "shouldIncludeEmpty": False}},
+                        "yAxisGroupColumnId": "fldC", "shouldIncludeEmpty": False,
+                        "colorScheme": {"colorSchemeName": "tableauExtended", "primaryColorIndex": 0}, "colorMode": "colorScheme"}},
         {"id": "c2", "type": "chart", "query": _q(), "definition": {
-            "type": "pie", "sliceColumnId": "fldC", "sliceArcLength": {"type": "rowCount"}}},
+            "type": "pie", "sliceColumnId": "fldC", "sliceArcLength": {"type": "rowCount"}, "colorMode": "fieldColors"}},
         {"id": "f1", "type": "filter", "tableId": "tblR", "label": {"isEnabled": True, "value": "Год"},
          "outputs": {"interactiveFilters": {"id": "peoA"}},
          "filters": {"conjunction": "and", "filterSet": [
@@ -63,7 +64,9 @@ def test_dashboard_converted():
     assert r1[1][0]["agg"] == "count" and r1[1][0]["col"] is None
     assert r2[0][0] == {"type": "chart", "kind": "bar", "table": 7, "title": "По годам", "x": "data", "bucket": "month",
                         "group": "zakazchik", "y": {"agg": "sum", "col": "metry"}, "empty": False,
-                        "filter": "peoA", "w": 6, "h": 6}
+                        "filter": "peoA", "colors": {"scheme": "tableauExtended", "primary": 0, "field": False},
+                        "w": 6, "h": 6}
+    assert r2[1][0]["colors"] == {"scheme": "airtable", "primary": 3, "field": True}   # по умолчанию — палитра Airtable
     assert r2[1][0]["kind"] == "pie" and r2[1][0]["x"] == "zakazchik" and r2[1][0]["y"] == {"agg": "count", "col": None}
 
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api.js'
 import { displayValue, kindOf, NUMBER as NUM } from '../grid/cells.js'
-import { rowColor, summarize } from '../grid/layout.js'
+import { rowColor } from '../grid/layout.js'
 import { LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
 import { aggregate, applyConds, series } from './dash.js'
 import { BarChart, PieChart, Tile, colorsFor, fmt } from './charts.jsx'
@@ -64,13 +64,11 @@ function Page({ id }) {
   }
   return (
     <section className="dash" aria-label={cfg.title}>
-      <header className="dash-head">
-        <h1>{cfg.title}</h1>
-        {cfg.filters.map(f => (
-          <FilterBar key={f.id} filter={f} fields={data[f.table]?.fields ?? {}} conds={conds[f.id]}
-            onChange={c => setConds(s => ({ ...s, [f.id]: c }))} />
-        ))}
-      </header>
+      {/* как в Airtable: заголовка нет (страница выбрана слева), фильтры — панелями над элементами */}
+      {cfg.filters.map(f => (
+        <FilterBar key={f.id} filter={f} fields={data[f.table]?.fields ?? {}} conds={conds[f.id]}
+          onChange={c => setConds(s => ({ ...s, [f.id]: c }))} onReset={() => setConds(s => ({ ...s, [f.id]: f.conds }))} />
+      ))}
       {!ready ? <p>Загрузка данных…</p> : <Rows rows={cfg.rows} data={data} rowsFor={rowsFor} />}
     </section>
   )
@@ -102,10 +100,14 @@ function Element({ el, fields, rows }) {
   return (
     <figure className="dash-card">
       {el.title && <figcaption>{el.title}</figcaption>}
-      {!s.xs.length ? <p className="dash-empty">Нет данных</p>
-        : el.kind === 'pie'
-          ? <PieChart s={s} colorsOf={xs => colorsFor(xs, fields[el.x])} show={show} height={height} />
-          : <BarChart s={s} colors={colorsFor(s.groups, fields[el.group])} show={show} height={height} />}
+      <div className="dash-card-body">
+        {!s.xs.length ? <p className="dash-empty">Нет данных</p>
+          : el.kind === 'pie'
+            ? <PieChart s={s} colorsOf={xs => colorsFor(xs, fields[el.x], el.colors)} show={show} height={height}
+                legendTitle={fields[el.x]?.title} />
+            : <BarChart s={s} colors={colorsFor(s.groups, fields[el.group], el.colors)} show={show} height={height}
+                legendTitle={fields[el.group]?.title} />}
+      </div>
     </figure>
   )
 }
@@ -124,13 +126,15 @@ function PageGrid({ el, fields, rows }) {
     return out
   }, [rows, el.sort, fields])
   const fs = Object.values(fields)
-  const sums = rs => cols.map(c => <td key={c} className="dash-sum">{NUM.has(kindOf(fields[c])) ? summarize(fields[c], rs, 'sum') : ''}</td>)
+  const sum = (f, rs) => rs.reduce((a, r) => a + (typeof r[f.column_name] === 'number' ? r[f.column_name] : 0), 0)
+  const sums = rs => cols.map(c => <td key={c} className="dash-sum">{NUM.has(kindOf(fields[c])) ? `Сумма ${fmt(fields[c], sum(fields[c], rs))}` : ''}</td>)
+  const cell = (f, v) => (typeof v === 'number' ? fmt(f, v) : displayValue(f, v))
   const body = (rs, levels, depth = 0) => {
     const [g, ...rest] = levels
     if (!g) {
       return rs.map(r => {
         const bar = rowColor(el.color, fs, r)
-        return <tr key={r.id}>{cols.map((c, i) => <td key={c} style={i === 0 && bar ? { boxShadow: `inset 4px 0 ${bar}` } : undefined}>{displayValue(fields[c], r[c])}</td>)}</tr>
+        return <tr key={r.id}>{cols.map((c, i) => <td key={c} style={i === 0 && bar ? { boxShadow: `inset 4px 0 ${bar}` } : undefined}>{cell(fields[c], r[c])}</td>)}</tr>
       })
     }
     const f = fields[g.col]
@@ -164,11 +168,16 @@ function PageGrid({ el, fields, rows }) {
 }
 
 // Фильтр страницы: условия из Airtable, значения правит зритель. Пустое значение — условие не действует.
-function FilterBar({ filter, fields, conds, onChange }) {
+// Панель фильтра, как в Airtable: подпись и «Сбросить» сверху, условия — «поле | оператор | значение».
+function FilterBar({ filter, fields, conds, onChange, onReset }) {
   const set = (i, value) => onChange(conds.map((c, j) => (j === i ? { ...c, value } : c)))
   return (
     <div className="dash-filter" role="group" aria-label={filter.label ?? 'Фильтр'}>
-      {filter.label && <span className="dash-filter-label">{filter.label}</span>}
+      <div className="dash-filter-head">
+        <span className="dash-filter-label">{filter.label}</span>
+        <button type="button" className="dash-reset" onClick={onReset}>Сбросить</button>
+      </div>
+      <div className="dash-filter-conds">
       {conds.map((c, i) => {
         const f = fields[c.col]
         if (!f) return null
@@ -177,7 +186,8 @@ function FilterBar({ filter, fields, conds, onChange }) {
         const val = Array.isArray(c.value) ? c.value.join('; ') : c.value ?? ''
         return (
           <label key={i} className="dash-cond">
-            <span>{f.title} {OPS[c.op]}</span>
+            <span className="dash-cond-field">{f.title}</span>
+            <span className="dash-cond-op">{OPS[c.op]}</span>
             {!NO_VALUE.has(c.op) && (choices.length && !list
               ? <select value={val} onChange={e => set(i, e.target.value || null)}>
                   <option value="">любое</option>
@@ -189,6 +199,7 @@ function FilterBar({ filter, fields, conds, onChange }) {
           </label>
         )
       })}
+      </div>
     </div>
   )
 }
