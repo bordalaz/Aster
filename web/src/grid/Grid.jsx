@@ -3,7 +3,7 @@ import { CompactSelection, DataEditor, GridCellKind } from '@glideapps/glide-dat
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { displayValue, isLink, kindOf, toCell, fromCell } from './cells.js'
-import { columnTotal, groupRows, orderRows, parsePastedBool, parsePastedNumber, rowColor, summarize, toCSV } from './layout.js'
+import { columnTotal, groupRows, moveRows, orderRows, parsePastedBool, parsePastedNumber, rowColor, summarize, toCSV } from './layout.js'
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 import { renderers, rownumHit, ROWNUM_W } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
@@ -20,6 +20,21 @@ function GroupMenu({ at, onClose, onToggle, onExpandAll, onCollapseAll }) {
         </button>
         <button role="menuitem" onClick={run(onExpandAll)}><Icon name="expandV" />Развернуть все</button>
         <button role="menuitem" onClick={run(onCollapseAll)}><Icon name="collapseV" />Свернуть все</button>
+      </div>
+    </>
+  )
+}
+
+// ПКМ по строке — меню записи, как в Airtable; по отмеченным строкам (больше одной) — действия над ними.
+function RowMenu({ at, onClose }) {
+  const run = fn => () => { onClose(); fn() }
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={e => { if (e.button === 0) onClose() }} onContextMenu={e => { e.preventDefault(); onClose() }} />
+      <div className="pop menu" role="menu" aria-label="Действия с записью" style={{ position: 'fixed', left: at.x, top: at.y, zIndex: 31 }}
+        onKeyDown={e => { if (e.key === 'Escape') onClose() }}>
+        {at.items.map((it, i) => (it === '-' ? <hr key={i} />
+          : <button key={it.label} role="menuitem" autoFocus={i === 0} onClick={run(it.run)}><Icon name={it.icon} />{it.label}</button>))}
       </div>
     </>
   )
@@ -62,8 +77,10 @@ function onText(cell, x) {
   return x >= 8 && x <= 8 + measureCtx.measureText(String(text)).width
 }
 
+// canReorder — можно двигать строки (вид без сортировки, правит тот, кто может менять вид); onReorder(ids) — новый порядок.
+// onInsert(row, 'above'|'below'|null), onDuplicate(row), onSend(rows, columns) — пункты меню записи.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd, collapseKey }) {
+  search = '', exportRef, onAdd, collapseKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -115,6 +132,10 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const [hoverRow, setHoverRow] = useState(null)      // строка под курсором — кнопка раскрытия, как в Airtable
   const [selection, setSelection] = useState({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
   const downCell = useRef(null)                       // выделенная ячейка до щелчка: второй щелчок по названию — карточка
+  const hoverX = useRef(0)                            // x курсора внутри ячейки — ручка/галочка/раскрытие в колонке номера
+  const [checked, setChecked] = useState(() => new Set())   // отмеченные галочками записи (id)
+  const [rowMenu, setRowMenu] = useState(null)        // {x, y, items}
+  const [drag, setDrag] = useState(null)              // {ids, from, group} — строки, которые тащат за ручку
   const [info, setInfo] = useState(null)             // описание поля по ⓘ в заголовке
   const allGroupIds = () => groupRows(shownRows, groupFields, new Set()).filter(i => i.kind === 'group').map(i => i.id)
   const toggleGroup = key => setCollapsed(prev => {
@@ -140,6 +161,17 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     width: widths[c.column_name] ?? (c.column_name === primaryField ? 260 : 160),
   }))], [cols, widths, primaryField])
   const nums = useMemo(() => { let n = 0; return items.map(i => (i.kind === 'row' ? ++n : null)) }, [items])
+  // группа каждой строки: двигать можно только внутри своей группы (куста), как в Airtable
+  const groupOf = useMemo(() => {
+    const path = []
+    return items.map(it => {
+      if (it.kind === 'group') { path.length = it.depth; path.push(it.id); return null }
+      return path.join('|')
+    })
+  }, [items])
+  const movable = canReorder && !config.sort?.length && !search
+  const shownIds = useMemo(() => new Set(shownRows.map(r => r.id)), [shownRows])
+  const checkedShown = [...checked].filter(id => shownIds.has(id))
   const fieldAt = ci => cols[ci - 1]
 
   const text = (t, bold) => ({ kind: GridCellKind.Text, data: t, displayData: t, allowOverlay: false, readonly: true,
@@ -156,14 +188,56 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           collapsed: it.collapsed, depth: it.depth } }
     }
     if (ci === 0) return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: String(nums[ri]),
-      data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row), hover: ri === hoverRow } }
+      data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row), hover: ri === hoverRow && !drag,
+        checked: checked.has(it.row.id), drag: movable } }
     const field = fieldAt(ci)
     const cell = toCell(field, it.row[field.column_name])
     // название в выделенной ячейке — синяя ссылка на карточку, как в Airtable
     if (ci === 1 && isSel(selection, ci, ri)) return { ...cell, themeOverride: { textDark: LINK_COLOR }, cursor: 'pointer' }
     return cell
-  }, [cols, items, totals, groupFields, nums, config.color, fields, hoverRow, selection])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cols, items, totals, groupFields, nums, config.color, fields, hoverRow, selection, checked, movable, drag])   // eslint-disable-line react-hooks/exhaustive-deps
   const rowAt = ri => (items[ri]?.kind === 'row' ? items[ri].row : null)
+  const toggleCheck = id => setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const allChecked = shownRows.length > 0 && checkedShown.length === shownRows.length
+
+  // Перетаскивание за ручку: цель — строка под курсором в той же группе; отмеченные галочками едут вместе.
+  const dropTarget = drag && rowAt(hoverRow) && !drag.ids.includes(rowAt(hoverRow).id) && groupOf[hoverRow] === drag.group ? hoverRow : null
+  useEffect(() => {
+    if (!drag) return
+    document.body.style.cursor = 'grabbing'
+    const up = () => {
+      document.body.style.cursor = ''
+      setDrag(null)
+      if (dropTarget == null) return
+      const all = orderRows(rows, config.rowOrder).map(r => r.id)
+      const next = moveRows(all, drag.ids, rowAt(dropTarget).id, dropTarget > drag.from)
+      patchConfig({ rowOrder: next })
+      onReorder?.(next)
+    }
+    window.addEventListener('pointerup', up)
+    return () => { window.removeEventListener('pointerup', up); document.body.style.cursor = '' }
+  }, [drag, dropTarget, rows, config.rowOrder])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // меню записи по ПКМ: несколько отмеченных — действия над ними; иначе — над строкой под курсором
+  const menuFor = row => {
+    const names = cols.map(c => c.column_name)
+    if (checked.has(row.id) && checkedShown.length > 1) {
+      const sel = shownRows.filter(r => checked.has(r.id))
+      return [onSend && { icon: 'send', label: 'Отправить выбранные (' + sel.length + ')', run: () => onSend(sel, names) }].filter(Boolean)
+    }
+    const ins = onInsert && (movable
+      ? [{ icon: 'arrowUp', label: 'Вставить запись выше', run: () => onInsert(row, 'above') },
+         { icon: 'arrowDown', label: 'Вставить запись ниже', run: () => onInsert(row, 'below') }]
+      : [{ icon: 'plus', label: 'Вставить запись', run: () => onInsert(row, null) }])
+    return [
+      ...(ins ?? []), ...(ins ? ['-'] : []),
+      onDuplicate && { icon: 'copy', label: 'Дублировать запись', run: () => onDuplicate(row) },
+      { icon: 'expand', label: 'Развернуть запись', run: () => onOpen(row, shownRows.map(r => r.id)) },
+      '-',
+      { icon: 'chat', label: 'Добавить комментарий', run: () => onOpen(row, shownRows.map(r => r.id)) },
+      onSend && { icon: 'send', label: 'Отправить запись', run: () => onSend([row], names) },
+    ].filter(Boolean)
+  }
 
   const onCellEdited = useCallback(([ci, ri], cell) => {
     const field = fieldAt(ci), row = rowAt(ri)
@@ -215,13 +289,39 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
       {/* ПКМ ловим на контейнере: в Glide 6.0.3 onCellContextMenu для мыши не срабатывает (слушатель вешается до появления элемента) */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}
-        onPointerDownCapture={() => { downCell.current = selection.current?.cell ?? null }} onContextMenu={e => {
+        onPointerDownCapture={() => { downCell.current = selection.current?.cell ?? null }}
+        onMouseDownCapture={e => {
+          const [ci, ri] = hovered.current ?? []
+          // ручка ⋮⋮ — начать перетаскивание; Glide этот щелчок не видит (иначе он начнёт выделять ячейки).
+          // Именно mousedown, не pointerdown: отмена pointerdown гасит и mousemove, по которым Glide ведёт курсор.
+          if (e.button === 0 && ci === 0 && rowAt(ri) && rownumHit(hoverX.current, { drag: movable }) === 'drag') {
+            e.preventDefault(); e.stopPropagation()
+            const id = rowAt(ri).id
+            const ids = checked.has(id)
+              ? items.filter((it, i) => it.kind === 'row' && checked.has(it.row.id) && groupOf[i] === groupOf[ri]).map(it => it.row.id)
+              : [id]
+            setDrag({ ids, from: ri, group: groupOf[ri] })
+          }
+        }} onContextMenu={e => {
         const [ci, ri] = hovered.current ?? []
         const it = items[ri]
-        if (ci === undefined || ci > 1 || it?.kind !== 'group') return
+        if (ci === undefined) return
+        if (it?.kind === 'row') {
+          e.preventDefault()
+          setRowMenu({ x: e.clientX, y: e.clientY, items: menuFor(it.row) })
+          return
+        }
+        if (ci > 1 || it?.kind !== 'group') return
         e.preventDefault()
         setGroupMenu({ x: e.clientX, y: e.clientY, id: it.id, collapsed: it.collapsed })
       }}>
+        {/* галочка «выбрать все» — в заголовке колонки номера, как в Airtable */}
+        <label className="grid-checkall" title={allChecked ? 'Снять все' : 'Выбрать все'}>
+          <input type="checkbox" aria-label="Выбрать все записи" checked={allChecked}
+            ref={el => { if (el) el.indeterminate = checkedShown.length > 0 && !allChecked }}
+            onChange={() => setChecked(allChecked ? new Set() : new Set(shownRows.map(r => r.id)))} />
+        </label>
+        {rowMenu && <RowMenu at={rowMenu} onClose={() => setRowMenu(null)} />}
         {info?.text && (
           <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setInfo(null)} />
@@ -243,13 +343,17 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           headerHeight={32}
           freezeTrailingRows={1}
           getCellContent={getCellContent}
-          getRowThemeOverride={ri => (ri === items.length ? { bgCell: '#ffffff', textDark: '#616670' } : undefined)}
+          getRowThemeOverride={ri => (ri === items.length ? { bgCell: '#ffffff', textDark: '#616670' }
+            : ri === dropTarget ? { bgCell: '#e8f0fe' }                                 // сюда встанут строки
+            : drag?.ids.includes(rowAt(ri)?.id) ? { bgCell: '#f5f6f8', textDark: '#a0a4ab' }
+            : rowAt(ri) && checked.has(rowAt(ri).id) ? { bgCell: '#f1f5ff' } : undefined)}
           onCellEdited={onCellEdited}
           onCellsEdited={onCellsEdited}
           coercePasteValue={coercePasteValue}
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
           onItemHovered={a => {
             hovered.current = a.kind === 'cell' ? a.location : null
+            hoverX.current = a.kind === 'cell' ? a.localEventX : 0
             const r = a.kind === 'cell' ? a.location[1] : null
             setHoverRow(h => (h === r ? h : r))
           }}
@@ -258,6 +362,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
             if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
             // карточка — по кнопке раскрытия у названия (как в Airtable), не по номеру строки
             else if (ci === 0 && rowAt(ri) && rownumHit(e.localEventX) === 'expand') onOpen(rowAt(ri), shownRows.map(r => r.id))
+            else if (ci === 0 && rowAt(ri) && rownumHit(e.localEventX) === 'check') toggleCheck(rowAt(ri).id)
             // щелчок по тексту названия в уже выделенной ячейке — карточка; первый щелчок только выделяет
             else if (ci === 1 && rowAt(ri) && downCell.current?.[0] === 1 && downCell.current?.[1] === ri
               && onText(getCellContent([ci, ri]), e.localEventX)) onOpen(rowAt(ri), shownRows.map(r => r.id))
@@ -285,7 +390,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       {/* нижняя полоса как в Airtable: «+ Добавить» и число записей — вне сетки, ничего не перекрывает */}
       <div className="grid-foot">
         {onAdd && <button className="add-row" onClick={onAdd}><Icon name="plus" size={14} />Добавить запись</button>}
-        <span role="status">{view.length} {plural(view.length)}</span>
+        <span role="status">{checkedShown.length ? 'Выбрано: ' + checkedShown.length + ' из ' + view.length : view.length + ' ' + plural(view.length)}</span>
       </div>
     </div>
   )

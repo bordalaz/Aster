@@ -243,3 +243,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .lc-prev { left: 8px; } .lc-next { right: 8px; }
 .lc-pos { position: absolute; bottom: 8px; right: 12px; background: rgb(0 0 0 / 0.45); color: #fff; border-radius: 10px; padding: 0 8px; font-size: 12px; }
 .lc-card .dash-col { gap: 12px; }
+.grid-checkall { position: absolute; left: 0; top: 0; width: 36px; height: 32px; display: flex; align-items: center; justify-content: center; z-index: 2; cursor: pointer; }
+.grid-checkall input { width: 14px; height: 14px; margin: 0 0 0 14px; accent-color: #166ee1; cursor: pointer; }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+/* «Отправить запись» — как окно Send record в Airtable */
+.send { position: relative; align-self: flex-start; width: min(560px, 100%); max-height: calc(100vh - 96px); overflow: auto; background: #fff; border-radius: 8px; padding: 24px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 32px rgb(0 0 0 / 0.2); }
+.send h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+.send-x { position: absolute; top: 12px; right: 12px; border: 0; background: none; font-size: 20px; color: var(--muted); cursor: pointer; }
+.send-lbl { font-size: 12px; color: var(--text2); margin-top: 6px; }
+.send-warn { background: #fff4e5; border: 1px solid #ffd59e; color: #7a4a00; border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+.send-preview { border: 1px solid var(--line); border-radius: 6px; max-height: 220px; overflow: auto; margin-top: 8px; padding: 8px 12px; background: #fafbfc; }
+.send-rec { padding: 4px 0 8px; border-bottom: 1px solid var(--grid); }
+.send-rec:last-child { border-bottom: 0; }
+.send-rec > div { padding: 3px 0; }
+.send-rec small { display: block; font-size: 11px; color: var(--muted); }
+.send-rec .send-title div { font-size: 15px; font-weight: 600; }
+.send-preview table { border-collapse: collapse; font-size: 12px; }
+.send-preview th, .send-preview td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.send-preview th { color: var(--text2); font-weight: 500; }
+.send-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 6px; cursor: pointer; }
+.send-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.send-done { margin: 12px 0; }

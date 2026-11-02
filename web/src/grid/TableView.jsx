@@ -4,7 +4,9 @@ import { useRecords } from '../record/useRecords.js'
 import Grid from './Grid.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
-import { visibleColumns } from './viewConfig.js'
+import { groupCols, visibleColumns } from './viewConfig.js'
+import { moveRows, orderRows } from './layout.js'
+import SendDialog from './SendDialog.jsx'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
   const { fields, rows, loading, patch, patchMany, refresh } = useRecords(tableId)
@@ -12,6 +14,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   const [order, setOrder] = useState([])   // id строк сетки по порядку — для ▲▼ в карточке
   const openRow = useCallback((row, ids) => { setOpen(row); if (ids) setOrder(ids) }, [])
   const [error, setError] = useState('')
+  const [sending, setSending] = useState(null)   // {rows, columns} — окно «Отправить запись»
   const [views, setViews] = useState([])
   const [current, setCurrent] = useState(null)   // id вида; null — «Все записи»
   const [config, setConfig] = useState({})
@@ -84,6 +87,52 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
     } catch { setError('Не удалось добавить запись') }
   }
 
+  // Ручной порядок: двигать строки может тот, кто меняет вид (общий — администратор, личный — владелец).
+  const view = views.find(v => v.id === current)
+  const isAdmin = user?.role === 'superadmin' || user?.role === 'admin'
+  const canReorder = !!view && (view.mine || (view.shared && isAdmin))
+  async function saveOrder(order) {
+    setError('')
+    try {
+      await api(`/api/views/${current}/row-order`, { method: 'PUT', body: { order } })
+      setViews(vs => vs.map(v => (v.id === current ? { ...v, config: { ...v.config, rowOrder: order } } : v)))   // вид не «изменён»
+    } catch { setError('Не удалось сохранить порядок записей') }
+  }
+
+  // Вставить выше/ниже (как в Airtable): новая запись встаёт рядом и в ту же группу — значения полей группировки копируются.
+  async function insertNear(row, where) {
+    setError('')
+    try {
+      const { id, updated_at } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      const group = Object.fromEntries(groupCols(config.group).filter(c => fields.find(f => f.column_name === c)?.editable).map(c => [c, row[c] ?? null]))
+      if (Object.keys(group).length) await patch({ id, updated_at }, group).catch(() => {})
+      if (where && canReorder) {
+        const all = [...orderRows(rows, config.rowOrder).map(r => r.id), id]
+        const order = moveRows(all, [id], row.id, where === 'below')
+        setConfig(c => ({ ...c, rowOrder: order }))
+        await saveOrder(order)
+      }
+      await refresh()
+    } catch { setError('Не удалось вставить запись') }
+  }
+
+  // Дублировать (как в Airtable): копия правимых полей встаёт сразу под исходной. Связи и вложения не копируются.
+  async function duplicate(row) {
+    setError('')
+    try {
+      const { id, updated_at } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      const values = Object.fromEntries(fields.filter(f => f.editable && !['multipleRecordLinks', 'multipleAttachments'].includes(f.kind)
+        && row[f.column_name] != null).map(f => [f.column_name, row[f.column_name]]))
+      if (Object.keys(values).length) await api(`/api/tables/${tableId}/records/${id}`, { method: 'PATCH', body: { updated_at, values } })
+      if (canReorder) {
+        const order = moveRows([...orderRows(rows, config.rowOrder).map(r => r.id), id], [id], row.id, true)
+        setConfig(c => ({ ...c, rowOrder: order }))
+        await saveOrder(order)
+      }
+      await refresh()
+    } catch { setError('Не удалось дублировать запись') }
+  }
+
   if (loading) return <div style={{ padding: 16 }}>Загрузка…</div>
 
   return (
@@ -105,9 +154,15 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
             onAdd={fields.some(f => f.editable) ? addRecord : undefined}
+            canReorder={canReorder} onReorder={saveOrder}
+            onInsert={fields.some(f => f.editable) ? insertNear : undefined}
+            onDuplicate={fields.some(f => f.editable) ? duplicate : undefined}
+            onSend={(rs, columns) => setSending({ rows: rs, columns })}
             collapseKey={`aster.collapsed.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`} />
         </div>
       </div>
+      {sending && <SendDialog tableId={tableId} table={title} rows={sending.rows} columns={sending.columns} fields={fields}
+        user={user} onClose={() => setSending(null)} />}
       {open && (() => {
         const record = rows.find(r => r.id === open.id) ?? open
         const i = order.indexOf(open.id)

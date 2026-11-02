@@ -154,3 +154,25 @@ def test_import_airtable_view_filters(loaded_fixture):
 ])
 def test_list_ops_strict(tables, config):
     assert create(as_user("u", "user"), tables["eq"], config=config).status_code == 422
+
+
+def test_row_order_saved_for_everyone_admins_only_on_shared(tables):
+    """Перетаскивание строк, как в Airtable: ручной порядок вида у всех; общий вид меняют администраторы."""
+    a = as_user("a", "admin")
+    vid = create(a, tables["eq"], title="Общий", shared=True).json()["id"]
+    assert a.put(f"/api/views/{vid}/row-order", json={"order": [3, 1, 2]}).status_code == 200
+    u = as_user("u", "user")
+    assert u.get(f"/api/tables/{tables['eq']}/views").json()[0]["config"]["rowOrder"] == [3, 1, 2]
+    assert u.put(f"/api/views/{vid}/row-order", json={"order": [1]}).status_code == 403
+    assert a.put(f"/api/views/{vid}/row-order", json={"order": ["x"]}).status_code == 422
+
+
+def test_airtable_view_settings_survive_save(tables):
+    """Вид из Airtable (итоги, закрепление, высота строк, цвет, ручной порядок) сохраняется без 422."""
+    a = as_user("a", "admin")
+    vid = create(a, tables["eq"], title="Общий", shared=True).json()["id"]
+    cfg = {"columns": ["name"], "summary": {"name": "count"}, "frozen": 2, "rowHeight": "medium",
+           "color": {"kind": "select", "col": "name"}, "locked": True, "rowOrder": [2, 1], "source": "airtable"}
+    assert a.patch(f"/api/views/{vid}", json={"config": cfg}).status_code == 200
+    assert a.get(f"/api/tables/{tables['eq']}/views").json()[0]["config"] == cfg
+    assert a.patch(f"/api/views/{vid}", json={"config": {"summary": {"nope": "sum"}}}).status_code == 422

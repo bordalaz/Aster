@@ -85,10 +85,21 @@ test('ручной порядок записей вида (сортировка 
 })
 
 describe('ячейка номера строки', () => {
-  it('карточку открывает только кнопка раскрытия справа от номера, как в Airtable', async () => {
+  it('ручка (если строки можно двигать), галочка, кнопка раскрытия — как в Airtable', async () => {
     const { rownumHit, ROWNUM_W } = await import('./renderers.js')
-    expect(rownumHit(10)).toBe('number')
+    expect(rownumHit(6, { drag: true })).toBe('drag')
+    expect(rownumHit(6)).toBe('number')            // отсортированный вид — ручки нет
+    expect(rownumHit(20)).toBe('check')
     expect(rownumHit(45)).toBe('expand')
     expect(rownumHit(ROWNUM_W - 4)).toBe('number')   // полоса цвета у края — не кнопка
+  })
+})
+
+describe('перетаскивание строк', () => {
+  it('выбранные переносятся вместе, в своём порядке, перед или после цели', async () => {
+    const { moveRows } = await import('./layout.js')
+    expect(moveRows([1, 2, 3, 4, 5], [4], 2, false)).toEqual([1, 4, 2, 3, 5])
+    expect(moveRows([1, 2, 3, 4, 5], [1, 3], 4, true)).toEqual([2, 4, 1, 3, 5])
+    expect(moveRows([1, 2, 3], [2], 2, true)).toEqual([1, 2, 3])   // на себя — без изменений
   })
 })

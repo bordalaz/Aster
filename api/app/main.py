@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from . import attachments, auth, calibration, forms, meta, pages, records, users, views
+from . import attachments, auth, calibration, forms, mail, meta, pages, records, users, views
 from .db import engine
 
 app = FastAPI(title="БД гидроканал")
@@ -14,6 +14,7 @@ app.include_router(forms.router)
 app.include_router(attachments.router)
 app.include_router(calibration.router)
 app.include_router(pages.router)
+app.include_router(mail.router)
 
 
 @app.get("/api/health")

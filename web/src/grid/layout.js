@@ -128,3 +128,15 @@ export function orderRows(rows, order) {
   const pos = new Map(order.map((id, i) => [id, i]))
   return [...rows].sort((a, b) => (pos.get(a.id) ?? Infinity) - (pos.get(b.id) ?? Infinity))
 }
+
+// Перетаскивание строк: перенести moving (сохраняя их взаимный порядок) перед или после target.
+// ids — полный ручной порядок вида (все записи, не только видимые фильтром), чтобы скрытые не сбивались в конец.
+export function moveRows(ids, moving, target, after) {
+  const set = new Set(moving)
+  if (set.has(target)) return ids
+  const rest = ids.filter(id => !set.has(id))
+  const moved = ids.filter(id => set.has(id))
+  const at = rest.indexOf(target)
+  if (at < 0) return ids
+  return [...rest.slice(0, at + (after ? 1 : 0)), ...moved, ...rest.slice(at + (after ? 1 : 0))]
+}
