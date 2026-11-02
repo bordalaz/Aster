@@ -189,3 +189,10 @@ def test_gallery_view_listed_with_kind_and_cover(tables):
     assert g["kind"] == "gallery" and g["config"]["cover"] == "name"
     assert create(u, tables["eq"], config={"cover": "nosuch"}).status_code == 422
     assert create(u, tables["eq"], config={"cover": "name"}).status_code == 200
+    # канбан: поле колонок — тоже колонка таблицы
+    with engine.begin() as c:
+        c.execute(text("insert into app_view (table_id, title, kind, config) values (:t, 'Канбан', 'kanban', cast(:c as jsonb))"),
+                  {"t": tables["eq"], "c": '{"stack": "name", "hideEmpty": true}'})
+    k = next(v for v in u.get(f"/api/tables/{tables['eq']}/views").json() if v["title"] == "Канбан")
+    assert k["kind"] == "kanban" and k["config"]["stack"] == "name"
+    assert create(u, tables["eq"], config={"stack": "nosuch"}).status_code == 422

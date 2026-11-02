@@ -24,18 +24,27 @@ export default function GalleryView({ fields, rows, primaryField, config, search
       {!items.length && <p className="dash-empty">Нет записей</p>}
       {items.map(r => (
         <article key={r.id} className="gl-card gv-card" onClick={() => open(r)}>
-          {config.cover && <Carousel files={r[config.cover]} height={180} dots />}
-          <div className="gl-body">
-            <button type="button" className="gl-name" onClick={e => { e.stopPropagation(); open(r) }}>{title(r)}</button>
-            {shown.map(c => (
-              <div key={c} className="gv-field">
-                <small>{byCol[c].title}</small>
-                <div className="gl-val"><CardValue field={byCol[c]} value={r[c]} /></div>
-              </div>
-            ))}
-          </div>
+          <CardBody row={r} byCol={byCol} shown={shown} cover={config.cover} coverHeight={180} title={title(r)} onOpen={() => open(r)} />
         </article>
       ))}
     </section>
+  )
+}
+
+// Тело карточки записи (галерея, канбан): обложка, заголовок-кнопка, поля с подписями.
+export function CardBody({ row, byCol, shown, cover, coverHeight, title, onOpen }) {
+  return (
+    <>
+      {cover && <Carousel files={row[cover]} height={coverHeight} dots />}
+      <div className="gl-body">
+        <button type="button" className="gl-name" onClick={e => { e.stopPropagation(); onOpen() }}>{title}</button>
+        {shown.map(c => (
+          <div key={c} className="gv-field">
+            <small>{byCol[c].title}</small>
+            <div className="gl-val"><CardValue field={byCol[c]} value={row[c]} /></div>
+          </div>
+        ))}
+      </div>
+    </>
   )
 }

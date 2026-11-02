@@ -94,7 +94,44 @@ def load_view_meta(c, lines: list[dict]) -> int:
             extra["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text("update app_view set config = config || :e where airtable_id = :a")
                   .bindparams(bindparam("e", type_=JSONB)), {"e": extra, "a": v["id"]})
-    return n + load_galleries(c, lines, raw, cols, recs, rec_ids)
+    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids)
+
+
+def load_kanbans(c, lines, raw, cols, recs, rec_ids) -> int:
+    """Общие канбаны → app_view kind='kanban': колонки — по полю группировки (stack, одиночный выбор),
+    emptyGroupState=hidden — пустые колонки не показывать; обложка — metadata.kanban.coverColumnId."""
+    tables = dict(c.execute(text("select airtable_id, id from app_table")).all())
+    order: dict[str, int] = {}
+    n = 0
+    for x in lines:
+        v, vd = x["view"], x["viewData"]
+        i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1
+        tid = tables.get(x["tableId"])
+        g = (vd.get("groupLevels") or [{}])[0]
+        if v["type"] != "kanban" or v.get("personalForUserId") or tid is None or g.get("columnId") not in cols:
+            continue
+        config = {"source": "airtable", "stack": cols[g["columnId"]],
+                  "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
+        if g.get("emptyGroupState") == "hidden":
+            config["hideEmpty"] = True
+        extra, problems = convert_view(raw[v["id"]], cols, recs)
+        config |= {k: val for k, val in extra.items() if k != "group"}
+        for p in problems:
+            print(f"Канбан «{x.get('table')} / {v['name']}»: фильтры не перенесены — {p}")
+        if (cover := ((vd.get("metadata") or {}).get("kanban") or {}).get("coverColumnId")) in cols:
+            config["cover"] = cols[cover]
+        s = vd.get("lastSortsApplied") or {}
+        if not s.get("shouldAutoSort") and vd.get("rowOrder"):
+            ids = rec_ids(x["tableId"])
+            config["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
+        c.execute(text(
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
+            "values (:t, :n, 'kanban', :c, :o, :a) "
+            "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
+            "config = excluded.config, sort_order = excluded.sort_order"
+        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+        n += 1
+    return n
 
 
 def load_galleries(c, lines, raw, cols, recs, rec_ids) -> int:

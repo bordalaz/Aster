@@ -349,3 +349,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .gv-field small { color: var(--text2); font-size: 11px; }
 .gl-text { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; white-space: pre-wrap; overflow-wrap: anywhere; }
 .gl-card .lc-carousel.empty { background: #f2f4f7; }
+/* канбан, как в Airtable: колонки 290px, у каждой своя прокрутка; заголовок — плашка варианта и число */
+.kb { flex: 1; min-height: 0; height: 100%; display: flex; overflow-x: auto; background: var(--canvas); }
+.kb-col { flex: 0 0 290px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+.kb-col.over { background: var(--accent-tint); }
+.kb-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: #fff; }
+.kb-none { background: #fff; border: 1px solid var(--text2); border-radius: 999px; font-weight: 500; }
+.kb-count { color: var(--text2); font-size: 12px; }
+.kb-cards { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.kb-card { cursor: pointer; flex-shrink: 0; content-visibility: auto; contain-intrinsic-size: auto 220px; }   /* 2000+ карточек в колонке — рисуются только видимые */
+.kb-card[draggable] { cursor: grab; }
+.kb-card.dragging { opacity: 0.4; }
+.kb-card.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.kb-empty { color: var(--text2); font-size: 12px; text-align: center; margin: 12px 0 4px; }
+.kb-add { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; color: var(--text2); font-size: 13px; padding: 4px 2px; }
+.kb-add:hover { color: var(--text); }
+.kb-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gl-card .gl-val { flex-wrap: nowrap; overflow: hidden; }   /* многозначные поля — одной строкой с обрезкой, как в Airtable */
+.gl-card .gl-val .pill { flex-shrink: 0; }
