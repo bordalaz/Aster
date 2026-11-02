@@ -105,14 +105,31 @@ const group = {
   },
 }
 
-// Номер записи и цветная полоса строки (colorConfig вида) у правого края — как в Airtable.
+// Ячейка номера, как в Airtable: слева номер записи, справа (у названия) — кнопка раскрытия записи,
+// видна при наведении на строку; у правого края — цветная полоса строки (colorConfig вида).
+export const ROWNUM_W = 72
+const NUM_W = 36, EXPAND_X = 38, EXPAND_W = 24
+// Что под курсором в ячейке номера: карточку открывает только кнопка раскрытия, как в Airtable.
+export const rownumHit = localX => (localX >= EXPAND_X && localX < EXPAND_X + EXPAND_W ? 'expand' : 'number')
+
+function expandIcon(ctx, x, y) {   // две стрелки наружу по диагонали (arrows-out-simple), 16×16
+  ctx.strokeStyle = '#616670'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+  ctx.beginPath()
+  ctx.moveTo(x + 9.5, y + 6.5); ctx.lineTo(x + 13, y + 3)
+  ctx.moveTo(x + 9, y + 3); ctx.lineTo(x + 13, y + 3); ctx.lineTo(x + 13, y + 7)
+  ctx.moveTo(x + 6.5, y + 9.5); ctx.lineTo(x + 3, y + 13)
+  ctx.moveTo(x + 3, y + 9); ctx.lineTo(x + 3, y + 13); ctx.lineTo(x + 7, y + 13)
+  ctx.stroke()
+}
+
 const rownum = {
   kind: GridCellKind.Custom,
   isMatch: c => c.data?.kind === 'rownum',
   draw: ({ ctx, rect, theme }, cell) => {
     ctx.save()
     ctx.fillStyle = '#a0a4ab'; ctx.font = `11px ${theme.fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText(cell.data.n, rect.x + rect.width / 2 - 3, rect.y + rect.height / 2)
+    ctx.fillText(cell.data.n, rect.x + NUM_W / 2, rect.y + rect.height / 2)
+    if (cell.data.hover) expandIcon(ctx, rect.x + EXPAND_X + (EXPAND_W - 16) / 2, rect.y + Math.min(rect.height, 32) / 2 - 8)
     if (cell.data.color) {
       ctx.fillStyle = cell.data.color
       roundRect(ctx, rect.x + rect.width - 7, rect.y + 4, 4, rect.height - 8, 2); ctx.fill()

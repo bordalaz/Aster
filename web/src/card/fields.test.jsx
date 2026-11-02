@@ -40,3 +40,17 @@ test('связь: мини-карточка с первыми полями св�
   expect(screen.getByText('Статус')).toBeInTheDocument()
   expect(screen.queryByText('Наименование')).toBeNull()
 })
+
+test('множественный выбор: как в Airtable — плашки с крестиком, остальные варианты в выпадающем списке', async () => {
+  const field = { column_name: 'eq', title: 'Оборудование', kind: 'multipleSelects', editable: true,
+    options: { choices: [{ name: 'Пульсатор', color: 'orangeLight2' }, { name: 'Гамма', color: 'blueLight2' }, { name: 'ТС', color: 'redLight2' }] } }
+  const onChange = vi.fn()
+  render(<FieldEditor field={field} value={['Пульсатор']} onChange={onChange} />)
+  const list = screen.getByRole('combobox', { name: 'Оборудование' })
+  expect([...list.options].map(o => o.text)).toEqual(['Добавить…', 'Гамма', 'ТС'])   // выбранного в списке нет
+  expect(screen.queryByRole('checkbox')).toBeNull()                                   // весь список не раскрыт
+  await userEvent.selectOptions(list, 'ТС')
+  expect(onChange).toHaveBeenLastCalledWith(['Пульсатор', 'ТС'])
+  await userEvent.click(screen.getByRole('button', { name: 'Убрать Пульсатор' }))
+  expect(onChange).toHaveBeenLastCalledWith([])
+})
