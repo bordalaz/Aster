@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
-import { displayValue, durText, isLink, parseDuration } from '../grid/cells.js'
+import { displayValue, durText, isLink, kindOf, parseDuration } from '../grid/cells.js'
 import { choiceColor } from '../grid/renderers.js'
 import { fieldIcon, Icon } from '../ui/icons.jsx'
 
@@ -47,13 +47,25 @@ function LinkCards({ id, field, list, onOpenLink }) {
           <span className="link-card-name">{v.name || `№${v.id}`}</span>
           {row && prev.cols.length > 0 && (
             <span className="link-card-fields">{prev.cols.map(c => (
-              <span key={c.column_name}><small>{c.title}</small><span className="link-card-val">{displayValue(c, row[c.column_name]) || '—'}</span></span>
+              <span key={c.column_name}><small>{c.title}</small><MiniValue field={c} value={row[c.column_name]} /></span>
             ))}</span>
           )}
         </button>
       )
     })}</div>
   )
+}
+
+// Значение в мини-карточке, как в Airtable: галочка — ✓, выбор — плашка цвета варианта, пусто — ничего.
+function MiniValue({ field, value }) {
+  if (kindOf(field) === 'checkbox') return value ? <span className="link-card-check" aria-label="да"><Icon name="check" size={14} /></span> : <span />
+  if (value == null || value === '' || (Array.isArray(value) && !value.length)) return <span />
+  const choices = (field.options?.result?.options ?? field.options)?.choices
+  if (choices) {
+    const colors = Object.fromEntries(choices.map(c => [c.name, c.color]))
+    return <span>{[].concat(value).map(v => <Pill key={v} name={v} color={colors[v]} />)}</span>
+  }
+  return <span className="link-card-val">{displayValue(field, value)}</span>
 }
 
 // Один редактор поля по его kind. Неэдитируемое — только показ.

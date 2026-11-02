@@ -71,9 +71,9 @@ def test_dashboard_converted():
 
 
 def test_unsupported_page_skipped():
-    els = [{"id": "g1", "type": "gallery", "query": _q()}]
+    els = [{"id": "g1", "type": "timeline", "query": _q()}]
     cfg, problems = convert_page(_page(els, [[[("g1", 12, 6)]]]), TABLES, COLS, NAMES)
-    assert cfg is None and problems == ["элемент gallery пока не переносится"]
+    assert cfg is None and problems == ["элемент timeline пока не переносится"]
 
 
 def test_empty_page_skipped():
@@ -138,3 +138,26 @@ def test_list_and_card_page():
     assert [r[0][0]["col"] for r in cfg["rows"]] == ["metry", "god", "data"]
     assert cfg["rows"][2][0][0] == {"type": "attachments", "table": 7, "col": "data", "readonly": True, "w": 6, "h": 6}
     assert cfg["rows"][1][0][0] == {"type": "field", "table": 7, "col": "god", "readonly": False, "w": 6, "h": None}
+
+
+def test_gallery_converted():
+    """Галерея: источник с фильтром (queryContainer), карточка, страница записи — поля по одному в ряд."""
+    E = {"q": {"id": "q", "type": "queryContainer", "outputs": {"query": {"id": "out1"}},
+               "staticFilters": {"conjunction": "and", "filterSet": [
+                   {"columnId": "fldS", "operator": "contains", "value": "829"},
+                   {"columnId": "fldD", "operator": "=", "value": {"mode": "exactDate", "exactDate": "2024-08-22T00:00:00.000Z"}}]}},
+         "g": {"id": "g", "type": "gallery", "titleColumnId": "fldS", "nonTitleColumnIds": ["fldD", "fldC"],
+               "coverColumnId": "fldM", "expandedRow": {"type": "custom", "pageId": "pagUnknown"},
+               "query": {"source": {"type": "query", "tableId": "tblR", "query": {"outputId": "out1"}}}}}
+    E["q"]["viewCanvasAreas"] = [{"canvasAreaId": "a1"}]   # как в Airtable: корень — источник, галерея — в его области
+    L = {"elementById": E, "rootCanvasAreaId": "a0", "canvasAreaById": {"a0": {"canvasId": "c0"}, "a1": {"canvasId": "c1"}},
+         "fullCanvasElementById": {"c0": {"elementId": "q"}, "c1": {"elementId": "g"}}, "rowCanvasById": {}}
+    cfg, problems = convert_page({"bundle": {"name": "Журнал"}, "pageMeta": {"name": "Журнал"},
+                                  "page": {"id": "pagJ", "publishedLayout": L}}, TABLES, COLS, NAMES)
+    assert problems == []
+    assert cfg["gallery"] == {"table": 7, "title": "status", "cover": "metry", "fields": ["data", "zakazchik"],
+                              "filters": [{"col": "status", "op": "contains", "value": "829"},
+                                          {"col": "data", "op": "eq", "value": "2024-08-22"}]}
+    # страницы записи нет в EXPANDED — её поля те же, что на карточке
+    assert [r[0][0]["col"] for r in cfg["rows"]] == ["data", "zakazchik"]
+    assert all(r[0][0]["readonly"] and r[0][0]["type"] == "field" for r in cfg["rows"])

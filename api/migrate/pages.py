@@ -6,9 +6,14 @@ from sqlalchemy.dialects.postgresql import JSONB
 from .view_meta import compact
 from .views import NO_VALUE, OPS, _filters, _value
 
-# дашборд и «список + карточка» (inbox — список, cellEditor — поле карточки, attachmentCarousel — фото);
-# галерея, queryContainer — отдельным шагом
-SUPPORTED = {"bigNumber", "chart", "filter", "grid", "inbox", "cellEditor", "attachmentCarousel"}
+# дашборд, «список + карточка» (inbox — список, cellEditor — поле карточки, attachmentCarousel — фото),
+# галерея (gallery + queryContainer — её источник и фильтр)
+SUPPORTED = {"bigNumber", "chart", "filter", "grid", "inbox", "cellEditor", "attachmentCarousel", "gallery", "queryContainer"}
+# Страница записи, которую открывает галерея: в Airtable она не опубликована, в снимке её нет.
+# Состав и порядок полей сняты глазами из живого Airtable 2026-11-02 (Журнал → карточка), только чтение.
+EXPANDED = {"pagdcBz738irTcsm5": ["fldwqdiOGMa22BSWu", "fldRHODiCpgxdvXdW", "fldvx1FvNmMzKQNXi", "fldHLvdz3jjL1EXdX",
+                                  "fldL2fxYoZvqYJpRd", "flds8uWuz8uLIBOuE", "fldhfY0xDiC8Xgoit", "fldtyegNDihbxhFmj",
+                                  "fldmaaLdikDM7I8ei", "fldVPw8UHZiaZUGuT"]}
 AGG = {"sum": "sum", "max": "max", "min": "min", "average": "avg", "avg": "avg",
        "countUnique": "unique", "distinct": "unique", "count": "filled", "rowCount": "count"}
 BUCKET = {"yearMonth": "month", "year": "year", "date": "day", "isoWeek": "week"}
@@ -146,7 +151,22 @@ def convert_page(raw: dict, tables: dict, cols: dict, names: dict) -> tuple[dict
     # сверху полоса с заголовком (первичное поле), под ней — те же ряды, что у дашборда (body)
     area = L.get("canvasAreaById", {}).get(L.get("rootCanvasAreaId"), {})
     full = L.get("fullCanvasElementById", {}).get(area.get("canvasId"))
-    if full and E[full["elementId"]]["type"] == "inbox":
+    if full and E[full["elementId"]]["type"] == "queryContainer":
+        # галерея: на корне — источник (queryContainer, его фильтр), галерея — в его области.
+        # Щелчок по карточке — страница записи: её поля стоят в rows, по одному в ряд, только чтение.
+        src = E[full["elementId"]]
+        inner = [L["canvasAreaById"][a["canvasAreaId"]]["canvasId"] for a in src.get("viewCanvasAreas", [])]
+        g = next((E[L["fullCanvasElementById"][c]["elementId"]] for c in inner if c in L.get("fullCanvasElementById", {})), {})
+        if g.get("type") != "gallery":
+            return None, [f"в источнике страницы — {g.get('type')}, пока не переносится"]
+        tid = tables.get(g["query"]["source"]["tableId"])
+        out["gallery"] = {"table": tid, "title": cols.get(g.get("titleColumnId")), "cover": cols.get(g.get("coverColumnId")),
+                          "fields": [cols[c] for c in g.get("nonTitleColumnIds", []) if c in cols],
+                          "filters": _filters(compact(src["staticFilters"]), cols, names, problems) if src.get("staticFilters") else []}
+        ids = EXPANDED.get((g.get("expandedRow") or {}).get("pageId"), g.get("nonTitleColumnIds", []))
+        out["rows"] = [[[{"type": "attachments" if cols[c] == out["gallery"]["cover"] else "field",
+                          "table": tid, "col": cols[c], "readonly": True, "w": 12, "h": 8}]] for c in ids if c in cols]
+    elif full and E[full["elementId"]]["type"] == "inbox":
         e = E[full["elementId"]]
         q = e.get("query") or {}
         header = [_element(E[n["elementId"]], tables, cols, names)["col"]
