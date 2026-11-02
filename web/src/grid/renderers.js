@@ -105,12 +105,18 @@ const group = {
   },
 }
 
-// Ячейка номера, как в Airtable: слева номер записи, справа (у названия) — кнопка раскрытия записи,
-// видна при наведении на строку; у правого края — цветная полоса строки (colorConfig вида).
+// Ячейка номера, как в Airtable (rowActionsCell): при наведении на строку — ручка ⋮⋮ (перетаскивание,
+// только без сортировки), галочка выбора вместо номера и кнопка раскрытия у названия; у правого края —
+// цветная полоса строки (colorConfig вида). Отмеченная строка держит галочку и без наведения.
 export const ROWNUM_W = 72
-const NUM_W = 36, EXPAND_X = 38, EXPAND_W = 24
-// Что под курсором в ячейке номера: карточку открывает только кнопка раскрытия, как в Airtable.
-export const rownumHit = localX => (localX >= EXPAND_X && localX < EXPAND_X + EXPAND_W ? 'expand' : 'number')
+const DRAG_W = 14, CHECK_X = 14, CHECK_W = 22, EXPAND_X = 38, EXPAND_W = 24
+// Что под курсором в ячейке номера (localX — от левого края ячейки); ручка — только если строки можно двигать.
+export function rownumHit(localX, { drag = false } = {}) {
+  if (drag && localX < DRAG_W) return 'drag'
+  if (localX >= CHECK_X && localX < CHECK_X + CHECK_W) return 'check'
+  if (localX >= EXPAND_X && localX < EXPAND_X + EXPAND_W) return 'expand'
+  return 'number'
+}
 
 function expandIcon(ctx, x, y) {   // две стрелки наружу по диагонали (arrows-out-simple), 16×16
   ctx.strokeStyle = '#616670'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
@@ -122,16 +128,37 @@ function expandIcon(ctx, x, y) {   // две стрелки наружу по д
   ctx.stroke()
 }
 
+function checkbox(ctx, x, y, on) {   // 14×14, как галочка строки Airtable
+  ctx.lineWidth = 1
+  roundRect(ctx, x + 0.5, y + 0.5, 13, 13, 3)
+  if (on) { ctx.fillStyle = '#166ee1'; ctx.fill() } else { ctx.strokeStyle = '#a0a4ab'; ctx.stroke() }
+  if (on) {
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.75; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    ctx.beginPath(); ctx.moveTo(x + 3.5, y + 7.2); ctx.lineTo(x + 6, y + 9.6); ctx.lineTo(x + 10.5, y + 4.4); ctx.stroke()
+  }
+}
+
+function grip(ctx, x, y) {   // ⋮⋮ — ручка перетаскивания
+  ctx.fillStyle = '#a0a4ab'
+  for (const dx of [0, 4]) for (const dy of [0, 4, 8]) { ctx.beginPath(); ctx.arc(x + dx + 1, y + dy + 1, 1, 0, Math.PI * 2); ctx.fill() }
+}
+
 const rownum = {
   kind: GridCellKind.Custom,
   isMatch: c => c.data?.kind === 'rownum',
   draw: ({ ctx, rect, theme }, cell) => {
+    const { n, hover, checked, drag, color } = cell.data
+    const mid = rect.y + Math.min(rect.height, 32) / 2
     ctx.save()
-    ctx.fillStyle = '#a0a4ab'; ctx.font = `11px ${theme.fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    ctx.fillText(cell.data.n, rect.x + NUM_W / 2, rect.y + rect.height / 2)
-    if (cell.data.hover) expandIcon(ctx, rect.x + EXPAND_X + (EXPAND_W - 16) / 2, rect.y + Math.min(rect.height, 32) / 2 - 8)
-    if (cell.data.color) {
-      ctx.fillStyle = cell.data.color
+    if (hover && drag) grip(ctx, rect.x + 4, mid - 5)
+    if (hover || checked) checkbox(ctx, rect.x + CHECK_X + (CHECK_W - 14) / 2, mid - 7, checked)
+    else {
+      ctx.fillStyle = '#a0a4ab'; ctx.font = `11px ${theme.fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(n, rect.x + CHECK_X + CHECK_W / 2, mid)
+    }
+    if (hover) expandIcon(ctx, rect.x + EXPAND_X + (EXPAND_W - 16) / 2, mid - 8)
+    if (color) {
+      ctx.fillStyle = color
       roundRect(ctx, rect.x + rect.width - 7, rect.y + 4, 4, rect.height - 8, 2); ctx.fill()
     }
     ctx.restore()

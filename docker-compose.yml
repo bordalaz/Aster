@@ -21,6 +21,14 @@ services:
       # обязательно TRUSTED_PROXIES — иначе все придут с адреса прокси (один лимит входа на всех)
       OFFICE_NETS: ${OFFICE_NETS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      # почта для «Отправить запись»: пусто — отправка выключена (кнопка скажет, что почта не настроена)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SSL: ${SMTP_SSL:-0}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-1}
     depends_on:
       db: { condition: service_healthy }
     # ponytail: код монтируется для разработки; для NAS — отдельный compose в этапе 3

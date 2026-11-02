@@ -1,5 +1,5 @@
 """Виды сетки (spec R10): общие (owner_id = null, правят админы) и личные (правит владелец)."""
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -48,9 +48,16 @@ class ViewConfig(Strict):
     # группировка: до 3 уровней; строка — старый формат (один уровень)
     group: Annotated[str, Col] | Annotated[list[Annotated[str, Col]], Field(min_length=1, max_length=3)] | None = None
     source: Literal["airtable"] | None = None
+    # настройки, перенесённые из Airtable (migrate/view_meta.py): без них сохранить такой вид было нельзя (422)
+    frozen: int | None = Field(None, ge=0, le=50)
+    rowHeight: Literal["small", "medium", "large", "xlarge"] | None = None
+    summary: dict[Annotated[str, Col], Annotated[str, Field(max_length=30)]] | None = Field(None, max_length=500)
+    color: dict[str, Any] | None = None
+    locked: bool | None = None
+    rowOrder: list[int] | None = Field(None, max_length=200_000)   # ручной порядок — перетаскивание строк
 
     def used_columns(self) -> set[str]:
-        return (set(self.columns or ()) | set(self.widths or ()) | {s.col for s in self.sort or ()}
+        return (set(self.columns or ()) | set(self.widths or ()) | set(self.summary or ()) | {s.col for s in self.sort or ()}
                 | {f.col for f in self.filters or ()} | set([self.group] if isinstance(self.group, str) else self.group or ()))
 
 
@@ -127,6 +134,21 @@ def patch_view(view_id: int, body: ViewPatch, user: dict = Depends(active_user))
         if body.config is not None:
             c.execute(text("update app_view set config = :c where id = :i").bindparams(bindparam("c", type_=JSONB)),
                       {"c": check_config(c, v.table_id, body.config), "i": view_id})
+    return {"ok": True}
+
+
+class RowOrder(Strict):
+    order: list[int] = Field(max_length=200_000)
+
+
+@router.put("/views/{view_id}/row-order")
+def put_row_order(view_id: int, body: RowOrder, user: dict = Depends(active_user)):
+    """Ручной порядок записей вида — перетаскивание строк, как в Airtable (у всех, кто смотрит вид).
+    Общий вид меняют администраторы (_own), личный — владелец."""
+    with engine.begin() as c:
+        _own(c, view_id, user)
+        c.execute(text("update app_view set config = jsonb_set(config, '{rowOrder}', :o) where id = :i")
+                  .bindparams(bindparam("o", type_=JSONB)), {"o": body.order, "i": view_id})
     return {"ok": True}
 
 
