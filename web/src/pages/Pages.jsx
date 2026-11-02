@@ -103,7 +103,7 @@ function Element({ el, fields, rows }) {
       {el.title && <figcaption>{el.title}</figcaption>}
       {!s.xs.length ? <p className="dash-empty">Нет данных</p>
         : el.kind === 'pie'
-          ? <PieChart s={s} colors={colorsFor(s.xs, fields[el.x])} show={show} height={height} />
+          ? <PieChart s={s} colorsOf={xs => colorsFor(xs, fields[el.x])} show={show} height={height} />
           : <BarChart s={s} colors={colorsFor(s.groups, fields[el.group])} show={show} height={height} />}
     </figure>
   )

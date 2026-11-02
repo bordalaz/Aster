@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { HUE_SHADES } from '../grid/renderers.js'
 import { numText } from '../grid/cells.js'
 
@@ -72,20 +72,36 @@ const niceMax = m => {
   return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * p
 }
 
+// Ширина контейнера: SVG рисуется в настоящих пикселях, шрифты не растягиваются вместе с графиком.
+function useWidth(fallback) {
+  const ref = useRef(null)
+  const [w, setW] = useState(fallback)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width) || fallback))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fallback])
+  return [ref, w]
+}
+
 // Столбцы со стопкой по группе: тонкие, 2px зазор между сегментами, сетка и оси приглушены.
 export function BarChart({ s, colors, show, height }) {
   const [tip, setTip] = useState(null)
-  const W = 640, H = height, L = 56, B = 40, T = 8
+  const [ref, W] = useWidth(640)
+  const H = height, B = 40, T = 8
   const totals = s.xs.map(x => s.groups.reduce((a, g) => a + s.value(x, g), 0))
   const max = niceMax(Math.max(0, ...totals))
+  const L = Math.max(...[0, 0.25, 0.5, 0.75, 1].map(f => show(f * max).length)) * 6.5 + 14   // подписи оси Y целиком
   const bw = Math.min(48, ((W - L) / Math.max(1, s.xs.length)) * 0.6)
   const step = (W - L) / Math.max(1, s.xs.length)
   const y = v => T + (H - T - B) * (1 - v / max)
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => f * max)
   const every = Math.ceil(s.xs.length / Math.floor((W - L) / 56))   // подписи X не налезают друг на друга
   return (
-    <div className="dash-chart" onMouseLeave={() => setTip(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Столбчатая диаграмма">
+    <div className="dash-chart" ref={ref} onMouseLeave={() => setTip(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Столбчатая диаграмма">
         {ticks.map(t => (
           <g key={t}>
             <line x1={L} x2={W} y1={y(t)} y2={y(t)} stroke="var(--grid)" />
@@ -119,9 +135,22 @@ export function BarChart({ s, colors, show, height }) {
 }
 
 // Круговая: срезы по убыванию, 2px зазор цвета фона, подписи — в легенде с долей.
-export function PieChart({ s, colors, show, height }) {
+// Больше 9 срезов — хвост в «Другое», как серии у столбцов: цвета не повторяются.
+export function pieParts(s) {
+  const all = s.xs.map(x => ({ x, v: s.value(x, null) })).filter(p => p.v > 0).sort((a, b) => b.v - a.v)
+  if (all.length <= PALETTE.length) return all
+  const keep = all.slice(0, PALETTE.length - 1)
+  return [...keep, { x: 'Другое', v: all.slice(PALETTE.length - 1).reduce((a, p) => a + p.v, 0) }]
+}
+
+export function PieChart({ s, colorsOf, show, height }) {
   const [tip, setTip] = useState(null)
-  const parts = s.xs.map((x, i) => ({ x, v: s.value(x, null), c: colors[i] })).filter(p => p.v > 0).sort((a, b) => b.v - a.v)
+  const ps = pieParts(s)
+  // цвета раздаём в алфавитном порядке, как у столбцов, — одно значение одного цвета на всей странице
+  const names = ps.map(p => p.x).filter(x => x !== 'Другое').sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }))
+  const cs = colorsOf(names)
+  const byName = Object.fromEntries(names.map((x, i) => [x, cs[i]]))
+  const parts = ps.map(p => ({ ...p, c: byName[p.x] ?? OTHER_COLOR }))
   const total = parts.reduce((a, p) => a + p.v, 0)
   const R = Math.min(height, 260) / 2 - 4
   let a0 = -Math.PI / 2

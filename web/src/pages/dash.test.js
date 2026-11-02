@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aggregate, applyConds, series } from './dash.js'
+import { pieParts } from './charts.jsx'
 
 const F = {
   m: { column_name: 'm', kind: 'number', options: { precision: 0 } },
@@ -56,5 +57,14 @@ describe('дашборд: серии графика', () => {
     expect(s.groups).toHaveLength(9)
     expect(s.groups.at(-1)).toBe('Другое')
     expect(s.value('a', 'Другое')).toBe(4 + 3 + 2 + 1)
+  })
+})
+
+describe('pieParts', () => {
+  it('больше 9 срезов — хвост в «Другое»', () => {
+    const xs = Array.from({ length: 12 }, (_, i) => `x${i}`)
+    const p = pieParts({ xs, value: x => 12 - Number(x.slice(1)) })
+    expect(p).toHaveLength(9)
+    expect(p.at(-1)).toEqual({ x: 'Другое', v: 4 + 3 + 2 + 1 })
   })
 })
