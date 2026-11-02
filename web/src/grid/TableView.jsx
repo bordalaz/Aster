@@ -9,7 +9,7 @@ import { moveRows, orderRows } from './layout.js'
 import SendDialog from './SendDialog.jsx'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
-  const { fields, rows, loading, patch, patchMany, refresh } = useRecords(tableId)
+  const { fields, rows, loading, patch, patchMany, refresh, dropRows } = useRecords(tableId)
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
   const [order, setOrder] = useState([])   // id строк сетки по порядку — для ▲▼ в карточке
   const openRow = useCallback((row, ids) => { setOpen(row); if (ids) setOrder(ids) }, [])
@@ -142,6 +142,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
       const { trash } = await api(`/api/tables/${tableId}/records/delete`, { method: 'POST', body: { ids: rs.map(r => r.id) } })
       if (open && rs.some(r => r.id === open.id)) setOpen(null)
       setUndo({ trash, n: rs.length })
+      dropRows(rs.map(r => r.id))
       await refresh()
     } catch { setError(rs.length > 1 ? 'Не удалось удалить записи' : 'Не удалось удалить запись') }
   }
@@ -153,7 +154,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   async function restore() {
     const u = undo
     setUndo(null)
-    try { await api('/api/trash/restore', { method: 'POST', body: { ids: u.trash } }); await refresh() }
+    try { await api('/api/trash/restore', { method: 'POST', body: { ids: u.trash } }); await refresh(false); refresh() }
     catch { setError('Не удалось вернуть — запись в корзине, её можно восстановить оттуда') }
   }
 

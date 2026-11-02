@@ -27,8 +27,9 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
   useEffect(() => { load() }, [load])
 
   // тихо, без «Загрузка…»: строки меняются на месте
-  const refreshRows = useCallback(async () => {
-    setRows(await api(`/api/tables/${tableId}/records?fresh=1`))
+  // fresh=false — сразу, без ожидания пересчёта (вернуть строку из корзины); формулы догонит следующий refresh
+  const refreshRows = useCallback(async (fresh = true) => {
+    setRows(await api(`/api/tables/${tableId}/records${fresh ? '?fresh=1' : ''}`))
   }, [tableId])
   const timer = useRef(null)
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -64,5 +65,8 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
     }
   }, [tableId, load, refreshRows, refreshMs])
 
-  return { fields, rows, loading, patch, patchMany, reload: load, refresh: refreshRows }
+  // удалённые — из сетки сразу, не дожидаясь пересчёта формул (как Airtable)
+  const dropRows = useCallback(ids => setRows(rs => rs.filter(r => !ids.includes(r.id))), [])
+
+  return { fields, rows, loading, patch, patchMany, reload: load, refresh: refreshRows, dropRows }
 }

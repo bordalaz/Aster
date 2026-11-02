@@ -35,7 +35,8 @@ export default function Comments({ tableId, recordId, readOnly = false }) {
       <div className="card-side-list">
         {items === null ? <div className="muted">Загрузка…</div>
           : items.length === 0
-            ? <div className="card-side-empty"><Icon name="chat" size={28} /><strong>Начните обсуждение</strong>
+            ? readOnly ? <div className="card-side-empty"><Icon name="chat" size={28} /><strong>Комментариев нет</strong></div>
+            : <div className="card-side-empty"><Icon name="chat" size={28} /><strong>Начните обсуждение</strong>
                 <span>Задайте вопрос или оставьте заметку о записи — её увидят все, кому доступна таблица.</span></div>
             : <ul>{items.map(c => (
                 <li key={c.id}>
