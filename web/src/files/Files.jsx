@@ -1,13 +1,20 @@
 import { useState } from 'react'
 import { ApiError, uploadFile } from '../api.js'
+import { Icon } from '../ui/icons.jsx'
 
 const PREVIEW = /^(image\/(png|jpeg|gif|webp)|application\/pdf)$/
 const size = n => (n == null ? '' : n < 1024 ? `${n} Б` : n < 1048576 ? `${(n / 1024).toFixed(0)} КБ` : `${(n / 1048576).toFixed(1)} МБ`)
 const MAX = 50 * 1024 * 1024
 
+// «Скачать все (N)» — ZIP всех файлов поля; сервер отдаёт его как вложение
+export function DownloadAll({ url, n }) {
+  return <a className="btn dl-all" href={url} download><Icon name="download" size={14} />Скачать все ({n})</a>
+}
+
 // Список вложений (R27, R28): имя → скачать под исходным именем; картинки и PDF — «открыть» в новой вкладке.
-// onUpload — добавить файлы (получает загруженные [{id, name, size}]); onRemove — убрать файл.
-export default function Files({ title, files, onUpload, onRemove, bare = false }) {   // bare — подпись рисует владелец (карточка)
+// onUpload — добавить файлы (получает загруженные [{id, name, size}]); onRemove — убрать файл;
+// zipUrl — «Скачать все (N)» одним ZIP, как Download all в Airtable (если файлов больше одного).
+export default function Files({ title, files, onUpload, onRemove, zipUrl, bare = false }) {   // bare — подпись рисует владелец (карточка)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -32,6 +39,7 @@ export default function Files({ title, files, onUpload, onRemove, bare = false }
     <div>
       {!bare && <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>{title}</div>}
       {(files ?? []).length === 0 && !onUpload && <div style={{ padding: '6px 0' }}>—</div>}
+      {zipUrl && (files ?? []).length > 1 && <DownloadAll url={zipUrl} n={files.length} />}
       <div style={{ display: 'grid', gap: 2 }}>
         {(files ?? []).map(f => (
           <div key={f.id} style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 0 }}>

@@ -53,6 +53,7 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
       <span className="fld-label"><Icon name={fieldIcon(f.kind)} size={14} />{f.title}</span>
       <div className="fld-value">
         <Files bare title={f.title} files={record[f.column_name]}
+          zipUrl={tableId ? `/api/tables/${tableId}/records/${record.id}/attachments/${f.column_name}/zip` : undefined}
           onUpload={canEdit && tableId ? async up => {
             await api(`/api/tables/${tableId}/records/${record.id}/attachments`, { method: 'POST', body: { column: f.column_name, ids: up.map(u => u.id) } })
             await onChanged?.()

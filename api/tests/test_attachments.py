@@ -95,3 +95,25 @@ def test_form_with_attachment(loaded_fixture, root):
     # повторно ту же загрузку не привязать (уже занята)
     r2 = u.post(f"/api/forms/{fid}/submit", json={"key": "k-att-00002", "values": {"f_fldbinv0000000000": "МИР 10", PHOTO: [a]}})
     assert r2.status_code == 422
+
+
+def test_download_all_zip(loaded_fixture, root):
+    """«Скачать все»: ZIP всех файлов поля; одинаковые имена не затирают друг друга; без прав/файлов — 404."""
+    import io
+    import zipfile
+    computed.reset()
+    t = loaded_fixture
+    adm = as_user("a", "admin")
+    rid, row = next((i, r) for i, r in b_rows(adm, t).items() if r[PHOTO])
+    url = f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/records/{rid}/attachments"
+    ids = [upload(adm, name="photo.jpg").json()["id"], upload(adm, name="../../etc/x.png").json()["id"]]
+    assert adm.post(url, json={"column": PHOTO, "ids": ids}).status_code == 200
+    z = as_user("u", "user").get(f"{url}/{PHOTO}/zip")
+    assert z.status_code == 200 and z.headers["content-type"] == "application/zip"
+    assert "filename*=UTF-8''" in z.headers["content-disposition"]
+    names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
+    assert names == ["photo.jpg", "photo (2).jpg", "x.png"]   # путь из имени отброшен
+    assert adm.get(f"{url}/f_nosuchfield/zip").status_code == 404
+    empty = next(i for i, r in b_rows(adm, t).items() if not r[PHOTO])
+    assert adm.get(f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/records/{empty}/attachments/{PHOTO}/zip").status_code == 404
+    assert adm.get(f"/api/tables/999999/records/{rid}/attachments/{PHOTO}/zip").status_code == 404

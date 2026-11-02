@@ -341,3 +341,4 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .dp-pop { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; }
 .dp .link { border: 0; background: none; padding: 0; height: auto; cursor: pointer; font: inherit; font-size: 12px; color: var(--text2); }
 .dp .link:hover { color: var(--accent); }
+.dl-all { display: inline-flex; align-items: center; gap: 6px; justify-self: start; width: max-content; margin-bottom: 6px; text-decoration: none; color: var(--text); }

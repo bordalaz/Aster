@@ -23,3 +23,15 @@ describe('даты как в Airtable', () => {
     expect(sortKey(f, '2018-03-05')).toBe('2018-03-05')
   })
 })
+
+describe('фильтры по датам', async () => {
+  const { applyFilters } = await import('./viewConfig.js')
+  it('сравнивают день, а не показанный текст «22.8.2024»', () => {
+    const f = { kind: 'date', column_name: 'd', options: local }
+    const t = { kind: 'dateTime', column_name: 'd', options: { ...local, timeFormat: { name: '24hour' }, timeZone: 'utc' } }
+    const rows = [{ id: 1, d: '2024-08-22' }, { id: 2, d: '2024-09-01' }]
+    expect(applyFilters([f], rows, [{ col: 'd', op: 'eq', value: '2024-08-22' }]).map(r => r.id)).toEqual([1])
+    expect(applyFilters([f], rows, [{ col: 'd', op: 'gt', value: '2024-08-31' }]).map(r => r.id)).toEqual([2])
+    expect(applyFilters([t], [{ id: 3, d: '2024-08-22T20:30:00.000Z' }], [{ col: 'd', op: 'eq', value: '2024-08-22' }]).map(r => r.id)).toEqual([3])
+  })
+})
