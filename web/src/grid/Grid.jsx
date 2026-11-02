@@ -283,7 +283,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // или пробел на выделенной ячейке.
   const onKeyDown = useCallback(e => {
     const cell = selection.current?.cell
-    if (e.key === ' ' && cell && rowAt(cell[1])) { e.preventDefault(); onOpen(rowAt(cell[1]), shownRows.map(r => r.id)) }
+    if (e.key === ' ' && cell && rowAt(cell[1])) { e.preventDefault(); e.cancel?.(); onOpen(rowAt(cell[1]), shownRows.map(r => r.id)) }
   }, [selection, items, onOpen, shownRows])   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

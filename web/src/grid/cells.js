@@ -5,7 +5,7 @@ export const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'durat
 // Правятся прямо в сетке; остальные типы — только в карточке (в сетке читаются).
 const INLINE = new Set([
   'singleLineText', 'multilineText', 'richText', 'email', 'url', 'phoneNumber',
-  'number', 'currency', 'percent', 'rating', 'duration', 'checkbox', 'date',
+  'number', 'currency', 'percent', 'rating', 'duration', 'checkbox', 'date', 'dateTime',
 ])
 const COMPUTED = new Set(['formula', 'rollup', 'multipleLookupValues'])
 // Lookup вложений API отдаёт id вложений — показывать нечего. Связи и их lookup приходят как [{id, name}].
@@ -29,23 +29,74 @@ const fmtOpts = f => f.options?.result?.options ?? f.options ?? {}   // у фо�
 const pad2 = x => String(x).padStart(2, '0')
 const meridiem = h => (h < 4 ? 'ночи' : h < 12 ? 'утра' : h < 17 ? 'дня' : 'вечера')   // как moment ru
 
+const zoneOf = o => (o.timeZone === 'utc' ? 'UTC' : o.timeZone && o.timeZone !== 'client' ? o.timeZone : undefined)
+const zoneParts = (t, timeZone) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric',
+    day: 'numeric', hour: 'numeric', minute: 'numeric' }).formatToParts(t).map(x => [x.type, x.value]))
+  return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour, mi: +p.minute }
+}
+
+// Значение → части в зоне поля: {y, m, d} у даты, плюс {h, mi} у даты со временем; null — не дата.
+export function dateParts(field, value) {
+  if (typeof value !== 'string') return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) { const [y, m, d] = value.split('-').map(Number); return { y, m, d } }
+  const t = new Date(value)
+  return Number.isNaN(t.getTime()) ? null : zoneParts(t, zoneOf(fmtOpts(field)))
+}
+
+// Части в зоне поля → значение для сервера: «YYYY-MM-DD» или ISO-время (UTC).
+export function partsToValue(field, { y, m, d, h, mi }) {
+  if (h == null) return `${y}-${pad2(m)}-${pad2(d)}`
+  const guess = Date.UTC(y, m - 1, d, h, mi)
+  const p = zoneParts(new Date(guess), zoneOf(fmtOpts(field)))   // поправка на смещение зоны
+  return new Date(guess - (Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi) - guess)).toISOString()
+}
+
+export const hasTime = field => !!fmtOpts(field).timeFormat || field.kind === 'dateTime'
+
+// Только дата, в формате поля: «23.3.2018» (friendly в поле ввода — тоже «23.3.2018»).
+export function dayText(field, { y, m, d }) {
+  const f = fmtOpts(field).dateFormat?.name
+  return f === 'us' ? `${m}/${d}/${y}` : f === 'european' ? `${d}/${m}/${y}` : f === 'iso' ? `${y}-${pad2(m)}-${pad2(d)}` : `${d}.${m}.${y}`
+}
+
+// Ввод даты, как в Airtable: «23.3.2018» (us — «3/23/2018»), «2018-03-23»; время — «20:30». null — не разобрать.
+export function parseDay(field, text) {
+  const t = String(text ?? '').trim()
+  let y, m, d, r
+  if ((r = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t))) [y, m, d] = [+r[1], +r[2], +r[3]]
+  else if ((r = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(t))) {
+    [d, m, y] = [+r[1], +r[2], +r[3]]
+    if (fmtOpts(field).dateFormat?.name === 'us') [d, m] = [m, d]
+  } else return null
+  const ok = new Date(Date.UTC(y, m - 1, d))
+  return ok.getUTCMonth() === m - 1 && ok.getUTCDate() === d ? { y, m, d } : null
+}
+export function parseTime(text) {
+  const r = /^(\d{1,2})[:.](\d{2})$/.exec(String(text ?? '').trim())
+  return r && +r[1] < 24 && +r[2] < 60 ? { h: +r[1], mi: +r[2] } : null
+}
+
+// Вставка из Excel: «23.3.2018 20:30», «2018-03-23T20:30» → значение; undefined — не разобрать.
+export function parseDateText(field, text) {
+  const t = String(text ?? '').trim()
+  if (!t) return null
+  if (/^\d{4}-\d{2}-\d{2}T/.test(t) && !Number.isNaN(new Date(t).getTime())) return hasTime(field) ? new Date(t).toISOString() : t.slice(0, 10)
+  const [ds, ts] = t.split(/\s+/)
+  const day = parseDay(field, ds)
+  if (!day) return undefined
+  if (!hasTime(field)) return partsToValue(field, day)
+  const time = ts ? parseTime(ts) : { h: 0, mi: 0 }
+  return time ? partsToValue(field, { ...day, ...time }) : undefined
+}
+
 export function dateText(field, value) {
   const o = fmtOpts(field)
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
-  let y, m, d, h, mi
-  if (dateOnly) [y, m, d] = value.split('-').map(Number)
-  else {
-    const t = new Date(value)
-    if (Number.isNaN(t.getTime())) return String(value)
-    const timeZone = o.timeZone === 'utc' ? 'UTC' : o.timeZone && o.timeZone !== 'client' ? o.timeZone : undefined
-    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric',
-      day: 'numeric', hour: 'numeric', minute: 'numeric' }).formatToParts(t).map(x => [x.type, x.value]))
-    ;[y, m, d, h, mi] = [p.year, p.month, p.day, p.hour, p.minute].map(Number)
-  }
-  const f = o.dateFormat?.name
-  const date = f === 'friendly' ? `${d} ${MONTHS[m - 1]} ${y} г.` : f === 'us' ? `${m}/${d}/${y}`
-    : f === 'european' ? `${d}/${m}/${y}` : f === 'iso' ? `${y}-${pad2(m)}-${pad2(d)}` : `${d}.${m}.${y}`
-  if (dateOnly || h == null || !o.timeFormat) return date
+  const p = dateParts(field, value)
+  if (!p) return String(value)
+  const { y, m, d, h, mi } = p
+  const date = o.dateFormat?.name === 'friendly' ? `${d} ${MONTHS[m - 1]} ${y} г.` : dayText(field, p)
+  if (h == null || !o.timeFormat) return date
   const time = o.timeFormat.name === '12hour' ? `${h % 12 || 12}:${pad2(mi)}${meridiem(h)}` : `${pad2(h)}:${pad2(mi)}`
   return `${date} ${time}`
 }
@@ -138,8 +189,9 @@ export function toCell(field, value) {
     }
   }
   const text = asText(field, value)
-  if (DATE_KINDS.has(kind) && typeof value === 'string') {   // правится ISO, показывается как в Airtable
-    return { kind: GridCellKind.Text, data: value, displayData: text, allowOverlay: editable }
+  if (editable && (field.kind === 'date' || field.kind === 'dateTime')) {   // правится календарём, как в Airtable
+    return { kind: GridCellKind.Custom, allowOverlay: true, readonly: false, copyData: text,
+      data: { kind: 'date', text, value: value ?? null, field } }
   }
   return { kind: GridCellKind.Text, data: text, displayData: text, allowOverlay: editable }
 }
@@ -148,6 +200,8 @@ export function fromCell(field, cell) {
   if (field.kind === 'checkbox') return !!(cell.kind === GridCellKind.Custom ? cell.data.value : cell.data)
   if (SELECT.has(field.kind)) return cell.kind === GridCellKind.Custom ? cell.data.value : undefined
   if (field.kind === 'duration') return parseDuration(cell.data)
+  if (cell.kind === GridCellKind.Custom && cell.data?.kind === 'date') return cell.data.value
+  if (field.kind === 'date' || field.kind === 'dateTime') return parseDateText(field, cell.data)
   if (NUMBER.has(field.kind)) return cell.data ?? null
   return cell.data === '' ? null : cell.data
 }
