@@ -94,10 +94,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* --- раскрытая запись (карточка), как в Airtable --- */
 .card-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45); display: flex; justify-content: center; padding: 72px 16px 12px; }
-.card { width: min(760px, 100%); background: #fff; border-radius: 6px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; min-height: 0; }
+.card { width: min(1000px, 100%); background: #fff; border-radius: 6px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; min-height: 0; }
 .card-head { height: 40px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--line); }
 .card-head-title { margin-left: 8px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-body { overflow-y: auto; padding: 32px 60px 40px; display: grid; gap: 14px; align-content: start; }
+.card-main { flex: 1; min-height: 0; display: flex; }
+.card-body { flex: 1; min-width: 0; overflow-y: auto; padding: 32px 60px 40px; display: grid; gap: 14px; align-content: start; }
+/* комментарии — правая панель, как в Airtable */
+.card-side { width: 260px; flex: none; border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.card-side-head { padding: 12px; font-size: 13px; color: var(--text2); }
+.card-side-list { flex: 1; overflow-y: auto; padding: 0 12px; }
+.card-side-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.card-side-list .quiet { padding: 0 4px; height: auto; vertical-align: middle; }
+.card-side-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; margin-top: 2px; }
+.card-side-empty { display: grid; justify-items: center; gap: 6px; text-align: center; margin-top: 30%; color: var(--text2); font-size: 12px; }
+.card-side-empty strong { color: var(--text); font-size: 13px; }
+.card-side-input { margin: 10px 12px 12px; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; resize: vertical; min-height: 38px; }
 .card-primary { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
 .card-title { margin: -8px 0 6px; padding-bottom: 14px; border-bottom: 1px solid var(--line); font-size: 22px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
 .card-hidden { display: flex; justify-content: center; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
@@ -121,12 +132,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .fld-multi { display: grid; gap: 4px; padding-top: 4px; }
 .pill { display: inline-block; padding: 1px 8px; font-size: 12px; line-height: 18px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .link-cards { display: grid; gap: 6px; }
-.link-card { text-align: left; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px 10px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-card { text-align: left; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px 10px; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); display: grid; gap: 6px; min-width: 0; }
+.link-card-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-card-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.link-card-fields > span { display: grid; gap: 2px; min-width: 0; }
+.link-card-fields small { color: var(--text2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-card-val { background: #e9eef6; border-radius: 4px; padding: 1px 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; justify-self: start; max-width: 100%; }
 .link-card:hover { border-color: #c4c7cd; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08); }
+@media (max-width: 900px) { .card-main { flex-direction: column; overflow-y: auto; } .card-body { overflow: visible; } .card-side { width: auto; border-left: 0; border-top: 1px solid var(--line); } }
 @media (max-width: 640px) { .card-body { padding: 20px 16px; } .fld-inline { grid-template-columns: 1fr; gap: 4px; } }
 
 /* «+» внизу слева сетки, как в Airtable */
-.add-row { position: absolute; left: 10px; bottom: 6px; z-index: 2; width: 30px; height: 22px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--text2); display: grid; place-items: center; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+.grid-foot { flex: none; height: 32px; display: flex; align-items: center; gap: 12px; padding: 0 10px; border-top: 1px solid var(--line); background: #fff; color: var(--text2); font-size: 12px; }
+.add-row { height: 24px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text2); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px; }
 .add-row:hover { color: var(--text); border-color: #c4c7cd; }
 
 /* список вариантов в ячейке, как в Airtable */

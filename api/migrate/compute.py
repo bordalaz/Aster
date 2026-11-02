@@ -347,9 +347,11 @@ def _deps(conn, opts: dict, kind: str) -> set:
     return out
 
 
-def compute_all(conn, today, aggs: dict | None = None) -> dict:
+def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None, changed: set | None = None) -> dict:
     """Все вычисляемые поля базы от сырых данных, по цепочке зависимостей (at_computed не читается).
-    → {field_id: {airtable_id записи: значение в виде API}}. Битые и неописанные в aggs rollup — пустые."""
+    → {field_id: {airtable_id записи: значение в виде API}}. Битые и неописанные в aggs rollup — пустые.
+    prev + changed (airtable_id изменённых сырых полей) — пересчёт только зависящих от них полей
+    (прямо или по цепочке); остальные берутся из prev. Формулы с TODAY()/NOW() считаются всегда."""
     from graphlib import TopologicalSorter
 
     from .rollup_aggs import AGG
@@ -359,10 +361,18 @@ def compute_all(conn, today, aggs: dict | None = None) -> dict:
         "from app_field f join app_table t on t.id = f.table_id where f.kind = any(:k)"),
         {"k": list(COMPUTED_KINDS)}).all()
     info = {r.airtable_id: r for r in rows}
-    graph = {fid: {d for d in _deps(conn, _as_dict(r.options), r.kind) if d in info} for fid, r in info.items()}
+    deps = {fid: _deps(conn, _as_dict(r.options), r.kind) for fid, r in info.items()}
+    graph = {fid: {d for d in ds if d in info} for fid, ds in deps.items()}
     cache = Values(computed={})
+    dirty = None if prev is None or changed is None else set(changed)
     for fid in TopologicalSorter(graph).static_order():
         r = info[fid]
+        if dirty is not None:
+            clock = r.kind == "formula" and any(w in _as_dict(r.options).get("formula", "").upper() for w in ("TODAY(", "NOW("))
+            if fid in prev and not clock and not deps[fid] & dirty:
+                cache.computed[fid] = prev[fid]
+                continue
+            dirty.add(fid)
         if _as_dict(r.options).get("isValid") is False:
             out = {}
         elif r.kind == "formula":

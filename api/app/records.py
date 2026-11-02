@@ -35,7 +35,15 @@ def load_table(c, table_id: int):
 
 # ponytail: отдаём все строки сразу (13,6 тыс. ≈ 3 МБ JSON) — сетке нужен весь набор; постранично — если упрёмся
 @router.get("/{table_id}/records")
-def list_records(table_id: int, user: dict = Depends(active_user)):
+def list_records(table_id: int, fresh: bool = False, ids: str | None = None, user: dict = Depends(active_user)):
+    """fresh — после правки: дождаться пересчёта вычисляемых полей (не дольше 20 с), отдать свежие.
+    ids — только эти записи (через запятую): мини-карточки связей в карточке."""
+    try:
+        only = [int(x) for x in ids.split(",")][:500] if ids else None
+    except ValueError:
+        raise HTTPException(422, "ids — числа через запятую")
+    if fresh:
+        computed.settle(20)
     with engine.connect() as c:
         table_title(c, table_id, user)
         t, fields = load_table(c, table_id)
@@ -43,7 +51,8 @@ def list_records(table_id: int, user: dict = Depends(active_user)):
         fields = [f for f in fields if f.column_name not in hidden]
         cols = [t.c.id, t.c.updated_at] + [t.c[f.column_name] for f in fields if f.column_name in t.c and not f.options.get("virtual")]
         if "airtable_id" not in t.c:
-            return [dict(r) for r in c.execute(select(*cols).order_by(t.c.id)).mappings()]
+            q = select(*cols).order_by(t.c.id)
+            return [dict(r) for r in c.execute(q if only is None else q.where(t.c.id.in_(only))).mappings()]
         # вычисляемые поля — из движка (ключ — airtable_id записи, наружу его не отдаём)
         comp = computed.values()
         virt = [(f.column_name, comp.get(f.airtable_id, {})) for f in fields if f.kind in COMPUTED_KINDS]
@@ -54,7 +63,8 @@ def list_records(table_id: int, user: dict = Depends(active_user)):
         files = [(f.column_name, f.airtable_id) for f in fields if f.kind == attachments.ATTACH]
         att = attachments.values_for(c, c.execute(text("select airtable_id from app_table where id = :t"), {"t": table_id}).scalar()) if files else {}
         out = []
-        for r in c.execute(select(*cols, t.c.airtable_id).order_by(t.c.id)).mappings():
+        q = select(*cols, t.c.airtable_id).order_by(t.c.id)
+        for r in c.execute(q if only is None else q.where(t.c.id.in_(only))).mappings():
             d = dict(r)
             at = d.pop("airtable_id")
             d.update((col, mappers[col](vals.get(at)) if col in mappers else vals.get(at)) for col, vals in virt)
@@ -120,7 +130,7 @@ def create_record(table_id: int, user: dict = Depends(active_user)):
         row = c.execute(insert(t).values(**extra, updated_by=user["id"]).returning(t.c.id, t.c.updated_at)).first()
         c.execute(text("insert into app_change (table_id, record_id, column_name, old, new, user_id) "
                        "values (:t, :r, 'id', null, to_jsonb(:r), :u)"), {"t": table_id, "r": row.id, "u": user["id"]})
-    computed.invalidate()
+    computed.invalidate(full=True)   # новая запись — во всех формулах таблицы и итогах по связям
     return {"id": row.id, "updated_at": row.updated_at}
 
 
@@ -174,3 +184,51 @@ def history(table_id: int, record_id: int, user: dict = Depends(active_user)):
             "where ch.table_id = :t and ch.record_id = :r order by ch.at desc, ch.id desc"
         ), {"t": table_id, "r": record_id})
         return [r._asdict() for r in rows]
+
+
+# Комментарии к записи (правая панель карточки, как в Airtable): видит и пишет всякий, кому видна таблица.
+class CommentBody(BaseModel):
+    text: str = Field(max_length=10000)
+
+
+def _record_exists(c, table_id: int, record_id: int, user: dict) -> None:
+    table_title(c, table_id, user)
+    pg = c.execute(text("select pg_name from app_table where id = :t"), {"t": table_id}).scalar()
+    if c.execute(text(f'select 1 from "{pg}" where id = :r'), {"r": record_id}).first() is None:
+        raise HTTPException(404, "Нет такой записи")
+
+
+@router.get("/{table_id}/records/{record_id}/comments")
+def list_comments(table_id: int, record_id: int, user: dict = Depends(active_user)):
+    with engine.connect() as c:
+        table_title(c, table_id, user)
+        rows = c.execute(text(
+            "select cm.id, cm.text, cm.at, u.name as user, cm.user_id = :me as mine from app_comment cm "
+            "join app_user u on u.id = cm.user_id where cm.table_id = :t and cm.record_id = :r order by cm.at, cm.id"
+        ), {"t": table_id, "r": record_id, "me": user["id"]})
+        return [r._asdict() for r in rows]
+
+
+@router.post("/{table_id}/records/{record_id}/comments")
+def add_comment(table_id: int, record_id: int, body: CommentBody, user: dict = Depends(active_user)):
+    body_text = body.text.strip()
+    if not body_text:
+        raise HTTPException(422, "Пустой комментарий")
+    with engine.begin() as c:
+        _record_exists(c, table_id, record_id, user)
+        cid = c.execute(text(
+            "insert into app_comment (table_id, record_id, user_id, text) values (:t, :r, :u, :x) returning id"
+        ), {"t": table_id, "r": record_id, "u": user["id"], "x": body_text}).scalar()
+    return {"id": cid}
+
+
+@router.delete("/{table_id}/records/{record_id}/comments/{comment_id}")
+def delete_comment(table_id: int, record_id: int, comment_id: int, user: dict = Depends(active_user)):
+    with engine.begin() as c:
+        table_title(c, table_id, user)
+        n = c.execute(text(
+            "delete from app_comment where id = :i and table_id = :t and record_id = :r and user_id = :u"
+        ), {"i": comment_id, "t": table_id, "r": record_id, "u": user["id"]}).rowcount
+    if not n:
+        raise HTTPException(404, "Нет такого комментария")   # чужой — тоже 404: удаляет только автор
+    return {"ok": True}

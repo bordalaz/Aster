@@ -50,7 +50,7 @@ const ROW_H = { small: 32, medium: 56, large: 88, xlarge: 128 }, GROUP_H = 44, N
 // Сетка управляется конфигом вида: колонки и их порядок, ширины, сортировка, фильтры (R9, R10).
 // Без onConfigChange (тесты, простые места) держит конфиг сама. search — поиск из панели вида.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd }) {
+  search = '', exportRef, onAdd, collapseKey }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -83,16 +83,19 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   // Группировка (R9) и строка итогов, закреплённая внизу.
   const groupFields = useMemo(() => groupCols(config.group).map(c => fields.find(f => f.column_name === c)).filter(Boolean),
     [config.group, fields])
-  const [collapsed, setCollapsed] = useState(new Set())
+  // Свёрнутые группы помнятся по виду у пользователя в браузере, как в Airtable (collapseKey — таблица+вид).
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(collapseKey)) ?? []) } catch { return new Set() }
+  })
+  useEffect(() => {
+    if (collapseKey) try { localStorage.setItem(collapseKey, JSON.stringify([...collapsed])) } catch { /* приватный режим */ }
+  }, [collapseKey, collapsed])
   const items = useMemo(() => groupRows(shownRows, groupFields, collapsed), [shownRows, groupFields, collapsed])
   // Итоги как у Airtable по умолчанию: суммы только у числовых полей, остальное пусто; слева — число записей.
   // Итоги внизу — по настройке вида, как в Airtable; у «Все записи» (своего вида в Airtable нет) — суммы чисел.
-  const totals = useMemo(() => cols.map((c, i) => {
-    const count = `${view.length} ${plural(view.length)}`
-    const own = config.summary ? summarize(c, shownRows, config.summary[c.column_name])
-      : config.source !== 'airtable' && NUMERIC.has(kindOf(c)) ? columnTotal(c, shownRows) : ''
-    return i === 0 ? [count, own].filter(Boolean).join(' · ') : own
-  }), [cols, shownRows, view.length, config.summary, config.source])
+  const totals = useMemo(() => cols.map(c => (config.summary ? summarize(c, shownRows, config.summary[c.column_name])
+    : config.source !== 'airtable' && NUMERIC.has(kindOf(c)) ? columnTotal(c, shownRows) : '')),
+  [cols, shownRows, config.summary, config.source])
   // ПКМ по заголовку группы — меню как в Airtable: свернуть/развернуть группу, развернуть все, свернуть все.
   const [groupMenu, setGroupMenu] = useState(null)   // {x, y, id, collapsed}
   const hovered = useRef(null)                        // ячейка под курсором — для ПКМ
@@ -127,7 +130,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     themeOverride: bold ? { baseFontStyle: '500 13px' } : undefined })
   const getCellContent = useCallback(([ci, ri]) => {
     if (ri === items.length) {                                         // строка итогов
-      return ci === 0 ? text('', false) : text(totals[ci - 1], false)   // в колонке номеров — кнопка «+»
+      return ci === 0 ? text('', false) : text(totals[ci - 1], false)
     }
     const it = items[ri]
     if (it.kind === 'group') {
@@ -189,7 +192,6 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--canvas)' }}>
-      <span role="status" className="sr-only">{view.length} {plural(view.length)}</span>
       <span data-testid="col-order" style={{ display: 'none' }}>{cols.map(c => c.column_name).join(',')}</span>
       <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
       {/* ПКМ ловим на контейнере: в Glide 6.0.3 onCellContextMenu для мыши не срабатывает (слушатель вешается до появления элемента) */}
@@ -211,7 +213,6 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
             onToggle={() => toggleGroup(groupMenu.id)} onExpandAll={() => setCollapsed(new Set())}
             onCollapseAll={() => setCollapsed(new Set(allGroupIds()))} />
         )}
-        {onAdd && <button className="add-row" aria-label="Добавить запись" title="Добавить запись" onClick={onAdd}><Icon name="plus" size={14} /></button>}
         <DataEditor
           theme={THEME}
           headerIcons={headerIcons}
@@ -252,6 +253,11 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           smoothScrollX
           getCellsForSelection
         />
+      </div>
+      {/* нижняя полоса как в Airtable: «+ Добавить» и число записей — вне сетки, ничего не перекрывает */}
+      <div className="grid-foot">
+        {onAdd && <button className="add-row" onClick={onAdd}><Icon name="plus" size={14} />Добавить запись</button>}
+        <span role="status">{view.length} {plural(view.length)}</span>
       </div>
     </div>
   )

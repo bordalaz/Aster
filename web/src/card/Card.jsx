@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import FieldEditor from './fields.jsx'
 import History from './History.jsx'
+import Comments from './Comments.jsx'
 import Files from '../files/Files.jsx'
 import { api } from '../api.js'
 import { displayValue } from '../grid/cells.js'
@@ -78,6 +79,7 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
           <span className="card-head-title">{title}</span>
           <button className="quiet" aria-label="Закрыть" onClick={onClose} style={{ marginLeft: 'auto' }}><Icon name="x" /></button>
         </header>
+        <div className="card-main">
         <div className="card-body">
           {primary && <div className="card-primary"><Icon name={fieldIcon(primary.kind)} size={14} />{primary.title}</div>}
           <h2 className="card-title">{title}</h2>
@@ -94,6 +96,8 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
           )}
           {showHidden && hidden.map(render)}
           {tableId && <History tableId={tableId} recordId={record.id} version={record.updated_at} fields={fields} />}
+        </div>
+        {tableId && <Comments tableId={tableId} recordId={record.id} />}
         </div>
       </div>
     </div>
