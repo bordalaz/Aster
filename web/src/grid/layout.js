@@ -1,4 +1,4 @@
-import { displayValue, kindOf, NUMBER, numText } from './cells.js'
+import { displayValue, kindOf, NUMBER, numText, sortKey } from './cells.js'
 import { choiceColor, HUE_SHADES } from './renderers.js'
 import { applyFilters } from './viewConfig.js'
 
@@ -10,13 +10,13 @@ const keyCompare = (a, b) => a.localeCompare(b, 'ru', { numeric: true })
 export function groupRows(rows, fields, collapsed = new Set(), depth = 0, path = []) {
   const [field, ...rest] = (Array.isArray(fields) ? fields : [fields]).filter(Boolean)
   if (!field) return rows.map(row => ({ kind: 'row', row }))
-  const groups = new Map()
+  const groups = new Map(), order = new Map()   // order: показанный ключ → ключ сортировки (у дат — ISO)
   for (const row of rows) {
     const key = displayValue(field, row[field.column_name])
-    if (!groups.has(key)) groups.set(key, [])
+    if (!groups.has(key)) { groups.set(key, []); order.set(key, sortKey(field, row[field.column_name])) }
     groups.get(key).push(row)
   }
-  const keys = [...groups.keys()].sort((a, b) => (a === '—') - (b === '—') || keyCompare(a, b))
+  const keys = [...groups.keys()].sort((a, b) => (a === '—') - (b === '—') || keyCompare(order.get(a), order.get(b)))
   return keys.flatMap(key => {
     const p = [...path, key], id = p.join(''), folded = collapsed.has(id)
     return [
