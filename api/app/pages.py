@@ -28,6 +28,8 @@ def _visible(c, user: dict, cfg: dict) -> bool:
     if lst := cfg.get("list"):   # «список + карточка»: колонки списка, его фильтр и сортировка
         used |= {(lst["table"], f) for f in [*lst["columns"], *lst["header"], *(x["col"] for x in lst["filters"]),
                                              *(x["col"] for x in lst["sort"])]}
+    if g := cfg.get("gallery"):   # галерея: заголовок, поля и обложка карточек, её фильтр
+        used |= {(g["table"], f) for f in [g["title"], g["cover"], *g["fields"], *(x["col"] for x in g["filters"])]}
     titles = dict(c.execute(text("select id, title from app_table")).all())
     for t in {t for t, _ in used}:
         if t not in titles or not can_read(user, titles[t]):

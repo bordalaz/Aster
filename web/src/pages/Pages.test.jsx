@@ -99,4 +99,34 @@ describe('Интерфейсы', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Следующее фото' }))
     expect(screen.getByRole('img', { name: 'b.png' })).toBeInTheDocument()
   })
+
+  it('галерея: фильтр источника, стрелка листает обложку, щелчок — страница записи только для чтения, «Назад»', async () => {
+    const gl = { id: 1, title: 'Журнал', subtitle: 'Журнал', filters: [],
+      gallery: { table: 5, title: 'name', cover: 'foto', fields: ['god'], filters: [{ col: 'name', op: 'contains', value: '829' }] },
+      rows: [[[{ type: 'field', table: 5, col: 'note', readonly: true, w: 12 }]], [[{ type: 'attachments', table: 5, col: 'foto', readonly: true, w: 12 }]]] }
+    const fs = [...fields, { column_name: 'name', title: '№ записи', kind: 'singleLineText' },
+      { column_name: 'note', title: 'Описание', kind: 'multilineText', editable: true },
+      { column_name: 'foto', title: 'Вложения', kind: 'multipleAttachments', editable: true }]
+    const rs = [{ id: 1, name: 'Нарушение 829', god: '2024', note: 'окалина', foto: [{ id: 'a', name: 'a.jpg', mime: 'image/jpeg' }, { id: 'b', name: 'b.jpg', mime: 'image/jpeg' }] },
+      { id: 2, name: 'Другое 100', god: '2025', note: '', foto: [] }]
+    mock()
+    server.use(
+      http.get('/api/pages/1', () => HttpResponse.json(gl)),
+      http.get('/api/tables/5/fields', () => HttpResponse.json(fs)),
+      http.get('/api/tables/5/records', () => HttpResponse.json(rs)),
+      http.get('/api/tables/5/records/1/comments', () => HttpResponse.json([])),
+    )
+    render(<Pages />)
+    expect(await screen.findByRole('button', { name: 'Нарушение 829' })).toBeInTheDocument()
+    expect(screen.queryByText('Другое 100')).toBeNull()   // фильтр источника страницы
+    await userEvent.click(screen.getByRole('button', { name: 'Следующее фото' }))
+    expect(screen.getByRole('img', { name: 'b.jpg' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Назад/ })).toBeNull()   // стрелка карточку не открывает
+    await userEvent.click(screen.getByRole('button', { name: 'Нарушение 829' }))
+    expect(screen.getByRole('heading', { name: 'Нарушение 829' })).toBeInTheDocument()
+    expect(screen.getByText('окалина')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Описание' })).toBeNull()   // только чтение
+    await userEvent.click(screen.getByRole('button', { name: 'Назад к «Журнал»' }))
+    expect(screen.getByRole('button', { name: 'Нарушение 829' })).toBeInTheDocument()
+  })
 })

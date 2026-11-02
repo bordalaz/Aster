@@ -5,6 +5,8 @@ import { rowColor } from '../grid/layout.js'
 import { choiceColor } from '../grid/renderers.js'
 import { applyFilters, LIST_OPS, NO_VALUE, OPS } from '../grid/viewConfig.js'
 import FieldEditor from '../card/fields.jsx'
+import Comments from '../card/Comments.jsx'
+import { Icon } from '../ui/icons.jsx'
 import { aggregate, applyConds, series } from './dash.js'
 import { BarChart, PieChart, Tile, colorsFor, fmt } from './charts.jsx'
 
@@ -56,7 +58,7 @@ function Page({ id }) {
   useEffect(() => {
     api(`/api/pages/${id}`).then(c => { setCfg(c); setConds(Object.fromEntries(c.filters.map(f => [f.id, f.conds]))) })
   }, [id])
-  const tableIds = useMemo(() => (cfg ? [...new Set([...walk(cfg.rows).map(e => e.table), cfg.list?.table].filter(Boolean))].sort() : []), [cfg])
+  const tableIds = useMemo(() => (cfg ? [...new Set([...walk(cfg.rows).map(e => e.table), cfg.list?.table, cfg.gallery?.table].filter(Boolean))].sort() : []), [cfg])
   const [data, setData] = useTables(tableIds)
   if (!cfg) return <p style={{ padding: 16 }}>Загрузка…</p>
   const ready = tableIds.every(t => data[t])
@@ -64,6 +66,7 @@ function Page({ id }) {
     const t = data[el.table]
     return el.filter && conds[el.filter] ? applyConds(t.rows, t.fields, conds[el.filter]) : t.rows
   }
+  if (cfg.gallery) return ready ? <Gallery cfg={cfg} data={data} /> : <p style={{ padding: 16 }}>Загрузка данных…</p>
   if (cfg.list) return ready ? <ListCard cfg={cfg} data={data} setData={setData} /> : <p style={{ padding: 16 }}>Загрузка данных…</p>
   return (
     <section className="dash" aria-label={cfg.title}>
@@ -130,6 +133,57 @@ function ListCard({ cfg, data, setData }) {
   )
 }
 
+// Галерея, как в Airtable: карточки (обложка-карусель, заголовок, поля), фильтр источника страницы.
+// Щелчок по карточке — страница записи: «← Назад», заголовок, поля слева подписями (только чтение), справа комментарии.
+function Gallery({ cfg, data }) {
+  const g = cfg.gallery
+  const t = data[g.table]
+  const items = useMemo(() => applyFilters(Object.values(t.fields), t.rows, g.filters), [t, g])
+  const [open, setOpen] = useState(null)
+  const title = r => (t.fields[g.title] ? displayValue(t.fields[g.title], r[g.title]) : '') || `Запись №${r.id}`
+  const record = items.find(r => r.id === open)
+  if (record) {
+    return (
+      <section className="gl-page" aria-label={title(record)}>
+        <div className="gl-main">
+          <button type="button" className="gl-back" onClick={() => setOpen(null)}><Icon name="arrowLeft" size={14} />Назад к «{cfg.subtitle || cfg.title}»</button>
+          <h1 className="gl-title">{title(record)}</h1>
+          {cfg.rows.map(([[el]]) => {
+            const f = t.fields[el.col]
+            if (!f) return null
+            return el.type === 'attachments'
+              ? <div key={el.col} className="fld fld-inline"><span className="fld-label">{f.title}</span>
+                  <div className="fld-value"><Carousel files={record[el.col]} height={(el.h ?? 8) * UNIT} /></div></div>
+              : <FieldEditor key={el.col} inline field={{ ...f, editable: false }} value={record[el.col]} onChange={() => {}} />
+          })}
+        </div>
+        <Comments tableId={g.table} recordId={record.id} />
+      </section>
+    )
+  }
+  return (
+    <section className="gl" aria-label={cfg.title}>
+      {!items.length && <p className="dash-empty">Нет записей</p>}
+      {items.map(r => (
+        // вся карточка щёлкается, как в Airtable; с клавиатуры — заголовок-кнопка
+        <article key={r.id} className="gl-card" onClick={() => setOpen(r.id)}>
+          {g.cover && <Carousel files={r[g.cover]} height={147} dots />}
+          <div className="gl-body">
+            <button type="button" className="gl-name" onClick={e => { e.stopPropagation(); setOpen(r.id) }}>{title(r)}</button>
+            {g.fields.filter(c => t.fields[c]).map(c => (
+              <div key={c} className="gl-val">{r[c] == null || r[c] === '' || (Array.isArray(r[c]) && !r[c].length)
+                ? <span className="gl-blank" aria-label={`${t.fields[c].title}: пусто`} />
+                : t.fields[c].kind === 'multipleRecordLinks'
+                  ? [].concat(r[c]).map(v => <span key={v.id ?? v} className="pill gl-link">{v.name ?? v}</span>)
+                  : <Value field={t.fields[c]} value={r[c]} />}</div>
+            ))}
+          </div>
+        </article>
+      ))}
+    </section>
+  )
+}
+
 // сразу сохраняются — как в Airtable; текст и числа — при уходе с поля или Enter (как в карточке записи)
 const IMMEDIATE = new Set(['checkbox', 'singleSelect', 'multipleSelects', 'date', 'dateTime', 'duration'])
 
@@ -155,7 +209,7 @@ function PageField({ field, record, onSave }) {
 }
 
 // Фото записи по одному, как карусель Airtable: вписаны в рамку, листаются стрелками.
-function Carousel({ files, height }) {
+function Carousel({ files, height, dots = false }) {
   const imgs = (files ?? []).filter(f => /^image\//.test(f.mime ?? ''))
   const [i, setI] = useState(0)
   if (!imgs.length) return <div className="lc-carousel empty" style={{ height }}>Нет фото</div>
@@ -164,9 +218,11 @@ function Carousel({ files, height }) {
     <div className="lc-carousel" style={{ height }}>
       <img src={`/api/attachments/${f.id}?inline=1`} alt={f.name} />
       {imgs.length > 1 && <>
-        <button type="button" className="lc-prev" aria-label="Предыдущее фото" onClick={() => setI((i + imgs.length - 1) % imgs.length)}>‹</button>
-        <button type="button" className="lc-next" aria-label="Следующее фото" onClick={() => setI((i + 1) % imgs.length)}>›</button>
-        <span className="lc-pos">{(i % imgs.length) + 1} / {imgs.length}</span>
+        <button type="button" className="lc-prev" aria-label="Предыдущее фото" onClick={e => { e.stopPropagation(); setI((i + imgs.length - 1) % imgs.length) }}>‹</button>
+        <button type="button" className="lc-next" aria-label="Следующее фото" onClick={e => { e.stopPropagation(); setI((i + 1) % imgs.length) }}>›</button>
+        {dots
+          ? <span className="gl-dots" aria-label={`Фото ${(i % imgs.length) + 1} из ${imgs.length}`}>{imgs.slice(0, 5).map((_, k) => <i key={k} className={k === Math.min(i, 4) ? 'on' : undefined} />)}</span>
+          : <span className="lc-pos">{(i % imgs.length) + 1} / {imgs.length}</span>}
       </>}
     </div>
   )

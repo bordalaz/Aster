@@ -41,6 +41,7 @@ import check from '@phosphor-icons/core/assets/regular/check.svg?raw'
 import send from '@phosphor-icons/core/assets/regular/paper-plane-tilt.svg?raw'
 import arrowUp from '@phosphor-icons/core/assets/regular/arrow-up.svg?raw'
 import arrowDown from '@phosphor-icons/core/assets/regular/arrow-down.svg?raw'
+import arrowLeft from '@phosphor-icons/core/assets/regular/arrow-left.svg?raw'
 import expand from '@phosphor-icons/core/assets/regular/arrows-out-simple.svg?raw'
 import collapse from '@phosphor-icons/core/assets/regular/arrows-in-simple.svg?raw'
 import expandV from '@phosphor-icons/core/assets/regular/arrows-out-line-vertical.svg?raw'
@@ -55,7 +56,7 @@ import chat from '@phosphor-icons/core/assets/regular/chats.svg?raw'
 export const ICONS = {
   aa, target, textLeft, hash, clock, fn, caretCircle, listBullets, checkSquare, calendar, paperclip, link, at, phone,
   binoculars, sigma, numbers, percent, star, rub, user, search, eyeSlash, eye, lock, info, funnel, list, rows, sort, caretDown,
-  table, download, floppy, trash, copy, plus, x, check, expand, collapse, expandV, collapseV, database, signOut, key, users, textbox, chat, send, arrowUp, arrowDown,
+  table, download, floppy, trash, copy, plus, x, check, expand, collapse, expandV, collapseV, database, signOut, key, users, textbox, chat, send, arrowUp, arrowDown, arrowLeft,
 }
 
 // Значок типа поля — как в заголовках Airtable.
