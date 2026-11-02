@@ -1,4 +1,4 @@
-import { DATE_KINDS, dateParts, displayValue, kindOf } from './cells.js'
+import { DATE_KINDS, dateParts, displayValue, kindOf, sortKey } from './cells.js'
 
 // Условия фильтра; value не нужен для «пусто/не пусто».
 export const OPS = {
@@ -73,4 +73,20 @@ export function applyFilters(fields, rows, filters) {
 export function sameConfig(a = {}, b = {}) {
   const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
   return [...keys].every(k => JSON.stringify((a ?? {})[k] ?? null) === JSON.stringify((b ?? {})[k] ?? null))
+}
+
+// Сортировка как у вида: по каждому ключу, начиная с младшего; сравнение показанных значений.
+export function sortRows(rows, fields, sort) {
+  const out = [...rows]
+  for (const s of [...sort].reverse()) {
+    const f = fields[s.col]
+    if (!f) continue
+    out.sort((a, b) => {
+      const x = a[s.col], y = b[s.col]
+      const d = typeof x === 'number' && typeof y === 'number' ? x - y
+        : sortKey(f, x).localeCompare(sortKey(f, y), 'ru', { numeric: true })
+      return s.desc ? -d : d
+    })
+  }
+  return out
 }

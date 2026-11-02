@@ -6,7 +6,12 @@
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
-from .views import _filters, _record_names, load_views
+from .views import _filters, _record_names, convert_view, load_views
+
+# Обложки галерей (Customize cards → Image field; везде Crop) — в снимках видов их нет, сняты из живого
+# Airtable 2026-11-02, только чтение. Нет в словаре — без обложки.
+COVERS = {"viwmuaVVgwHwQtGjN": "Вложения", "viwENZaTKU2ZiTgJ4": "Вложения", "viwKrdc09ARSmmwcj": "Attachments",
+          "viw4TFdJq1QC0n22o": "Attachments", "viwZIsbMfWhbE71Lw": "Фото", "viw423cnrJ2mDKShH": "Фото"}
 
 
 def compact(fs: dict | None) -> dict:
@@ -89,4 +94,41 @@ def load_view_meta(c, lines: list[dict]) -> int:
             extra["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text("update app_view set config = config || :e where airtable_id = :a")
                   .bindparams(bindparam("e", type_=JSONB)), {"e": extra, "a": v["id"]})
+    return n + load_galleries(c, lines, raw, cols, recs, rec_ids)
+
+
+def load_galleries(c, lines, raw, cols, recs, rec_ids) -> int:
+    """Общие галереи → app_view kind='gallery': поля карточки (видимые, первое — заголовок), фильтр,
+    сортировка, ручной порядок, обложка (COVERS, по названию поля таблицы)."""
+    tables = dict(c.execute(text("select airtable_id, id from app_table")).all())
+    order: dict[str, int] = {}
+    n = 0
+    for x in lines:
+        v, vd = x["view"], x["viewData"]
+        i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1   # место вида в таблице, как у load_views
+        tid = tables.get(x["tableId"])
+        if v["type"] != "gallery" or v.get("personalForUserId") or tid is None:
+            continue
+        config = {"source": "airtable",
+                  "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
+        extra, problems = convert_view(raw[v["id"]], cols, recs)
+        config |= {k: val for k, val in extra.items() if k != "group"}   # в галерее групп нет
+        for p in problems:
+            print(f"Галерея «{x.get('table')} / {v['name']}»: фильтры не перенесены — {p}")
+        if cover := COVERS.get(v["id"]):
+            col = c.execute(text("select column_name from app_field where table_id = :t and title = :n and kind = 'multipleAttachments'"),
+                            {"t": tid, "n": cover}).scalar()
+            if col:
+                config["cover"] = col
+        s = vd.get("lastSortsApplied") or {}
+        if not s.get("shouldAutoSort") and vd.get("rowOrder"):
+            ids = rec_ids(x["tableId"])
+            config["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
+        c.execute(text(
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
+            "values (:t, :n, 'gallery', :c, :o, :a) "
+            "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
+            "config = excluded.config, sort_order = excluded.sort_order"
+        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+        n += 1
     return n

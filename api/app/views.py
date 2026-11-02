@@ -55,9 +55,10 @@ class ViewConfig(Strict):
     color: dict[str, Any] | None = None
     locked: bool | None = None
     rowOrder: list[int] | None = Field(None, max_length=200_000)   # ручной порядок — перетаскивание строк
+    cover: Annotated[str, Col] | None = None   # галерея: поле вложений — обложка карточки
 
     def used_columns(self) -> set[str]:
-        return (set(self.columns or ()) | set(self.widths or ()) | set(self.summary or ()) | {s.col for s in self.sort or ()}
+        return (set(self.columns or ()) | set(self.widths or ()) | ({self.cover} if self.cover else set()) | set(self.summary or ()) | {s.col for s in self.sort or ()}
                 | {f.col for f in self.filters or ()} | set([self.group] if isinstance(self.group, str) else self.group or ()))
 
 
@@ -73,7 +74,7 @@ def check_config(c, table_id: int, cfg: ViewConfig) -> dict:
 
 
 def _out(r, user) -> dict:
-    return {"id": r.id, "title": r.title, "config": r.config,
+    return {"id": r.id, "title": r.title, "kind": r.kind, "config": r.config,
             "shared": r.owner_id is None, "mine": r.owner_id == user["id"]}
 
 
@@ -82,8 +83,8 @@ def list_views(table_id: int, user: dict = Depends(active_user)):
     with engine.connect() as c:
         table_title(c, table_id, user)
         rows = c.execute(text(
-            "select id, title, owner_id, config from app_view "
-            "where table_id = :t and kind = 'grid' and (owner_id is null or owner_id = :u) "
+            "select id, title, kind, owner_id, config from app_view "
+            "where table_id = :t and kind in ('grid', 'gallery') and (owner_id is null or owner_id = :u) "
             "order by owner_id nulls first, sort_order, id"
         ), {"t": table_id, "u": user["id"]})
         return [_out(r, user) for r in rows]

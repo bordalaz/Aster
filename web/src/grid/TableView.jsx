@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 import { useRecords } from '../record/useRecords.js'
 import Grid from './Grid.jsx'
+import GalleryView from './GalleryView.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 import { groupCols, visibleColumns } from './viewConfig.js'
@@ -176,7 +177,9 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           } catch { setError('Не удалось создать вид') }
         }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
+          {view?.kind === 'gallery'
+            ? <GalleryView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} />
+            : <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
             onAdd={fields.some(f => f.editable) ? addRecord : undefined}
             canReorder={canReorder} onReorder={saveOrder}
@@ -184,7 +187,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             onDuplicate={fields.some(f => f.editable) ? duplicate : undefined}
             onSend={(rs, columns) => setSending({ rows: rs, columns })}
             onDelete={fields.some(f => f.editable) ? rs => (rs.length > 1 ? setAsking(rs) : remove(rs)) : undefined}
-            collapseKey={`aster.collapsed.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`} />
+            collapseKey={`aster.collapsed.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`} />}
         </div>
       </div>
       {asking && (

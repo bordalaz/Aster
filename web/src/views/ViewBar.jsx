@@ -25,6 +25,11 @@ function useDismiss(open, close) {
   return ref
 }
 
+// Значок вида, как в Airtable: таблица — синяя, галерея — фиолетовые квадраты.
+const ViewIcon = ({ kind, size }) => (kind === 'gallery'
+  ? <Icon name="gallery" size={size} style={{ color: '#7c37ef' }} />
+  : <Icon name="table" size={size} style={{ color: 'var(--accent)' }} />)
+
 // Список видов слева (☰), как в Airtable: «+ Создать вид», поиск, разделы «Мои личные» и «Общие» (сворачиваются).
 // onCreate(title) — новый личный вид из текущих настроек.
 export function ViewsSide({ views, current, onSelect, onCreate }) {
@@ -34,7 +39,7 @@ export function ViewsSide({ views, current, onSelect, onCreate }) {
   const match = v => v.title.toLowerCase().includes(q.trim().toLowerCase())
   const item = v => (
     <button key={v.id ?? 'all'} className="vs-item" aria-current={current === v.id ? 'true' : undefined} onClick={() => onSelect(v.id)} title={v.title}>
-      <Icon name="table" size={16} style={{ color: 'var(--accent)' }} /><span>{v.title}</span>
+      <ViewIcon kind={v.kind} size={16} /><span>{v.title}</span>
       {v.config?.locked && <Icon name="lock" size={12} style={{ color: 'var(--faint)', marginLeft: 'auto' }} title="Закреплённый вид" />}
     </button>
   )
@@ -149,7 +154,7 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
         <button className="tool" aria-label="Список видов" aria-pressed={side} onClick={onToggleSide}><Icon name="list" /></button>
         <div style={{ position: 'relative' }}>
           <button className="tool" aria-haspopup="menu" aria-label={`Вид: ${view?.title ?? 'Все записи'}`} aria-expanded={panel === 'menu'} onClick={() => toggle('menu')}>
-            <Icon name="table" style={{ color: 'var(--accent)' }} />
+            <ViewIcon kind={view?.kind} />
             <span className="viewname">{view?.title ?? 'Все записи'}</span>
             {view?.config?.locked && <Icon name="lock" size={12} style={{ color: 'var(--faint)' }} />}
             <Icon name="caretDown" size={12} />
@@ -227,7 +232,7 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
           )}
         </div>
 
-        <div style={{ position: 'relative' }}>
+        {view?.kind !== 'gallery' && <div style={{ position: 'relative' }}>{/* у галереи Airtable группировки нет */}
           <button className={`tool group${groups.length ? ' on' : ''}`} aria-expanded={panel === 'group'} onClick={() => toggle('group')}>
             <Icon name="rows" />{label.group}
           </button>
@@ -243,7 +248,7 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         <div style={{ position: 'relative' }}>
           <button className={`tool sort${sorts.length ? ' on' : ''}`} aria-expanded={panel === 'sort'} onClick={() => toggle('sort')}>
