@@ -6,6 +6,7 @@ import Users from './users/Users.jsx'
 import Forms from './forms/Forms.jsx'
 import Pages from './pages/Pages.jsx'
 import Trash from './trash/Trash.jsx'
+import Automations from './automations/Automations.jsx'
 import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
 import { Icon } from './ui/icons.jsx'
@@ -85,6 +86,7 @@ export default function Workspace({ user, onLogout }) {
           <button aria-current={section('table')} onClick={() => setScreen('table')}>Данные</button>
           <button aria-current={section('pages')} onClick={() => setScreen('pages')}>Интерфейсы</button>
           <button aria-current={section('forms')} onClick={() => setScreen('forms')}>Формы</button>
+          {isAdmin && <button aria-current={section('automations')} onClick={() => setScreen('automations')}>Автоматизации</button>}
         </nav>
         <div className="right">
           <ProfileMenu user={user} isAdmin={isAdmin} onUsers={() => setScreen('users')} onTrash={() => setScreen('trash')} onPassword={() => setScreen('password')} onLogout={onLogout} />
@@ -98,6 +100,7 @@ export default function Workspace({ user, onLogout }) {
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {screen === 'pages' && <Pages />}
         {screen === 'forms' && <Forms open={formOpen} />}
+        {screen === 'automations' && isAdmin && <Automations />}
         {screen === 'calibration' && <Calibration user={user} />}
         {screen === 'users' && <Users me={user} />}
         {screen === 'trash' && isAdmin && <Trash user={user} />}

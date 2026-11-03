@@ -61,6 +61,26 @@ def smtp_config() -> dict | None:
             "starttls": os.environ.get("SMTP_STARTTLS", "1") == "1"}  # 587 — STARTTLS; внутренний релей на 25 — 0
 
 
+def smtp_send(cfg: dict, subject: str, sender: str, to: list, cc: list, text_body: str, html_body: str) -> None:
+    """Письмо через SMTP из окружения; ошибки сервера — исключением (OSError / SMTPException)."""
+    m = EmailMessage()
+    m["Subject"], m["From"], m["To"] = subject, formataddr((sender, cfg["from"])), ", ".join(to)
+    if cc:
+        m["Cc"] = ", ".join(cc)
+    m.set_content(text_body)
+    m.add_alternative(html_body, subtype="html")
+    if cfg["ssl"]:
+        s = smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=ssl.create_default_context(), timeout=20)
+    else:
+        s = smtplib.SMTP(cfg["host"], cfg["port"], timeout=20)
+        if cfg["starttls"]:
+            s.starttls(context=ssl.create_default_context())
+    with s:
+        if cfg["user"]:
+            s.login(cfg["user"], cfg["password"] or "")
+        s.send_message(m)
+
+
 # --- значение поля → текст, как его показывает сетка ---
 def _opts(f) -> dict:   # у формул и подстановок формат — в options.result.options
     o = f["options"] or {}
@@ -213,21 +233,8 @@ def send_records(table_id: int, body: SendBody, user: dict = Depends(active_user
     recs.sort(key=lambda r: order.get(r["id"], 0))
     sender = user.get("name") or user["login"]
     html_body, text_body = render(table, sender, body.message, fields, recs, body.grid)
-    m = EmailMessage()
-    m["Subject"], m["From"], m["To"] = body.subject, formataddr((sender, cfg["from"])), ", ".join(body.to)
-    m.set_content(text_body)
-    m.add_alternative(html_body, subtype="html")
     try:
-        if cfg["ssl"]:
-            s = smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=ssl.create_default_context(), timeout=20)
-        else:
-            s = smtplib.SMTP(cfg["host"], cfg["port"], timeout=20)
-            if cfg["starttls"]:
-                s.starttls(context=ssl.create_default_context())
-        with s:
-            if cfg["user"]:
-                s.login(cfg["user"], cfg["password"] or "")
-            s.send_message(m)
+        smtp_send(cfg, body.subject, sender, body.to, [], text_body, html_body)
     except (OSError, smtplib.SMTPException) as e:
         log.warning("письмо не отправлено: %s → %s: %s", user["login"], body.to, e)
         raise HTTPException(502, "Почтовый сервер не принял письмо — попробуйте позже")

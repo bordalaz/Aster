@@ -10,7 +10,7 @@ from sqlalchemy import Boolean, bindparam, func, insert, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from . import attachments, computed, links
+from . import attachments, automations, computed, links
 from .access import can_read, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
@@ -155,6 +155,7 @@ def submit(form_id: int, body: SubmitBody, user: dict = Depends(active_user)):
             ).bindparams(bindparam("n", type_=JSONB)),
                 [{"t": f.table_id, "r": rid, "c": k, "n": v, "u": user["id"]} for k, v in new.items()] or
                 [{"t": f.table_id, "r": rid, "c": "id", "n": rid, "u": user["id"]}])
+            automations.after_change(c, f.table_id, rid, [{"c": k, "o": None, "n": v} for k, v in new.items()])
             c.execute(text("insert into app_form_submit (key, form_id, record_id, user_id) values (:k, :f, :r, :u)"),
                       {"k": body.key, "f": form_id, "r": rid, "u": user["id"]})
     except IntegrityError:

@@ -5,6 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+from sqlalchemy import text
+
 from app.db import engine
 
 from .airtable import AirtableClient
@@ -113,6 +115,22 @@ def cmd_views_full() -> int:
     return 0
 
 
+def cmd_automations() -> int:
+    """Настройки автоматизаций из снятого в Airtable (at_automations.json): получатели письма о перемещениях."""
+    p = SNAP / "at_automations.json"
+    if not p.exists():
+        print(f"Нет {p}")
+        return 2
+    snap = json.loads(p.read_text(encoding="utf-8"))
+    m = snap.get("mail_peremeshcheniya") or {}
+    settings = {"to": m.get("to", []), "cc": m.get("cc", []), "from_name": m.get("from_name", "")}
+    with engine.begin() as c:
+        c.execute(text("update app_automation set settings = cast(:s as jsonb) where key = 'mail_peremeshcheniya'"),
+                  {"s": json.dumps(settings, ensure_ascii=False)})
+    print(f"Письмо о перемещениях: получатели {len(settings['to'])}, копия {len(settings['cc'])}")
+    return 0
+
+
 def cmd_tables() -> int:
     """Скрытые таблицы из снимка веб-клиента Airtable (at_base_schema.json); данные не трогает."""
     from .tables import apply_hidden
@@ -173,11 +191,11 @@ def cmd_compute_verify() -> int:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m migrate", description=__doc__)
-    p.add_argument("command", choices=["fetch", "load", "views", "forms", "tables", "views-full", "pages", "verify", "compute-verify", "all"])
+    p.add_argument("command", choices=["fetch", "load", "views", "forms", "tables", "views-full", "pages", "automations", "verify", "compute-verify", "all"])
     p.add_argument("--no-files", action="store_true", help="без вложений; докачать — тот же fetch без флага")
     a = p.parse_args(argv)
     fetch = lambda: cmd_fetch(files=not a.no_files)  # noqa: E731
-    steps = {"fetch": [fetch], "load": [cmd_load], "views": [cmd_views], "forms": [cmd_forms], "tables": [cmd_tables], "views-full": [cmd_views_full], "pages": [cmd_pages], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
+    steps = {"fetch": [fetch], "load": [cmd_load], "views": [cmd_views], "forms": [cmd_forms], "tables": [cmd_tables], "views-full": [cmd_views_full], "pages": [cmd_pages], "automations": [cmd_automations], "verify": [cmd_verify], "compute-verify": [cmd_compute_verify],
              "all": [fetch, cmd_load, cmd_verify]}[a.command]
     for step in steps:
         code = step()
