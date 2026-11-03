@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from . import attachments, computed, links
 from .access import can_read, hidden_columns
 from .auth import ADMINS, active_user
-from .db import engine
+from .db import SNAPSHOT, engine
 from .records import _editable_table
 
 log = logging.getLogger(__name__)
@@ -32,6 +32,8 @@ def _admin(user: dict):
 
 
 def _purge_old(c) -> None:
+    if SNAPSHOT:   # снимок только для чтения — старое из корзины чистит рабочая база
+        return
     c.execute(text(f"delete from app_trash where deleted_at < now() - interval '{KEEP_DAYS} days'"))
 
 

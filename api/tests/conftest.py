@@ -11,11 +11,24 @@ url = make_url(os.environ["DATABASE_URL"])
 test_url = url.set(database=url.database + "_test")
 os.environ["DATABASE_URL"] = test_url.render_as_string(hide_password=False)
 
+# служебная база снимков — своя тестовая (как её создаёт ops/backup.sh)
+ops_url = url.set(database=url.database + "_test_ops")
+os.environ["OPS_DATABASE_URL"] = ops_url.render_as_string(hide_password=False)
+
 _admin = create_engine(url, isolation_level="AUTOCOMMIT")
 with _admin.connect() as c:
-    c.execute(text(f'drop database if exists "{test_url.database}" with (force)'))
-    c.execute(text(f'create database "{test_url.database}"'))
+    for db in (test_url.database, ops_url.database):
+        c.execute(text(f'drop database if exists "{db}" with (force)'))
+        c.execute(text(f'create database "{db}"'))
 _admin.dispose()
+_ops = create_engine(ops_url)
+with _ops.begin() as c:
+    c.execute(text("create table snapshot (id serial primary key, created_at timestamptz not null default now(), kind text not null, "
+                   "file text not null unique, size bigint, rows bigint, by_user text)"))
+    c.execute(text("create table job (id serial primary key, kind text not null, snapshot_id int, by_user text, status text not null "
+                   "default 'pending', message text not null default '', created_at timestamptz not null default now(), done_at timestamptz)"))
+    c.execute(text("create table state (key text primary key, value text not null)"))
+_ops.dispose()
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
