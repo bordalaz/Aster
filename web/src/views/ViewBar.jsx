@@ -66,8 +66,11 @@ export function ViewsSide({ views, current, onSelect, onCreate }) {
         <input aria-label="Найти вид" placeholder="Найти вид" value={q} onChange={e => setQ(e.target.value)} />
       </label>
       <div className="vs-list">{match({ title: 'Все записи' }) && item({ id: null, title: 'Все записи' })}</div>
-      {section('mine', 'Мои личные виды', views.filter(v => !v.shared && match(v)))}
+      {section('mine', 'Мои личные виды', views.filter(v => v.mine && match(v)))}
       {section('shared', 'Общие виды', views.filter(v => v.shared && match(v)))}
+      {/* личные виды Airtable, ещё ничьи — только админам (сервер так и отдаёт), по авторам */}
+      {[...new Set(views.filter(v => v.airtable_owner).map(v => v.airtable_owner))].map(who =>
+        section(`at:${who}`, `Личные Airtable: ${who}`, views.filter(v => v.airtable_owner === who && match(v))))}
     </aside>
   )
 }

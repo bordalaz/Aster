@@ -6,6 +6,7 @@ import Users from './users/Users.jsx'
 import Forms from './forms/Forms.jsx'
 import Pages from './pages/Pages.jsx'
 import Trash from './trash/Trash.jsx'
+import AirtableOffer from './views/AirtableOffer.jsx'
 import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
 import { Icon } from './ui/icons.jsx'
@@ -97,6 +98,7 @@ export default function Workspace({ user, onLogout }) {
         } : undefined} />}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {screen === 'pages' && <Pages />}
+        <AirtableOffer />
         {screen === 'forms' && <Forms open={formOpen} />}
         {screen === 'calibration' && <Calibration user={user} />}
         {screen === 'users' && <Users me={user} />}

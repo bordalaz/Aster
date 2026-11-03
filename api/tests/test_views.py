@@ -85,10 +85,12 @@ def test_import_airtable_views(loaded_fixture):
         {"id": "tblMissing", "views": [{"id": "viwZ", "name": "?", "type": "grid", "visibleFieldIds": []}]},
     ]
     with engine.begin() as c:
-        assert load_views(c, schema) == 1
-        assert load_views(c, schema) == 1   # повторно — обновление, без дублей
-        rows = c.execute(text("select title, kind, owner_id, config, airtable_id from app_view")).all()
+        assert load_views(c, schema) == 2
+        assert load_views(c, schema) == 2   # повторно — обновление, без дублей
+        rows = c.execute(text("select title, kind, owner_id, config, airtable_id from app_view where at_owner is null")).all()
+        personal = c.execute(text("select owner_id, at_owner from app_view where airtable_id = 'viwB3'")).one()
         cols = dict(c.execute(text("select airtable_id, column_name from app_field")).all())
+    assert personal == (None, {"id": "usrX", "name": "usrX"})   # личный Airtable — ничей, с автором, не общий
     assert len(rows) == 1
     title, kind, owner, config, at = rows[0]
     assert (title, kind, owner, at) == ("В работе", "grid", None, "viwB1")
@@ -218,3 +220,32 @@ def test_gallery_view_listed_with_kind_and_cover(tables):
     assert any(v["kind"] == "timeline" for v in u.get(f"/api/tables/{tables['eq']}/views").json())
     assert create(u, tables["eq"], config={"start": "name", "labelStyle": {"nosuch": {"bold": True}}}).status_code == 422
     assert create(u, tables["eq"], config={"start": "name", "layout": "stacked", "groupDesc": True}).status_code == 200
+
+
+def test_airtable_personal_views_admins_see_author_claims(tables):
+    from app.views import is_author
+    assert is_author({"name": "Чернов Юрий Петрович"}, {"name": "Юрий Чернов"})
+    assert is_author({"name": "чернов юрий"}, {"name": "Юрий Чернов"})
+    assert not is_author({"name": "Юрий Иванов"}, {"name": "Юрий Чернов"})
+    assert not is_author({"name": "Tech"}, {"name": "Tech"})   # одно слово — не сопоставляем
+    t = tables["eq"]
+    with engine.begin() as c:
+        c.execute(text("insert into app_view (table_id, title, kind, config, at_owner) values "
+                       "(:t, 'Юрий''s view', 'grid', '{}', '{\"name\": \"Юрий Чернов\"}'), "
+                       "(:t, 'Чужой', 'grid', '{}', '{\"name\": \"Teka Waqa\"}')"), {"t": t})
+    adm = as_user("adm", "admin")
+    got = {v["title"]: v for v in adm.get(f"/api/tables/{t}/views").json()}
+    assert got["Юрий's view"]["airtable_owner"] == "Юрий Чернов" and not got["Юрий's view"]["shared"]
+    assert adm.get("/api/views/airtable/offer").json() == []          # админ — не автор
+    u = as_user("yuri", "user")
+    with engine.begin() as c:
+        c.execute(text("update app_user set name = 'Чернов Юрий' where login = 'yuri'"))
+    assert all("airtable_owner" not in v for v in u.get(f"/api/tables/{t}/views").json())   # не админ — не видит
+    offer = u.get("/api/views/airtable/offer").json()
+    assert [o["title"] for o in offer] == ["Юрий's view"]
+    other = next(v["id"] for v in adm.get(f"/api/tables/{t}/views").json() if v["title"] == "Чужой")
+    assert u.post("/api/views/airtable/offer", json={"ids": [other]}).status_code == 404   # чужой не взять
+    assert u.post("/api/views/airtable/offer", json={"ids": [offer[0]["id"]]}).json()["added"] == 1
+    mine = [v for v in u.get(f"/api/tables/{t}/views").json() if v["mine"]]
+    assert [v["title"] for v in mine] == ["Юрий's view"]
+    assert u.get("/api/views/airtable/offer").json() == []            # второй раз не предлагаем

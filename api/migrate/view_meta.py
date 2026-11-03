@@ -60,7 +60,7 @@ def load_view_meta(c, lines: list[dict]) -> int:
 
     for x in lines:
         v, vd = x["view"], x["viewData"]
-        if v["type"] != "grid" or v.get("personalForUserId"):
+        if v["type"] != "grid":
             continue
         meta = (vd.get("metadata") or {}).get("grid", {})
         extra = {
@@ -97,6 +97,12 @@ def load_view_meta(c, lines: list[dict]) -> int:
     return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs) + load_timelines(c, lines, raw, cols, recs)
 
 
+def _owner(v: dict) -> dict | None:
+    """Личный вид Airtable — ничей, с автором (имя — tag_personal): иначе он стал бы общим."""
+    u = v.get("personalForUserId")
+    return {"id": u, "name": u} if u else None
+
+
 def _color(cc: dict, cols, recs) -> dict | None:
     """colorConfig вида → наш цвет (по полю выбора или правилам), как у таблицы."""
     if cc.get("type") == "selectColumn" and cc.get("selectColumnId") in cols:
@@ -126,7 +132,7 @@ def load_timelines(c, lines, raw, cols, recs) -> int:
         tid = tables.get(x["tableId"])
         t = (vd.get("metadata") or {}).get("timeline") or {}
         rng = (t.get("dateColumnRanges") or [{}])[0]
-        if v["type"] != "timeline" or v.get("personalForUserId") or tid is None or rng.get("startColumnId") not in cols:
+        if v["type"] != "timeline" or tid is None or rng.get("startColumnId") not in cols:
             continue
         config = {"source": "airtable", "start": cols[rng["startColumnId"]],
                   "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
@@ -160,11 +166,11 @@ def load_timelines(c, lines, raw, cols, recs) -> int:
         if color := _color(vd.get("colorConfig") or {}, cols, recs):
             config["color"] = color
         c.execute(text(
-            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
-            "values (:t, :n, 'timeline', :c, :o, :a) "
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id, at_owner) "
+            "values (:t, :n, 'timeline', :c, :o, :a, :w) "
             "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
-            "config = excluded.config, sort_order = excluded.sort_order"
-        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+            "config = excluded.config, sort_order = excluded.sort_order, at_owner = coalesce(app_view.at_owner, excluded.at_owner)"
+        ).bindparams(bindparam("c", type_=JSONB), bindparam("w", type_=JSONB(none_as_null=True))), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"], "w": _owner(v)})
         n += 1
     return n
 
@@ -180,7 +186,7 @@ def load_calendars(c, lines, raw, cols, recs) -> int:
         i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1
         tid = tables.get(x["tableId"])
         rng = (((vd.get("metadata") or {}).get("calendar") or {}).get("dateColumnRanges") or [{}])[0]
-        if v["type"] != "calendar" or v.get("personalForUserId") or tid is None or rng.get("startColumnId") not in cols:
+        if v["type"] != "calendar" or tid is None or rng.get("startColumnId") not in cols:
             continue
         config = {"source": "airtable", "start": cols[rng["startColumnId"]],
                   "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
@@ -203,11 +209,11 @@ def load_calendars(c, lines, raw, cols, recs) -> int:
             if rules:
                 config["color"] = {"kind": "rules", "rules": rules}
         c.execute(text(
-            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
-            "values (:t, :n, 'calendar', :c, :o, :a) "
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id, at_owner) "
+            "values (:t, :n, 'calendar', :c, :o, :a, :w) "
             "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
-            "config = excluded.config, sort_order = excluded.sort_order"
-        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+            "config = excluded.config, sort_order = excluded.sort_order, at_owner = coalesce(app_view.at_owner, excluded.at_owner)"
+        ).bindparams(bindparam("c", type_=JSONB), bindparam("w", type_=JSONB(none_as_null=True))), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"], "w": _owner(v)})
         n += 1
     return n
 
@@ -223,7 +229,7 @@ def load_kanbans(c, lines, raw, cols, recs, rec_ids) -> int:
         i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1
         tid = tables.get(x["tableId"])
         g = (vd.get("groupLevels") or [{}])[0]
-        if v["type"] != "kanban" or v.get("personalForUserId") or tid is None or g.get("columnId") not in cols:
+        if v["type"] != "kanban" or tid is None or g.get("columnId") not in cols:
             continue
         config = {"source": "airtable", "stack": cols[g["columnId"]],
                   "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
@@ -240,11 +246,11 @@ def load_kanbans(c, lines, raw, cols, recs, rec_ids) -> int:
             ids = rec_ids(x["tableId"])
             config["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text(
-            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
-            "values (:t, :n, 'kanban', :c, :o, :a) "
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id, at_owner) "
+            "values (:t, :n, 'kanban', :c, :o, :a, :w) "
             "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
-            "config = excluded.config, sort_order = excluded.sort_order"
-        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+            "config = excluded.config, sort_order = excluded.sort_order, at_owner = coalesce(app_view.at_owner, excluded.at_owner)"
+        ).bindparams(bindparam("c", type_=JSONB), bindparam("w", type_=JSONB(none_as_null=True))), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"], "w": _owner(v)})
         n += 1
     return n
 
@@ -259,7 +265,7 @@ def load_galleries(c, lines, raw, cols, recs, rec_ids) -> int:
         v, vd = x["view"], x["viewData"]
         i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1   # место вида в таблице, как у load_views
         tid = tables.get(x["tableId"])
-        if v["type"] != "gallery" or v.get("personalForUserId") or tid is None:
+        if v["type"] != "gallery" or tid is None:
             continue
         config = {"source": "airtable",
                   "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
@@ -277,10 +283,42 @@ def load_galleries(c, lines, raw, cols, recs, rec_ids) -> int:
             ids = rec_ids(x["tableId"])
             config["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text(
-            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
-            "values (:t, :n, 'gallery', :c, :o, :a) "
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id, at_owner) "
+            "values (:t, :n, 'gallery', :c, :o, :a, :w) "
             "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
-            "config = excluded.config, sort_order = excluded.sort_order"
-        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+            "config = excluded.config, sort_order = excluded.sort_order, at_owner = coalesce(app_view.at_owner, excluded.at_owner)"
+        ).bindparams(bindparam("c", type_=JSONB), bindparam("w", type_=JSONB(none_as_null=True))), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"], "w": _owner(v)})
         n += 1
+    return n
+
+
+def collaborators(schema: dict) -> dict:
+    """{usr…: {id, name, email}} — участники базы из снимка веб-клиента."""
+    out = {}
+    def walk(o):
+        if isinstance(o, dict):
+            if str(o.get("id", "")).startswith("usr") and "email" in o:
+                name = " ".join(x for x in (o.get("firstName"), o.get("lastName")) if x) or o.get("name") or o["email"]
+                out[o["id"]] = {"id": o["id"], "name": name, "email": o["email"]}
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+    walk(schema)
+    return out
+
+
+def tag_personal(c, lines: list[dict], schema: dict) -> int:
+    """Личные виды Airtable: owner_id пуст, at_owner — автор (решение владельца: видят админы,
+    автору предлагаются на выбор). Чьи-то копии (owner_id задан) не трогаем."""
+    people = collaborators(schema)
+    n = 0
+    for x in lines:
+        u = x["view"].get("personalForUserId")
+        if not u:
+            continue
+        who = people.get(u) or {"id": u, "name": u, "email": None}
+        n += c.execute(text("update app_view set at_owner = :o where airtable_id = :a and owner_id is null")
+                       .bindparams(bindparam("o", type_=JSONB)), {"o": who, "a": x["view"]["id"]}).rowcount
     return n
