@@ -438,9 +438,3 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .form-item:hover { background: #f7f7f8; }
 .form-item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
 .form-item small { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
-/* Личные виды Airtable — выбор автора */
-.at-offer-lead { margin: 0 0 8px; color: #616670; }
-.at-offer-list { max-height: 50vh; overflow-y: auto; display: grid; gap: 8px; }
-.at-offer-list fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 0; }
-.at-offer-list legend { font-weight: 600; font-size: 12px; padding: 0 4px; }
-.at-offer-list label { display: flex; gap: 8px; align-items: center; padding: 2px 0; }

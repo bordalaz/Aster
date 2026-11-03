@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
-from .access import can_read, table_title
+from .access import table_title
 from .auth import ADMINS, active_user
 from .db import engine
 
@@ -173,48 +173,3 @@ def delete_view(view_id: int, user: dict = Depends(active_user)):
         c.execute(text("delete from app_view where id = :i"), {"i": view_id})
     return {"ok": True}
 
-
-# --- личные виды Airtable: автору — на выбор (решение владельца) ---
-
-def is_author(user: dict, owner: dict | None) -> bool:
-    """Автор вида Airtable — наш пользователь, если в его ФИО есть все слова имени автора («Юрий Чернов»
-    ↔ «Чернов Юрий Петрович»). ponytail: по имени, привязка по почте — когда у пользователей будет почта."""
-    words = (owner or {}).get("name", "").casefold().split()
-    have = set((user.get("name") or "").casefold().replace("ё", "е").split())
-    return len(words) >= 2 and all(w.replace("ё", "е") in have for w in words)
-
-
-def _offer(c, user: dict) -> list:
-    rows = c.execute(text(
-        "select v.id, v.title, v.kind, v.table_id, v.at_owner, t.title as table from app_view v "
-        "join app_table t on t.id = v.table_id where v.owner_id is null and v.at_owner is not null "
-        "order by t.sort_order, t.id, v.sort_order, v.id")).all()
-    return [r for r in rows if is_author(user, r.at_owner) and can_read(user, r.table)]
-
-
-@router.get("/views/airtable/offer")
-def airtable_offer(user: dict = Depends(active_user)):
-    """Личные виды Airtable этого пользователя — один раз, пока он не выбрал."""
-    with engine.connect() as c:
-        if c.execute(text("select at_views_offered from app_user where id = :u"), {"u": user["id"]}).scalar():
-            return []
-        return [{"id": r.id, "title": r.title, "kind": r.kind, "table_id": r.table_id, "table": r.table} for r in _offer(c, user)]
-
-
-class Claim(Strict):
-    ids: list[int] = Field(max_length=500)
-
-
-@router.post("/views/airtable/offer")
-def airtable_claim(body: Claim, user: dict = Depends(active_user)):
-    """Выбранные — копии в личные виды пользователя; пустой список — «не нужно». Больше не предлагаем."""
-    with engine.begin() as c:
-        allowed = {r.id for r in _offer(c, user)}
-        if set(body.ids) - allowed:
-            raise HTTPException(404, "Нет такого вида")
-        for i in dict.fromkeys(body.ids):
-            c.execute(text("insert into app_view (table_id, title, kind, config, sort_order, owner_id) "
-                           "select table_id, title, kind, config, sort_order, :u from app_view where id = :i"),
-                      {"u": user["id"], "i": i})
-        c.execute(text("update app_user set at_views_offered = true where id = :u"), {"u": user["id"]})
-    return {"ok": True, "added": len(set(body.ids))}
