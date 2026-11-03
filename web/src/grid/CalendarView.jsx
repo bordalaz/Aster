@@ -10,12 +10,14 @@ import { Icon } from '../ui/icons.jsx'
 // ponytail: только режим «Месяц»; День/Неделя/2 недели и «See records» (записи без даты) — когда попросят.
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const LANES = 3          // полос в ячейке, остальное — «+N ещё»
 const DAY = 86400000
 const dayNum = p => Math.round(Date.UTC(p.y, p.m - 1, p.d) / DAY)
 const fromNum = n => { const t = new Date(n * DAY); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() } }
 const pad2 = n => String(n).padStart(2, '0')
+const empty = v => v == null || v === '' || v === false || (Array.isArray(v) && !v.length)   // Airtable пустое в подписи пропускает
 
 // Сдвиг значения даты на delta дней (время и зона поля сохраняются).
 export function shiftDate(field, value, delta) {
@@ -58,7 +60,7 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
       if (!sp) continue
       const ep = endF ? dateParts(endF, row[config.end]) : null
       const s = dayNum(sp), e = Math.max(s, ep ? dayNum(ep) : s)
-      const text = label.map(c => displayValue(byCol[c], row[c])).filter(Boolean).join(' · ') || `Запись №${row.id}`
+      const text = label.filter(c => !empty(row[c])).map(c => displayValue(byCol[c], row[c])).filter(t => t && t !== '—').join(' · ') || `Запись №${row.id}`
       if (q && !text.toLowerCase().includes(q)) continue
       out.push({ row, s, e, text, time: hasTime(startF) && sp.h != null ? `${pad2(sp.h)}:${pad2(sp.mi)}` : null,
         bg: lightColor(config.color, fields, row) ?? '#e9eef6' })
@@ -94,7 +96,7 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
     onMove(d.row, vals)
   }
   const bar = (e, extra = {}) => (
-    <button key={e.row.id} type="button" className={`cal-bar${e.s < (extra.ws ?? e.s) ? ' cont-l' : ''}${e.e > (extra.ws ?? e.e) + 6 ? ' cont-r' : ''}`}
+    <button key={e.row.id} data-id={e.row.id} type="button" className={`cal-bar${e.s < (extra.ws ?? e.s) ? ' cont-l' : ''}${e.e > (extra.ws ?? e.e) + 6 ? ' cont-r' : ''}`}
       style={{ background: e.bg, ...extra.style }} title={e.text}
       draggable={movable || undefined}
       onDragStart={movable ? ev => {
@@ -133,8 +135,8 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
                     <span className={`cal-num${day === today ? ' today' : ''}`}>{d}</span>
                     {more > 0 && <button type="button" className="cal-more" style={{ top: 26 + LANES * 22 }} onClick={() => setPopDay(day)}>+{more} ещё</button>}
                     {popDay === day && (
-                      <div ref={pop} className="cal-pop" role="dialog" aria-label={`${d} ${MONTHS[fromNum(day).m - 1]}`}>
-                        <div className="cal-pop-head">{d} {MONTHS[fromNum(day).m - 1].toLowerCase()}
+                      <div ref={pop} className="cal-pop" role="dialog" aria-label={`${d} ${MONTHS_GEN[fromNum(day).m - 1]}`}>
+                        <div className="cal-pop-head">{d} {MONTHS_GEN[fromNum(day).m - 1]}
                           <button type="button" aria-label="Закрыть" onClick={() => setPopDay(null)}><Icon name="x" size={14} /></button></div>
                         {events.filter(e => e.s <= day && e.e >= day).map(e => bar(e))}
                       </div>

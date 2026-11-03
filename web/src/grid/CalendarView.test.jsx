@@ -24,14 +24,14 @@ test('сдвиг даты: дата и дата со временем (зона 
 })
 
 test('полоса записи с подписью, «+N ещё» и попап дня, щелчок открывает запись', () => {
-  const fields = [{ column_name: 'name', kind: 'singleLineText', title: 'Имя' }, { column_name: 'd', kind: 'date', title: 'Дата', editable: true }]
+  const fields = [{ column_name: 'name', kind: 'singleLineText', title: 'Имя' }, { column_name: 'ok', kind: 'checkbox' }, { column_name: 'n', kind: 'number' }, { column_name: 'd', kind: 'date', title: 'Дата', editable: true }]
   const now = new Date(), ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-15`
-  const rows = [1, 2, 3, 4, 5].map(id => ({ id, name: `Рейс ${id}`, d: ymd }))
+  const rows = [1, 2, 3, 4, 5].map(id => ({ id, name: `Рейс ${id}`, d: ymd, ok: false, n: null }))
   const onOpen = vi.fn()
-  render(<CalendarView fields={fields} rows={rows} primaryField="name" config={{ start: 'd', columns: ['name'] }} onOpen={onOpen} onMove={() => {}} />)
+  render(<CalendarView fields={fields} rows={rows} primaryField="name" config={{ start: 'd', columns: ['name', 'ok', 'n'] }} onOpen={onOpen} onMove={() => {}} />)
   expect(screen.getAllByRole('button', { name: /^Рейс/ })).toHaveLength(3)
   fireEvent.click(screen.getByText('+2 ещё'))
-  expect(screen.getByRole('dialog')).toBeTruthy()
+  expect(screen.getByRole('dialog', { name: /^15 / })).toBeTruthy()   // «15 ноября» — родительный падеж
   expect(screen.getAllByRole('button', { name: /^Рейс/ })).toHaveLength(8)
   fireEvent.click(screen.getAllByRole('button', { name: 'Рейс 1' })[0])
   expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), [1, 2, 3, 4, 5])

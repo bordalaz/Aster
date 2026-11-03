@@ -145,6 +145,14 @@ def test_import_airtable_view_filters(loaded_fixture):
     assert config == {"columns": [cols["fldBwork000000000"]], "source": "airtable",
                       "filters": [{"col": cols["fldBwork000000000"], "op": "contains", "value": "a"}],
                       "group": [cols["fldBinv0000000000"]]}
+    # вариант выбора в условии — по id (sel…), как хранит веб-клиент → название варианта
+    raw = {"viwB1": {"f": {"c": "and", "f": [["fldAtype000000000", "=", "selAAAAAAAAAAAAA2"]]}}}
+    schema[0]["id"] = "tblAAAAAAAAAAAAAA"
+    with engine.begin() as c:
+        c.execute(text("delete from app_view"))
+        load_views(c, schema, raw)
+        f = c.execute(text("select config->'filters' from app_view")).scalar()
+    assert f == [{"col": cols["fldAtype000000000"], "op": "eq", "value": "скважинное"}]
 
 
 @pytest.mark.parametrize("config", [
