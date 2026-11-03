@@ -79,3 +79,19 @@ test('неделя у даты со временем — сетка по час�
   fireEvent.change(screen.getByRole('combobox', { name: 'Выходные' }), { target: { value: 'hide' } })
   expect(r2.container.querySelector('.cal-week').style.gridTemplateColumns).toMatch(/ 0 0$/)
 })
+
+test('режим и выходные помнятся для вида', () => {
+  localStorage.clear()
+  const f = [{ column_name: 'name', kind: 'singleLineText', title: 'Имя' }, { column_name: 'd', kind: 'date', title: 'Дата' }]
+  const props = { fields: f, rows: [], primaryField: 'name', config: { start: 'd' }, onOpen: () => {}, storeKey: 'aster.cal.7' }
+  const a = render(<CalendarView {...props} />)
+  fireEvent.change(screen.getByRole('combobox', { name: 'Режим' }), { target: { value: 'week' } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Выходные' }), { target: { value: 'hide' } })
+  a.unmount()
+  render(<CalendarView {...props} />)
+  expect(screen.getByRole('combobox', { name: 'Режим' }).value).toBe('week')
+  expect(screen.getByRole('combobox', { name: 'Выходные' }).value).toBe('hide')
+  localStorage.setItem('aster.cal.8.mode', 'мусор')
+  render(<CalendarView {...props} storeKey="aster.cal.8" />)
+  expect(screen.getAllByRole('combobox', { name: 'Режим' }).at(-1).value).toBe('month')   // чужое значение — по умолчанию
+})

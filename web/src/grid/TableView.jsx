@@ -220,9 +220,9 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
         }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           {view?.kind === 'timeline'
-            ? <TimelineView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} />
+            ? <TimelineView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} storeKey={`aster.tl.${current}`} />
             : view?.kind === 'calendar'
-            ? <CalendarView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} />
+            ? <CalendarView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} storeKey={`aster.cal.${current}`} />
             : view?.kind === 'kanban'
             ? <KanbanView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow}
                 canEdit={fields.some(f => f.editable)} canReorder={canReorder} onMove={moveCard} onAdd={fields.some(f => f.editable) ? addToStack : undefined} />

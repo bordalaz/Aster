@@ -4,6 +4,7 @@ import { lightColor } from './layout.js'
 import { choiceColor, HUE_SHADES } from './renderers.js'
 import { applyFilters, sortRows } from './viewConfig.js'
 import { shiftDate } from './CalendarView.jsx'
+import { useStored } from '../ui/useStored.js'
 
 // Таймлайн, как в Airtable: масштаб (День … Год) вписывает отрезок в ширину экрана, полоса записи — точно от начала до конца
 // (время учитывается), подпись — видимые поля со стилем. Без layout — строка на запись (слева названия,
@@ -73,11 +74,11 @@ export function totalColor(rules, n) {
   return { background: hue[shade], color: shade >= 2 ? '#fff' : '#1d1f25' }
 }
 
-export default function TimelineView({ fields, rows, primaryField, config, search = '', onOpen, onMove }) {
+export default function TimelineView({ fields, rows, primaryField, config, search = '', onOpen, onMove, storeKey }) {
   const byCol = useMemo(() => Object.fromEntries(fields.map(f => [f.column_name, f])), [fields])
   const startF = byCol[config.start], endF = byCol[config.end]
   const groupF = config.layout !== 'stacked' ? byCol[config.group?.[0]] : null
-  const [scale, setScale] = useState('month')
+  const [scale, setScale] = useStored(storeKey && `${storeKey}.scale`, 'month', SCALES.map(s => s[0]))   // помнится для вида
   const [px, setPx] = useState(41)
   const label = (config.columns ?? []).filter(c => byCol[c])
 

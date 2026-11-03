@@ -3,13 +3,14 @@ import { dateParts, displayValue, hasTime, partsToValue } from './cells.js'
 import { lightColor } from './layout.js'
 import { applyFilters, sortRows } from './viewConfig.js'
 import { Icon } from '../ui/icons.jsx'
+import { useStored } from '../ui/useStored.js'
 
 // Календарь, как в Airtable. Режимы: Месяц (6 недель) и 2 недели — сетка дней с полосами записей;
 // Неделя / 3 дня / День — у даты со временем сетка по часам (запись режется по дням, пересекающиеся —
 // рядом), у даты без времени — полосы в одну строку. Выходные: показывать / свернуть / скрыть.
 // Полоса — от начала (config.start) до конца (config.end), со временем начала и подписью «поле · поле».
 // Не влезли — «+N ещё» → попап дня. Перетаскивание сдвигает начало и конец на те же дни.
-// ponytail: «Custom» и «Start week on» Airtable — нет; режим и выходные не запоминаются между заходами.
+// Режим и выходные помнятся в браузере для каждого вида (storeKey). ponytail: «Custom» и «Start week on» Airtable — нет.
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
@@ -83,7 +84,7 @@ export function periodTitle(mode, first, last) {
   return `${left} – ${b.d} ${MONTHS_GEN[b.m - 1]} ${b.y}`
 }
 
-export default function CalendarView({ fields, rows, primaryField, config, search = '', onOpen, onMove }) {
+export default function CalendarView({ fields, rows, primaryField, config, search = '', onOpen, onMove, storeKey }) {
   const byCol = useMemo(() => Object.fromEntries(fields.map(f => [f.column_name, f])), [fields])
   const startF = byCol[config.start], endF = byCol[config.end]
   const timed = !!startF && hasTime(startF)
@@ -112,8 +113,8 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
 
   const now = new Date()
   const today = dayNum({ y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() })
-  const [mode, setMode] = useState('month')
-  const [weekends, setWeekends] = useState('show')   // show | collapse | hide
+  const [mode, setMode] = useStored(storeKey && `${storeKey}.mode`, 'month', MODES.map(m => m[0]))
+  const [weekends, setWeekends] = useStored(storeKey && `${storeKey}.weekends`, 'show', ['show', 'collapse', 'hide'])
   const [anchor, setAnchor] = useState(today)
   const [popDay, setPopDay] = useState(null)
   const [drag, setDrag] = useState(null)   // {row, grab, over}
