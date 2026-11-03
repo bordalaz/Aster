@@ -58,3 +58,16 @@ test('деления шкалы по масштабам', () => {
   expect(y.top.map(t => t.label)).toEqual(['4 кв. 2026', '1 кв. 2027'])
   expect(y.bottom.map(u => u.label)).toEqual(['Ноя', 'Дек', 'Янв'])
 })
+
+test('Gantt: ручной порядок строк, подпись справа от полосы, записи без дат скрыты с плашкой', () => {
+  globalThis.ResizeObserver ??= class { observe() {} disconnect() {} }
+  const fields = [{ column_name: 'name', kind: 'singleLineText', title: 'Имя' }, { column_name: 'a', kind: 'date' }, { column_name: 'b', kind: 'date' }]
+  const now = new Date(), ymd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const rows = [{ id: 1, name: 'Р1', a: ymd, b: ymd }, { id: 2, name: 'Р2', a: ymd, b: ymd }, { id: 3, name: 'Р3', a: null }]
+  const { container } = render(<TimelineView fields={fields} rows={rows} primaryField="name" onOpen={() => {}}
+    config={{ start: 'a', end: 'b', gantt: true, columns: ['name'], rowOrder: [2, 1, 3] }} />)
+  expect([...container.querySelectorAll('.tl-name')].map(b => b.textContent)).toEqual(['Р2', 'Р1'])
+  expect(container.querySelector('.tl-bar[data-id="2"]').textContent).toBe('')
+  expect([...container.querySelectorAll('.tl-glabel')].map(l => l.textContent)).toEqual(['Р2', 'Р1'])
+  expect(screen.getByRole('status').textContent).toContain('1')
+})

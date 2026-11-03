@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { dateParts, displayValue } from './cells.js'
-import { lightColor } from './layout.js'
+import { lightColor, orderRows } from './layout.js'
 import { choiceColor, HUE_SHADES } from './renderers.js'
 import { applyFilters, sortRows } from './viewConfig.js'
 import { shiftDate } from './CalendarView.jsx'
@@ -78,19 +78,20 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
   const byCol = useMemo(() => Object.fromEntries(fields.map(f => [f.column_name, f])), [fields])
   const startF = byCol[config.start], endF = byCol[config.end]
   const groupF = config.layout !== 'stacked' ? byCol[config.group?.[0]] : null
-  const [scale, setScale] = useStored(storeKey && `${storeKey}.scale`, 'month', SCALES.map(s => s[0]))   // помнится для вида
+  const [scale, setScale] = useStored(storeKey && `${storeKey}.scale`, config.scale ?? 'month', SCALES.map(s => s[0]))   // помнится для вида
   const [px, setPx] = useState(41)
   const label = (config.columns ?? []).filter(c => byCol[c])
 
   const events = useMemo(() => {
     if (!startF) return []
     let rs = applyFilters(fields, rows, config.filters)
-    if (config.sort?.length) rs = sortRows(rs, byCol, config.sort)
+    rs = config.sort?.length ? sortRows(rs, byCol, config.sort) : orderRows(rs, config.rowOrder)
     const q = search.trim().toLowerCase()
     const out = []
+    out.hidden = 0   // записи без даты начала — плашка «скрыто», как в Gantt Airtable
     for (const row of rs) {
       const t0 = point(startF, row[config.start], false)
-      if (t0 == null) continue
+      if (t0 == null) { out.hidden++; continue }
       const e = endF ? point(endF, row[config.end], true) : null
       const t1 = Math.max(e ?? t0 + 1, t0 + 1 / 24)
       const parts = label.map(c => ({ c, text: row[c] == null || row[c] === '' || (Array.isArray(row[c]) && !row[c].length) ? '(пусто)' : displayValue(byCol[c], row[c]) }))
@@ -99,7 +100,7 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
       out.push({ row, t0, t1, parts, text, bg: lightColor(config.color, fields, row) ?? '#cfdfff' })
     }
     return out
-  }, [fields, rows, byCol, startF, endF, config.start, config.end, config.filters, config.sort, config.color, search, label.join()])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fields, rows, byCol, startF, endF, config.start, config.end, config.filters, config.sort, config.rowOrder, config.color, search, label.join()])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Строки: stacked — дорожки; иначе группы (по вариантам, порядок поля или обратный) и строка на запись.
   const layout = useMemo(() => {
@@ -151,6 +152,10 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
     if (!el) return
     el.scrollLeft = Math.max(0, (day - lo) * px - (el.clientWidth - left) / 4)
     setView(v => ({ ...v, left: el.scrollLeft }))   // сразу, не дожидаясь события scroll
+    if (config.gantt) {   // как Gantt Airtable: и вниз — к первой записи, видной у этого дня
+      const p = layout.placed.find(q => q.ev.t1 >= day - (el.clientWidth - left) / 4 / px)
+      if (p) el.scrollTop = Math.max(0, tops[p.line] - (layout.lines[p.line - 1]?.kind === 'group' ? HEAD : 0))
+    }
   }
   useLayoutEffect(() => { goto(today) }, [px, lo])   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -238,13 +243,18 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
             <div key={ev.row.id} data-id={ev.row.id} role="button" tabIndex={0} className={`tl-bar${drag?.ev === ev ? ' dragging' : ''}`} title={ev.text}
               style={{ top: tops[line] + 4, left: left + x(ev.t0) + (drag?.ev === ev ? drag.dx : 0), width: Math.max(6, (ev.t1 - ev.t0) * px), background: ev.bg, cursor: movable ? 'grab' : 'pointer' }}
               onPointerDown={e => down(e, ev)} onKeyDown={e => e.key === 'Enter' && onOpen(ev.row, ids)}>
-              {ev.parts.map((p, k) => {
+              {!config.gantt && ev.parts.map((p, k) => {
                 const st = config.labelStyle?.[p.c] ?? {}
                 return <span key={p.c} className={p.text === '(пусто)' ? 'tl-empty' : ''} style={{ fontWeight: st.bold ? 600 : undefined, fontStyle: st.italic ? 'italic' : undefined, textDecoration: st.underline ? 'underline' : undefined }}>{k ? ' · ' : ''}{p.text}</span>
               })}
             </div>
           ))}
+          {/* Gantt Airtable: подпись справа от полосы */}
+          {config.gantt && layout.placed.filter(p => p.ev.t1 > d0 && p.ev.t0 < d1 + 1).map(({ ev, line }) => (
+            <div key={'l' + ev.row.id} className="tl-glabel" style={{ top: tops[line] + 4, left: left + x(ev.t1) + 8 + (drag?.ev === ev ? drag.dx : 0) }}>{ev.text}</div>
+          ))}
         </div>
+        {events.hidden > 0 && <div className="tl-hidden" role="status">⚠ Записей без дат скрыто: {events.hidden}</div>}
       </div>
       {totals && (
         <div className="tl-totals">

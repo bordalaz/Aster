@@ -94,7 +94,7 @@ def load_view_meta(c, lines: list[dict]) -> int:
             extra["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text("update app_view set config = config || :e where airtable_id = :a")
                   .bindparams(bindparam("e", type_=JSONB)), {"e": extra, "a": v["id"]})
-    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs) + load_timelines(c, lines, raw, cols, recs) + load_lists(c, lines, cols, recs)
+    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs) + load_timelines(c, lines, raw, cols, recs, rec_ids) + load_lists(c, lines, cols, recs)
 
 
 def _owner(v: dict) -> dict | None:
@@ -163,7 +163,18 @@ def load_lists(c, lines, cols, recs) -> int:
     return n
 
 
-def load_timelines(c, lines, raw, cols, recs) -> int:
+# Gantt Airtable (вид type='block'): его настройки (поля дат, подпись) живут в самом расширении и в снимок
+# не попадают — сняты из «Gantt settings» в живом Airtable 2026-11-03 (личный «Юрий's Gantt» закрыт —
+# поля как у «Ремонты ССК-Т / Timeline», цвет тот же). ponytail: новые Gantt'ы — дописать сюда.
+GANTT = {
+    "viweAEG5zF6sF8CUK": ("fldLE0FcT2JGCDb1i", "fldQu52mUc5Ye8tli", "fldULn7kqt8VtI5Lg"),   # Рейсы APS / График
+    "viwMOPYTmvkMQ8BdD": ("fldLE0FcT2JGCDb1i", "fldQu52mUc5Ye8tli", "fldULn7kqt8VtI5Lg"),   # Рейсы APS / График с LWD
+    "viwTd6Wr3xIviqvgW": ("fldXiAoCxgy8Eh1cS", "fldi7XBR7u7AjJHWW", "fldQffgFpKviZHJvC"),   # Работы / График
+    "viwnfynOionSugbXN": ("fldkVKgfn2ox4k0W2", "fldAZVZJjHG9fwuDw", "fldT7uFHs45KRdMt0"),   # Ремонты ССК-Т / Юрий's Gantt
+}
+
+
+def load_timelines(c, lines, raw, cols, recs, rec_ids=None) -> int:
     """Общие таймлайны → app_view kind='timeline': start/end, подпись — видимые поля со стилем
     (labelConfigByColumnId), группировка (groupLevels[0], порядок, скрытие пустых), layoutMode=stacked,
     нижняя строка «Всего» (summaryBarsConfig: число записей по дням, цвет по порогам)."""
@@ -176,10 +187,21 @@ def load_timelines(c, lines, raw, cols, recs) -> int:
         tid = tables.get(x["tableId"])
         t = (vd.get("metadata") or {}).get("timeline") or {}
         rng = (t.get("dateColumnRanges") or [{}])[0]
-        if v["type"] != "timeline" or tid is None or rng.get("startColumnId") not in cols:
+        gantt = v["type"] == "block" and v["id"] in GANTT
+        if gantt:
+            rng = dict(zip(("startColumnId", "endColumnId", "label"), GANTT[v["id"]]))
+        elif v["type"] != "timeline":
+            continue
+        if tid is None or rng.get("startColumnId") not in cols:
             continue
         config = {"source": "airtable", "start": cols[rng["startColumnId"]],
                   "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
+        if gantt:   # строка на запись, подпись справа от полосы, масштаб «Квартал», ручной порядок
+            config |= {"gantt": True, "columns": [cols[rng["label"]]] if rng["label"] in cols else [], "scale": "quarter"}
+            s = vd.get("lastSortsApplied") or {}
+            if rec_ids and not s.get("shouldAutoSort") and vd.get("rowOrder"):
+                ids = rec_ids(x["tableId"])
+                config["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         if rng.get("endColumnId") in cols:
             config["end"] = cols[rng["endColumnId"]]
         extra, problems = convert_view(raw[v["id"]], cols, recs)
