@@ -34,5 +34,20 @@ services:
     # ponytail: код монтируется для разработки; для NAS — отдельный compose в этапе 3
     volumes: [./api:/app, ./data:/data]
     ports: ["8000:8000"]
+  # бэкап раз в сутки: дамп БД (проверяется восстановлением) + новые вложения; восстановление — ops/restore.sh
+  backup:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${BACKUP_TZ:-Asia/Tomsk}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_FILES: ${BACKUP_FILES:-0}   # 1 — копировать и вложения (только на другой диск)
+    command: ["sh", "/ops/backup.sh"]
+    depends_on:
+      db: { condition: service_healthy }
+    # ponytail: на NAS BACKUP_DIR — на другом диске/томе, иначе бэкап погибнет вместе с базой
+    volumes: [./ops:/ops:ro, ./data:/data:ro, "${BACKUP_DIR:-./backups}:/backups"]
+    restart: unless-stopped
 volumes:
   pgdata: {}
