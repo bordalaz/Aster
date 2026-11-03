@@ -94,7 +94,7 @@ def load_view_meta(c, lines: list[dict]) -> int:
             extra["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text("update app_view set config = config || :e where airtable_id = :a")
                   .bindparams(bindparam("e", type_=JSONB)), {"e": extra, "a": v["id"]})
-    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs) + load_timelines(c, lines, raw, cols, recs)
+    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs) + load_timelines(c, lines, raw, cols, recs) + load_lists(c, lines, cols, recs)
 
 
 def _owner(v: dict) -> dict | None:
@@ -117,6 +117,50 @@ def _color(cc: dict, cols, recs) -> dict | None:
         if rules:
             return {"kind": "rules", "rules": rules}
     return None
+
+
+def load_lists(c, lines, cols, recs) -> int:
+    """Виды «List» (levels) → app_view kind='list': уровни сверху вниз — таблица, связь с уровнем выше,
+    колонки, ширины, фильтр уровня; последний уровень — эта таблица (leafLevel)."""
+    tables = dict(c.execute(text("select airtable_id, id from app_table")).all())
+    order: dict[str, int] = {}
+    n = 0
+    for x in lines:
+        v, vd = x["view"], x["viewData"]
+        i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1
+        tid = tables.get(x["tableId"])
+        lc = ((vd.get("metadata") or {}).get("levels") or {}).get("levelsConfig") or {}
+        if v["type"] != "levels" or tid is None or not lc.get("leafLevel"):
+            continue
+        levels, bad = [], []
+        for lv in [*lc.get("orderedParentLevels", []), {**lc["leafLevel"], "tableId": x["tableId"]}]:
+            if lv["tableId"] not in tables:
+                bad.append(lv["tableId"])
+                continue
+            item = {"table": tables[lv["tableId"]],
+                    "columns": [cols[f] for f in lv.get("allOrderedDisplayColumnIds", []) if f in cols],
+                    "widths": {cols[f]: w for f, w in (lv.get("widthsByColumnId") or {}).items() if f in cols}}
+            if lv.get("parentLinkedRecordColumnId") in cols:
+                item["link"] = cols[lv["parentLinkedRecordColumnId"]]   # связь этого уровня с уровнем выше
+            problems = []
+            if lv.get("filters") and (f := _filters(compact(lv["filters"]), cols, recs, problems)) and not problems:
+                item["filters"] = f
+            levels.append(item)
+        if bad:
+            print(f"List «{x.get('table')} / {v['name']}»: нет таблиц {bad} — не перенесён")
+            continue
+        config = {"source": "airtable", "levels": levels}
+        if lc.get("shouldHideEmptyParents"):
+            config["hideEmpty"] = True
+        c.execute(text(
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id, at_owner) "
+            "values (:t, :n, 'list', :c, :o, :a, :w) "
+            "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
+            "config = excluded.config, sort_order = excluded.sort_order, at_owner = coalesce(app_view.at_owner, excluded.at_owner)"
+        ).bindparams(bindparam("c", type_=JSONB), bindparam("w", type_=JSONB(none_as_null=True))),
+            {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"], "w": _owner(v)})
+        n += 1
+    return n
 
 
 def load_timelines(c, lines, raw, cols, recs) -> int:
