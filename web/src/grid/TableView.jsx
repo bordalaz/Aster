@@ -7,6 +7,7 @@ import KanbanView from './KanbanView.jsx'
 import CalendarView from './CalendarView.jsx'
 import TimelineView from './TimelineView.jsx'
 import Card from '../card/Card.jsx'
+import { ButtonDialog, ButtonRun, openForm } from '../card/ButtonField.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 import { groupCols, visibleColumns } from './viewConfig.js'
 import { moveRows, orderRows } from './layout.js'
@@ -15,6 +16,7 @@ import SendDialog from './SendDialog.jsx'
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
   const { fields, rows, loading, patch, patchMany, refresh, dropRows } = useRecords(tableId)
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
+  const [press, setPress] = useState(null)   // окно кнопки «правка»: {field, row}
   const [order, setOrder] = useState([])   // id строк сетки по порядку — для ▲▼ в карточке
   const openRow = useCallback((row, ids) => { setOpen(row); if (ids) setOrder(ids) }, [])
   const [error, setError] = useState('')
@@ -193,7 +195,15 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
 
   if (loading) return <div style={{ padding: 16 }}>Загрузка…</div>
 
+  // Поле-кнопка: форма — экран «Формы» с подстановкой; правка — окно полей этой записи.
+  const runButton = (field, row) => {
+    const act = field.options?.action
+    if (act?.kind === 'form') openForm(act, row)
+    else if (act?.kind === 'edit') setPress({ field, row })
+  }
+
   return (
+    <ButtonRun.Provider value={runButton}>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {error && <div className="err" style={{ padding: '6px 16px' }}>{error}</div>}
       <ViewBar tableId={tableId} fields={fields} primaryField={primaryField} user={user} views={views} current={current}
@@ -274,6 +284,12 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           />
         )
       })()}
+      {press && (() => {
+        const row = rows.find(r => r.id === press.row.id) ?? press.row
+        return <ButtonDialog field={press.field} row={row} tableId={tableId} fields={fields} primaryField={primaryField}
+          onSave={values => patch(row, values)} onChanged={refresh} onClose={() => setPress(null)} />
+      })()}
     </div>
+    </ButtonRun.Provider>
   )
 }

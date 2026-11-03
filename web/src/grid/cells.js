@@ -1,5 +1,5 @@
 import { GridCellKind } from '@glideapps/glide-data-grid'
-import { choiceColor, LINK_PILL } from './renderers.js'
+import { buttonStyle, choiceColor, LINK_PILL } from './renderers.js'
 
 export const NUMBER = new Set(['number', 'currency', 'percent', 'rating', 'duration', 'autoNumber'])
 // Правятся прямо в сетке; остальные типы — только в карточке (в сетке читаются).
@@ -161,6 +161,12 @@ const pillsCell = (items, round) => ({
 
 export function toCell(field, value) {
   const kind = kindOf(field)
+  if (field.kind === 'button') {   // поле-кнопка (card/ButtonField.jsx)
+    const o = field.options ?? {}
+    const { background, color } = buttonStyle(o.variant)
+    return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: '',
+      data: { kind: 'btn', label: o.label ?? field.title, bg: background, fg: color, off: !o.action || o.action.kind === 'script' } }
+  }
   const editable = field.editable && INLINE.has(field.kind)
   if (kind === 'checkbox' && !Array.isArray(value)) {
     const color = choiceColor(field.options?.color ?? 'greenBright').bg

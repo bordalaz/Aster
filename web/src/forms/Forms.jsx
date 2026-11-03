@@ -3,10 +3,16 @@ import { api } from '../api.js'
 import FormFill from './FormFill.jsx'
 
 // Экран «Формы»: список доступных форм слева, заполнение справа (R12).
-export default function Forms() {
+export default function Forms({ open }) {
   const [forms, setForms] = useState(null)
   const [active, setActive] = useState(null)
   useEffect(() => { api('/api/forms').then(setForms, () => setForms([])) }, [])
+  // открыта кнопкой: форма — по id вида Airtable
+  useEffect(() => {
+    const f = open && forms?.find(x => x.airtable_id === open.form)
+    if (f) setActive(f.id)
+  }, [open, forms])
+  const prefill = open && forms?.find(x => x.airtable_id === open.form)?.id === active ? open : null
 
   if (!forms) return <div style={{ padding: 16 }}>Загрузка…</div>
   return (
@@ -21,7 +27,7 @@ export default function Forms() {
         ))}
       </nav>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {active ? <FormFill key={active} formId={active} /> : <div style={{ padding: 16, color: 'var(--muted)' }}>Выберите форму слева</div>}
+        {active ? <FormFill key={`${active}-${prefill ? open.row.id : ''}`} formId={active} prefill={prefill} /> : <div style={{ padding: 16, color: 'var(--muted)' }}>Выберите форму слева</div>}
       </div>
     </div>
   )

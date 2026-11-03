@@ -103,9 +103,12 @@ def cmd_views_full() -> int:
         print(f"Нет {p}")
         return 2
     lines = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
+    from .buttons import load_buttons
+    schema = json.loads((SNAP / "at_base_schema.json").read_text(encoding="utf-8"))
     with engine.begin() as c:
         n = load_view_meta(c, lines)
-    print(f"Видов обновлено: {n} (из {len(lines)} снятых)")
+        b = load_buttons(c, schema, lines)
+    print(f"Видов обновлено: {n} (из {len(lines)} снятых); полей-кнопок: {b}")
     return 0
 
 

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { ButtonRun } from '../card/ButtonField.jsx'
 import { CompactSelection, DataEditor, GridCellKind } from '@glideapps/glide-data-grid'
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
 import '@glideapps/glide-data-grid/dist/index.css'
@@ -176,6 +177,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
 
   const text = (t, bold) => ({ kind: GridCellKind.Text, data: t, displayData: t, allowOverlay: false, readonly: true,
     themeOverride: bold ? { baseFontStyle: '500 13px' } : undefined })
+  const runButton = useContext(ButtonRun)
   const getCellContent = useCallback(([ci, ri]) => {
     if (ri === items.length) {                                         // строка итогов
       return ci === 0 ? text('', false) : text(totals[ci - 1], false)
@@ -363,6 +365,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           onHeaderMenuClick={(ci, bounds) => setInfo({ text: cols[ci - 1]?.description, x: bounds.x + bounds.width - 260, y: bounds.y + bounds.height + 4 })}
           onCellClicked={([ci, ri], e) => {
             if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
+            else if (ci > 0 && cols[ci - 1]?.kind === 'button' && rowAt(ri)) runButton?.(cols[ci - 1], rowAt(ri))
             // карточка — по кнопке раскрытия у названия (как в Airtable), не по номеру строки
             else if (ci === 0 && rowAt(ri) && rownumHit(e.localEventX) === 'expand') onOpen(rowAt(ri), shownRows.map(r => r.id))
             else if (ci === 0 && rowAt(ri) && rownumHit(e.localEventX) === 'check') toggleCheck(rowAt(ri).id)
