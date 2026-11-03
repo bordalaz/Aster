@@ -395,3 +395,32 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.14); padding: 8px; display: flex; flex-direction: column; gap: 4px; }
 .cal-pop-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
 .cal-pop-head button { border: 0; background: none; cursor: pointer; padding: 2px; }
+
+/* Таймлайн, как в Airtable */
+.tl { height: 100%; min-height: 0; display: flex; flex-direction: column; background: #fff; }
+.tl-top { position: relative; display: flex; height: 66px; border-bottom: 1px solid var(--line); flex: none; }
+.tl-corner { flex: none; padding: 8px 16px; font-size: 12px; color: #616670; border-right: 1px solid var(--line); background: #fff; z-index: 2; }
+.tl-corner b { color: #1d1f25; font-weight: 500; }
+.tl-scale { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+.tl-months { position: absolute; top: 9px; left: 0; height: 18px; }
+.tl-months span { position: absolute; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.tl-days { position: absolute; top: 34px; left: 0; height: 34px; }
+.tl-dayh { position: absolute; top: 0; height: 34px; text-align: center; font-size: 11px; line-height: 13px; color: #616670; }
+.tl-dayh.today span { color: var(--accent); font-weight: 600; }
+.tl-ctl { position: absolute; right: 8px; top: 4px; display: flex; gap: 4px; background: #fff; z-index: 3; }
+.tl-body { flex: 1; min-height: 0; overflow: auto; position: relative; }
+.tl-grid { position: absolute; top: 0; background-image: linear-gradient(to right, #eef0f3 1px, transparent 1px); }
+.tl-now { position: absolute; top: 0; width: 2px; margin-left: -1px; background: var(--accent); z-index: 1; }
+.tl-left { position: absolute; display: flex; align-items: center; padding: 0 16px; background: #fff; border-right: 1px solid var(--line); z-index: 3; box-sizing: border-box; }
+.tl-left.group { background: #f6f7f9; padding-left: 8px; }
+.tl-grouprow { position: absolute; height: 36px; background: #f6f7f9; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); box-sizing: border-box; }
+.tl-name { border: 0; background: none; padding: 0 0 0 16px; font: inherit; font-size: 13px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.tl-name:hover { color: var(--accent); text-decoration: underline; }
+.tl-bar { position: absolute; height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid rgba(0,0,0,.1); border-radius: 4px; font-size: 12px;
+  line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #1d1f25; z-index: 2; user-select: none; touch-action: none; }
+.tl-bar:hover { box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+.tl-bar.dragging { opacity: .85; box-shadow: 0 2px 8px rgba(0,0,0,.2); z-index: 4; }
+.tl-empty { color: #8a8f98; }
+.tl-totals { display: flex; height: 28px; border-top: 1px solid var(--line); flex: none; font-size: 12px; }
+.tl-totals .tl-corner { padding: 6px 8px; color: #1d1f25; }
+.tl-tot { position: absolute; top: 0; height: 28px; line-height: 28px; padding-left: 4px; box-sizing: border-box; border-right: 1px solid rgba(0,0,0,.04); }

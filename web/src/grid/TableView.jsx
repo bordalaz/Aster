@@ -5,6 +5,7 @@ import Grid from './Grid.jsx'
 import GalleryView from './GalleryView.jsx'
 import KanbanView from './KanbanView.jsx'
 import CalendarView from './CalendarView.jsx'
+import TimelineView from './TimelineView.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 import { groupCols, visibleColumns } from './viewConfig.js'
@@ -208,7 +209,9 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           } catch { setError('Не удалось создать вид') }
         }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {view?.kind === 'calendar'
+          {view?.kind === 'timeline'
+            ? <TimelineView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} />
+            : view?.kind === 'calendar'
             ? <CalendarView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} />
             : view?.kind === 'kanban'
             ? <KanbanView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow}

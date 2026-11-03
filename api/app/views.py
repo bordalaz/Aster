@@ -60,9 +60,14 @@ class ViewConfig(Strict):
     hideEmpty: bool | None = None              # канбан: пустые колонки не показывать
     start: Annotated[str, Col] | None = None   # календарь: поле начала
     end: Annotated[str, Col] | None = None     # календарь: поле конца (необязательно)
+    # таймлайн: stacked — записи плотно по дорожкам (иначе строка на запись); totals — нижняя строка «Всего»
+    layout: Literal["stacked"] | None = None
+    groupDesc: bool | None = None
+    labelStyle: dict[Annotated[str, Col], dict[str, bool]] | None = Field(None, max_length=50)
+    totals: dict[str, Any] | None = None
 
     def used_columns(self) -> set[str]:
-        return (set(self.columns or ()) | set(self.widths or ()) | {x for x in (self.cover, self.stack, self.start, self.end) if x} | set(self.summary or ()) | {s.col for s in self.sort or ()}
+        return (set(self.columns or ()) | set(self.widths or ()) | {x for x in (self.cover, self.stack, self.start, self.end) if x} | set(self.labelStyle or ()) | set(self.summary or ()) | {s.col for s in self.sort or ()}
                 | {f.col for f in self.filters or ()} | set([self.group] if isinstance(self.group, str) else self.group or ()))
 
 
@@ -88,7 +93,7 @@ def list_views(table_id: int, user: dict = Depends(active_user)):
         table_title(c, table_id, user)
         rows = c.execute(text(
             "select id, title, kind, owner_id, config from app_view "
-            "where table_id = :t and kind in ('grid', 'gallery', 'kanban', 'calendar') and (owner_id is null or owner_id = :u) "
+            "where table_id = :t and kind in ('grid', 'gallery', 'kanban', 'calendar', 'timeline') and (owner_id is null or owner_id = :u) "
             "order by owner_id nulls first, sort_order, id"
         ), {"t": table_id, "u": user["id"]})
         return [_out(r, user) for r in rows]
