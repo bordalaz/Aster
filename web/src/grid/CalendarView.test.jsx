@@ -95,3 +95,28 @@ test('режим и выходные помнятся для вида', () => {
   render(<CalendarView {...props} storeKey="aster.cal.8" />)
   expect(screen.getAllByRole('combobox', { name: 'Режим' }).at(-1).value).toBe('month')   // чужое значение — по умолчанию
 })
+
+test('«Свой» — 1–6 недель; неделя с воскресенья', () => {
+  const D = (y, m, d) => Date.UTC(y, m - 1, d) / 86400000
+  const tue = D(2026, 11, 3)
+  expect(rowsFor('custom', tue, 1, 3)).toEqual([[D(2026, 11, 2), 7], [D(2026, 11, 9), 7], [D(2026, 11, 16), 7]])
+  expect(rowsFor('week', tue, 0)).toEqual([[D(2026, 11, 1), 7]])                    // воскресенье 1.11
+  expect(rowsFor('month', tue, 0)[0][0]).toBe(D(2026, 11, 1))
+  const f = [{ column_name: 'name', kind: 'singleLineText', title: 'Имя' }, { column_name: 'd', kind: 'date', title: 'Дата' }]
+  const { container } = render(<CalendarView fields={f} rows={[]} primaryField="name" config={{ start: 'd' }} onOpen={() => {}} />)
+  fireEvent.change(screen.getByRole('combobox', { name: 'Начало недели' }), { target: { value: 'sun' } })
+  expect(container.querySelector('.cal-wd').textContent.startsWith('Вс')).toBe(true)
+  fireEvent.change(screen.getByRole('combobox', { name: 'Выходные' }), { target: { value: 'hide' } })
+  expect(container.querySelector('.cal-week').style.gridTemplateColumns).toMatch(/^0 /)   // вс — первая и скрыта
+  fireEvent.change(screen.getByRole('combobox', { name: 'Режим' }), { target: { value: 'custom' } })
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Недель' }), { target: { value: '4' } })
+  expect(container.querySelectorAll('.cal-week')).toHaveLength(4)
+})
+
+test('сдвиг на часы: дата со временем — точно, дата без времени — до дней', () => {
+  const dt = { kind: 'dateTime', options: { timeZone: 'utc', timeFormat: { name: '24hour' } } }
+  expect(shiftDate(dt, '2026-11-03T10:30:00.000Z', 3 / 24)).toBe('2026-11-03T13:30:00.000Z')
+  expect(shiftDate(dt, '2026-11-03T10:30:00.000Z', -25 / 24)).toBe('2026-11-02T09:30:00.000Z')
+  expect(shiftDate({ kind: 'date' }, '2026-11-03', 3 / 24)).toBe('2026-11-03')
+  expect(shiftDate({ kind: 'date' }, '2026-11-03', 20 / 24)).toBe('2026-11-04')
+})

@@ -471,3 +471,5 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); z-index: 3; }
 .tl-gl { position: absolute; top: 0; width: 1px; background: #eef0f3; }
 .tl-dayh { overflow: hidden; white-space: nowrap; border-left: 1px solid transparent; }
+.cal-weeks { display: inline-flex; align-items: center; gap: 4px; }
+.cal-weeks input { width: 40px; font: inherit; border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; }
