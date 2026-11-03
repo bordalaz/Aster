@@ -469,3 +469,5 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: #1d1f25; text-align: left; overflow: hidden; cursor: pointer; z-index: 1; overflow-wrap: normal; word-break: normal; }
 .cal-slot:hover { filter: brightness(0.96); z-index: 2; }
 .cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); z-index: 3; }
+.tl-gl { position: absolute; top: 0; width: 1px; background: #eef0f3; }
+.tl-dayh { overflow: hidden; white-space: nowrap; border-left: 1px solid transparent; }
