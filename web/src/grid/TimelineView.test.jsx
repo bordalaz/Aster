@@ -39,3 +39,22 @@ test('группы по выбору в обратном порядке, пус�
   fireEvent.click(screen.getByRole('button', { name: 'Рейс 1' }))
   expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), [1, 2])
 })
+
+import { ticks } from './TimelineView.jsx'
+
+test('деления шкалы по масштабам', () => {
+  const D = (y, m, d) => Date.UTC(y, m - 1, d) / 86400000
+  const d0 = D(2026, 11, 3)
+  const day = ticks('day', d0, d0)
+  expect(day.top[0].label).toBe('3 ноября 2026')
+  expect(day.bottom).toHaveLength(24)
+  expect(day.bottom[14].label).toBe('14:00')
+  expect(ticks('week', d0, d0 + 1).bottom.map(u => u.label)).toEqual(['Вт 3', 'Ср 4', 'Чт 5'])
+  expect(ticks('month', d0, d0).bottom[0].label).toEqual(['В', 3])
+  const q = ticks('quarter', d0, d0 + 14)
+  expect(q.bottom.map(u => [u.label, u.b - u.a])).toEqual([['2', 7], ['9', 7], ['16', 7]])   // недели с понедельника
+  expect(q.top[0].label).toBe('Ноябрь 2026')
+  const y = ticks('year', D(2026, 11, 3), D(2027, 1, 20))
+  expect(y.top.map(t => t.label)).toEqual(['4 кв. 2026', '1 кв. 2027'])
+  expect(y.bottom.map(u => u.label)).toEqual(['Ноя', 'Дек', 'Янв'])
+})

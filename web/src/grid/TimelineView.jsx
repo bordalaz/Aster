@@ -5,19 +5,43 @@ import { choiceColor, HUE_SHADES } from './renderers.js'
 import { applyFilters, sortRows } from './viewConfig.js'
 import { shiftDate } from './CalendarView.jsx'
 
-// Таймлайн, как в Airtable: шкала по дням (Неделя / Месяц), полоса записи — точно от начала до конца
+// Таймлайн, как в Airtable: масштаб (День … Год) вписывает отрезок в ширину экрана, полоса записи — точно от начала до конца
 // (время учитывается), подпись — видимые поля со стилем. Без layout — строка на запись (слева названия,
 // группы по полю выбора); layout='stacked' — записи плотно по дорожкам. Снизу «Всего» — число записей
 // в каждый день, цвет по порогам. Перетаскивание полосы сдвигает начало и конец на целые дни.
-// ponytail: масштабы только Неделя/Месяц; «+ Record», вехи, растягивание края полосы — когда попросят.
+// ponytail: «+ Record», вехи, растягивание края полосы — когда попросят; перетаскивание — по целым дням и в «Дне».
 
-const PX = { week: 200, month: 41 }
+export const SCALES = [['day', 'День'], ['week', 'Неделя'], ['2week', '2 недели'], ['month', 'Месяц'], ['quarter', 'Квартал'], ['6month', '6 месяцев'], ['year', 'Год']]
+const SPAN = { day: 1, week: 7, '2week': 14, month: 31, quarter: 91, '6month': 182, year: 365 }   // дней на ширину экрана
+const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+const MON = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+const pad2 = n => String(n).padStart(2, '0')
 const ROW = 34, HEAD = 36, LEFT = 240
 const DAY = 86400000
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const WD = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
 const dayNum = p => Math.round(Date.UTC(p.y, p.m - 1, p.d) / DAY)
 const ymd = n => { const t = new Date(n * DAY); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate(), wd: t.getUTCDay() } }
+const monthOf = (n, k = 0) => { const p = ymd(n), t = p.m - 1 + k; return dayNum({ y: p.y + Math.floor(t / 12), m: ((t % 12) + 12) % 12 + 1, d: 1 }) }
+
+// Деления шкалы на [d0, d1]: верхняя строка (день / месяц / квартал) и нижняя (часы / дни / недели / месяцы).
+export function ticks(scale, d0, d1) {
+  const top = [], bottom = []
+  const each = (first, next, label, out) => { for (let a = first; a <= d1 + 1; a = next(a)) out.push({ a, b: next(a), label: label(a) }) }
+  if (scale === 'day') {
+    each(d0, a => a + 1, a => { const p = ymd(a); return `${p.d} ${MONTHS_GEN[p.m - 1]} ${p.y}` }, top)
+    for (let d = d0; d <= d1; d++) for (let h = 0; h < 24; h++) bottom.push({ a: d + h / 24, b: d + (h + 1) / 24, label: `${pad2(h)}:00` })
+  } else if (['week', '2week', 'month', 'quarter'].includes(scale)) {
+    each(monthOf(d0), a => monthOf(a, 1), a => `${MONTHS[ymd(a).m - 1]} ${ymd(a).y}`, top)
+    if (scale === 'quarter') each(d0 - (ymd(d0).wd + 6) % 7, a => a + 7, a => String(ymd(a).d), bottom)   // недели с понедельника
+    else each(d0, a => a + 1, a => { const p = ymd(a); return scale === 'month' ? [WD[p.wd][0], p.d] : `${WD[p.wd]} ${p.d}` }, bottom)
+  } else {
+    const q = n => { const p = ymd(n); return dayNum({ y: p.y, m: Math.floor((p.m - 1) / 3) * 3 + 1, d: 1 }) }
+    each(q(d0), a => monthOf(a, 3), a => `${Math.floor((ymd(a).m - 1) / 3) + 1} кв. ${ymd(a).y}`, top)
+    each(monthOf(d0), a => monthOf(a, 1), a => MON[ymd(a).m - 1], bottom)
+  }
+  return { top, bottom }
+}
 
 // Точка на шкале (в днях от эпохи, с дробной частью — время в зоне поля).
 export function point(field, value, isEnd) {
@@ -54,7 +78,7 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
   const startF = byCol[config.start], endF = byCol[config.end]
   const groupF = config.layout !== 'stacked' ? byCol[config.group?.[0]] : null
   const [scale, setScale] = useState('month')
-  const px = PX[scale]
+  const [px, setPx] = useState(41)
   const label = (config.columns ?? []).filter(c => byCol[c])
 
   const events = useMemo(() => {
@@ -108,8 +132,9 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
 
   const now = new Date()
   const today = dayNum({ y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() })
-  const lo = Math.floor(Math.min(today, ...events.map(e => e.t0))) - 14
-  const hi = Math.ceil(Math.max(today, ...events.map(e => e.t1))) + 60
+  // запас по краям — не меньше экрана масштаба, чтобы «Год» и «6 месяцев» не обрывались
+  const lo = Math.floor(Math.min(today, ...events.map(e => e.t0))) - Math.max(14, SPAN[scale])
+  const hi = Math.ceil(Math.max(today, ...events.map(e => e.t1))) + Math.max(60, SPAN[scale])
   const body = useRef(null)
   const [view, setView] = useState({ left: 0, width: 1200 })
   const [drag, setDrag] = useState(null)   // {ev, x0, dx}
@@ -118,7 +143,14 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
   let y = 0
   for (const l of layout.lines) { tops.push(y); y += l.kind === 'group' ? HEAD : ROW }
 
-  const goto = day => { if (body.current) body.current.scrollLeft = Math.max(0, (day - lo) * px - (body.current.clientWidth - left) / 4) }
+  // масштаб: выбранный отрезок — во всю ширину экрана (пересчёт при смене масштаба, не при каждом ресайзе)
+  useLayoutEffect(() => { const w = body.current?.clientWidth ? body.current.clientWidth - left : 1200; setPx(Math.max(0.5, w / SPAN[scale])) }, [scale, left])
+  const goto = day => {
+    const el = body.current
+    if (!el) return
+    el.scrollLeft = Math.max(0, (day - lo) * px - (el.clientWidth - left) / 4)
+    setView(v => ({ ...v, left: el.scrollLeft }))   // сразу, не дожидаясь события scroll
+  }
   useLayoutEffect(() => { goto(today) }, [px, lo])   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const el = body.current
@@ -134,8 +166,6 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
   const movable = !!onMove && startF.editable && (!endF || endF.editable)
   const ids = events.map(e => e.row.id)
   const d0 = lo + Math.max(0, Math.floor(view.left / px) - 1), d1 = Math.min(hi, lo + Math.ceil((view.left + view.width) / px) + 1)
-  const days = []
-  for (let d = d0; d <= d1; d++) days.push(d)
   const x = t => (t - lo) * px
   const shift = -view.left
 
@@ -158,7 +188,10 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
   }
 
-  const totals = config.totals && days.map(d => events.reduce((n, e) => n + (e.t0 < d + 1 && e.t1 > d), 0))
+  const { top: topTicks, bottom: units } = ticks(scale, d0, d1)
+  const nowT = today + (now.getHours() * 60 + now.getMinutes()) / 1440
+  const nowX = scale === 'day' ? nowT : today + 0.5   // в «Дне» — точное время, иначе — середина дня
+  const totals = config.totals && units.map(u => events.reduce((n, e) => n + (e.t0 < u.b && e.t1 > u.a), 0))
 
   return (
     <section className="tl" aria-label="Таймлайн">
@@ -166,21 +199,22 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
         {left > 0 && <div className="tl-corner" style={{ width: left }}>{groupF && <>Сгруппировано по<br /><b>{groupF.title}</b></>}</div>}
         <div className="tl-scale">
           <div className="tl-months" style={{ transform: `translateX(${shift}px)` }}>
-            {days.filter((d, i) => i === 1 || ymd(d).d === 1).map(d => (
-              <span key={d} style={{ left: Math.max(x(d), view.left) + 8 }}>{MONTHS[ymd(d).m - 1]} {ymd(d).y}</span>
+            {topTicks.filter(t => x(t.b) > view.left).map(t => (   // ушедшие за левый край — не показываем (иначе липнут к краю стопкой)
+              <span key={t.a} style={{ left: Math.max(x(t.a), view.left) + 8 }}>{t.label}</span>
             ))}
           </div>
           <div className="tl-days" style={{ transform: `translateX(${shift}px)` }}>
-            {days.map(d => { const p = ymd(d); return (
-              <div key={d} className={`tl-dayh${d === today ? ' today' : ''}`} style={{ left: x(d), width: px }}>
-                <span>{scale === 'week' ? `${WD[p.wd]} ${p.d}` : <>{WD[p.wd][0]}<br />{p.d}</>}</span>
-              </div>) })}
+            {units.map(u => (
+              <div key={u.a} className={`tl-dayh${(scale === 'day' ? u.a <= nowT && nowT < u.b : u.a <= today && today < u.b) ? ' today' : ''}`}
+                style={{ left: x(u.a), width: (u.b - u.a) * px }}>
+                <span>{Array.isArray(u.label) ? <>{u.label[0]}<br />{u.label[1]}</> : u.label}</span>
+              </div>))}
           </div>
         </div>
         <div className="tl-ctl">
           <button type="button" className="tool" onClick={() => goto(today)}>Сегодня</button>
           <select className="tool" aria-label="Масштаб" value={scale} onChange={e => setScale(e.target.value)}>
-            <option value="week">Неделя</option><option value="month">Месяц</option>
+            {SCALES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
           <button type="button" className="tool" aria-label="Назад" onClick={() => body.current && (body.current.scrollLeft -= view.width * 0.8)}>‹</button>
           <button type="button" className="tool" aria-label="Вперёд" onClick={() => body.current && (body.current.scrollLeft += view.width * 0.8)}>›</button>
@@ -188,8 +222,8 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
       </div>
       <div className="tl-body" ref={body}>
         <div style={{ width: left + (hi - lo + 1) * px, height: Math.max(y, 1), position: 'relative' }}>
-          <div className="tl-grid" style={{ left: left + x(d0), width: (d1 - d0 + 1) * px, height: y, backgroundSize: `${px}px 100%` }} />
-          {today >= d0 && today <= d1 && <div className="tl-now" style={{ left: left + x(today) + px / 2, height: y }} />}
+          {units.map(u => <div key={u.a} className="tl-gl" style={{ left: left + x(u.a), height: y }} />)}
+          {nowX >= d0 && nowX <= d1 + 1 && <div className="tl-now" style={{ left: left + x(nowX), height: y }} />}
           {left > 0 && layout.lines.map((l, i) => (
             <div key={i} className={`tl-left ${l.kind}`} style={{ top: tops[i], left: view.left, width: left, height: l.kind === 'group' ? HEAD : ROW }}>
               {l.kind === 'group'
@@ -215,7 +249,7 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
           <div className="tl-corner" style={{ width: Math.max(left, 60) }}>{config.totals.label}</div>
           <div className="tl-scale">
             <div style={{ transform: `translateX(${shift - Math.max(0, 60 - left)}px)`, position: 'relative', height: '100%' }}>
-              {days.map((d, i) => <div key={d} className="tl-tot" style={{ left: x(d), width: px, ...totalColor(config.totals.rules, totals[i]) }}>{totals[i]}</div>)}
+              {units.map((u, i) => <div key={u.a} className="tl-tot" style={{ left: x(u.a), width: (u.b - u.a) * px, ...totalColor(config.totals.rules, totals[i]) }}>{totals[i]}</div>)}
             </div>
           </div>
         </div>
