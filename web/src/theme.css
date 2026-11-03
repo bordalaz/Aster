@@ -454,3 +454,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .au-mail { display: grid; gap: 8px; max-width: 520px; } .au-mail label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
 .au-runs { border-collapse: collapse; font-size: 12px; } .au-runs td { padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .au-runs td:first-child { white-space: nowrap; color: #616670; } .au-runs .ok { color: #20a032; } .au-runs .bad { color: var(--danger); }
+
+/* Календарь: сетка по часам (Неделя / 3 дня / День) */
+.cal-wd-today { display: inline-block; min-width: 20px; border-radius: 4px; background: var(--accent); color: #fff; font-weight: 600; }
+.cal-hours { flex: 1; min-height: 0; overflow-y: auto; }
+.cal-hgrid { display: grid; position: relative; }
+.cal-hlabels { position: relative; border-right: 1px solid var(--line); }
+.cal-hlabels span { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11px; color: #8a8f98; }
+.cal-hlabels span:first-child { transform: none; }
+.cal-hday { position: relative; border-right: 1px solid var(--line); background-image: linear-gradient(to bottom, #eef0f3 1px, transparent 1px); }
+.cal-hday.we { background-color: #f6f7f9; }
+.cal-hday.over { background-color: var(--accent-tint); }
+.cal-slot { position: absolute; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; box-sizing: border-box; padding: 2px 6px; border: 0; border-radius: 4px; font: inherit; font-size: 12px; line-height: 16px;
+  color: #1d1f25; text-align: left; overflow: hidden; cursor: pointer; z-index: 1; overflow-wrap: normal; word-break: normal; }
+.cal-slot:hover { filter: brightness(0.96); z-index: 2; }
+.cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); z-index: 3; }
