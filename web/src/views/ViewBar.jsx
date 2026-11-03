@@ -30,6 +30,7 @@ const ViewIcon = ({ kind, size }) => (kind === 'gallery' ? <Icon name="gallery" 
   : kind === 'kanban' ? <Icon name="kanban" size={size} style={{ color: '#048a0e' }} />
   : kind === 'calendar' ? <Icon name="calendar" size={size} style={{ color: '#d54401' }} />
   : kind === 'timeline' ? <Icon name="timeline" size={size} style={{ color: '#dc043b' }} />
+  : kind === 'list' ? <Icon name="listBullets" size={size} style={{ color: '#0d52ac' }} />
   : <Icon name="table" size={size} style={{ color: 'var(--accent)' }} />)
 
 // Список видов слева (☰), как в Airtable: «+ Создать вид», поиск, разделы «Мои личные» и «Общие» (сворачиваются).
@@ -245,7 +246,7 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
         {(view?.kind === 'calendar' || view?.kind === 'timeline') && (   // как «Using date field» в Airtable
           <span className="tool" style={{ cursor: 'default' }}><Icon name="calendar" />Дата: {[config.start, config.end].map(c => fields.find(f => f.column_name === c)?.title).filter(Boolean).join(' — ') || '—'}</span>
         )}
-        {!['gallery', 'kanban', 'calendar', 'timeline'].includes(view?.kind) && <div style={{ position: 'relative' }}>{/* у галереи и канбана Airtable группировки нет */}
+        {!['gallery', 'kanban', 'calendar', 'timeline', 'list'].includes(view?.kind) && <div style={{ position: 'relative' }}>{/* у галереи и канбана Airtable группировки нет */}
           <button className={`tool group${groups.length ? ' on' : ''}`} aria-expanded={panel === 'group'} onClick={() => toggle('group')}>
             <Icon name="rows" />{label.group}
           </button>

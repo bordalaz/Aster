@@ -65,6 +65,7 @@ class ViewConfig(Strict):
     groupDesc: bool | None = None
     labelStyle: dict[Annotated[str, Col], dict[str, bool]] | None = Field(None, max_length=50)
     totals: dict[str, Any] | None = None
+    levels: list[dict[str, Any]] | None = Field(None, max_length=6)   # List: уровни иерархии (таблица, связь, колонки)
 
     def used_columns(self) -> set[str]:
         return (set(self.columns or ()) | set(self.widths or ()) | {x for x in (self.cover, self.stack, self.start, self.end) if x} | set(self.labelStyle or ()) | set(self.summary or ()) | {s.col for s in self.sort or ()}
@@ -96,7 +97,7 @@ def list_views(table_id: int, user: dict = Depends(active_user)):
         table_title(c, table_id, user)
         rows = c.execute(text(
             "select id, title, kind, owner_id, config, at_owner from app_view "
-            "where table_id = :t and kind in ('grid', 'gallery', 'kanban', 'calendar', 'timeline') "
+            "where table_id = :t and kind in ('grid', 'gallery', 'kanban', 'calendar', 'timeline', 'list') "
             "and ((owner_id is null and (at_owner is null or :adm)) or owner_id = :u) "
             "order by owner_id nulls first, sort_order, id"
         ), {"t": table_id, "u": user["id"], "adm": user["role"] in ADMINS})

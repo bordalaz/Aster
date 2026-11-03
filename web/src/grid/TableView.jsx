@@ -6,6 +6,7 @@ import GalleryView from './GalleryView.jsx'
 import KanbanView from './KanbanView.jsx'
 import CalendarView from './CalendarView.jsx'
 import TimelineView from './TimelineView.jsx'
+import ListView from './ListView.jsx'
 import Card from '../card/Card.jsx'
 import { ButtonDialog, ButtonRun, openForm } from '../card/ButtonField.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
@@ -219,7 +220,9 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           } catch { setError('Не удалось создать вид') }
         }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {view?.kind === 'timeline'
+          {view?.kind === 'list'
+            ? <ListView fields={fields} rows={rows} config={config} search={search} onOpen={openRow} onOpenLink={onOpenLink} />
+            : view?.kind === 'timeline'
             ? <TimelineView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} storeKey={`aster.tl.${current}`} />
             : view?.kind === 'calendar'
             ? <CalendarView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} storeKey={`aster.cal.${current}`} />
