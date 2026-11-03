@@ -19,7 +19,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from .access import can_edit, can_read, hidden_columns, table_title
-from .auth import active_user
+from .auth import ADMINS, active_user
 from .db import engine
 
 # имя файла из базы — только имя: ни «/», ни «\» (zip-slip при распаковке в Windows), ни управляющих
@@ -86,8 +86,12 @@ def _visible(c, row, user) -> bool:
         return row.uploaded_by == user["id"]
     if row.table_id == "app_calibration":   # файлы калибровок — всем, кто видит Оборудование
         return can_read(user, "Оборудование")
-    t = c.execute(text("select id, title from app_table where airtable_id = :a"), {"a": row.table_id}).first()
+    t = c.execute(text("select id, title, pg_name from app_table where airtable_id = :a"), {"a": row.table_id}).first()
     if t is None or not can_read(user, t.title):
+        return False
+    # запись в корзине (её нет в таблице) — файлы видят только админы, как и саму корзину
+    if user["role"] not in ADMINS and c.execute(text(f"select 1 from {t.pg_name} where airtable_id = :r"),
+                                                 {"r": row.record_airtable_id}).first() is None:
         return False
     col = c.execute(text("select column_name from app_field where airtable_id = :f"), {"f": row.field_id}).scalar()
     return col not in hidden_columns(c, user, t.id)
