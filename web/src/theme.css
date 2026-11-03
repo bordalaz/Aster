@@ -431,3 +431,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .fb:disabled { opacity: .5; cursor: default; }
 .fb-rec { margin: 0 0 8px; color: #616670; }
 .fb-help { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Список форм: высота по тексту, таблица под названием */
+.form-item { display: block; width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text);
+  font: inherit; text-align: left; line-height: 1.3; overflow-wrap: anywhere; cursor: pointer; }
+.form-item:hover { background: #f7f7f8; }
+.form-item[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-tint); }
+.form-item small { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
