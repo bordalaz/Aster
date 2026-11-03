@@ -10,7 +10,7 @@ import { useStored } from '../ui/useStored.js'
 // (время учитывается), подпись — видимые поля со стилем. Без layout — строка на запись (слева названия,
 // группы по полю выбора); layout='stacked' — записи плотно по дорожкам. Снизу «Всего» — число записей
 // в каждый день, цвет по порогам. Перетаскивание полосы сдвигает начало и конец на целые дни.
-// ponytail: «+ Record», вехи, растягивание края полосы — когда попросят; перетаскивание — по целым дням и в «Дне».
+// Перетаскивание: в «Дне» — шаг час, в остальных масштабах — целые дни. ponytail: «+ Record», вехи, растягивание края полосы — когда попросят.
 
 export const SCALES = [['day', 'День'], ['week', 'Неделя'], ['2week', '2 недели'], ['month', 'Месяц'], ['quarter', 'Квартал'], ['6month', '6 месяцев'], ['year', 'Год']]
 const SPAN = { day: 1, week: 7, '2week': 14, month: 31, quarter: 91, '6month': 182, year: 365 }   // дней на ширину экрана
@@ -178,7 +178,8 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
       setDrag(null)
-      const delta = Math.round(dx / px)
+      // в «Дне» — шаг час, иначе — целые дни
+      const delta = scale === 'day' ? Math.round(dx / px * 24) / 24 : Math.round(dx / px)
       if (Math.abs(dx) <= 3) onOpen(ev.row, ids)
       else if (movable && delta) {
         const vals = { [config.start]: shiftDate(startF, ev.row[config.start], delta) }

@@ -10,39 +10,50 @@ import { useStored } from '../ui/useStored.js'
 // рядом), у даты без времени — полосы в одну строку. Выходные: показывать / свернуть / скрыть.
 // Полоса — от начала (config.start) до конца (config.end), со временем начала и подписью «поле · поле».
 // Не влезли — «+N ещё» → попап дня. Перетаскивание сдвигает начало и конец на те же дни.
-// Режим и выходные помнятся в браузере для каждого вида (storeKey). ponytail: «Custom» и «Start week on» Airtable — нет.
+// «Свой» — 1–6 недель («Custom» Airtable), начало недели — понедельник или воскресенье («Start week on»).
+// Режим, число недель, начало недели и выходные помнятся в браузере для каждого вида (storeKey).
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-export const MODES = [['day', 'День'], ['3day', '3 дня'], ['week', 'Неделя'], ['2week', '2 недели'], ['month', 'Месяц']]
+export const MODES = [['day', 'День'], ['3day', '3 дня'], ['week', 'Неделя'], ['2week', '2 недели'], ['month', 'Месяц'], ['custom', 'Свой (недели)']]
 const LANES = { month: 3, '2week': 8 }   // полос в ячейке, остальное — «+N ещё»; в одну строку — все
 const HOUR = 44                          // высота часа в сетке по часам
 const DAY = 86400000
 const dayNum = p => Math.round(Date.UTC(p.y, p.m - 1, p.d) / DAY)
 const fromNum = n => { const t = new Date(n * DAY); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() } }
 const wday = n => (new Date(n * DAY).getUTCDay() + 6) % 7   // 0 — понедельник
-const monday = n => n - wday(n)
+// начало недели: first — 1 понедельник (как у нас по умолчанию), 0 — воскресенье («Start week on» Airtable)
+const weekStart = (n, first = 1) => n - ((new Date(n * DAY).getUTCDay() - first + 7) % 7)
 const pad2 = n => String(n).padStart(2, '0')
 const empty = v => v == null || v === '' || v === false || (Array.isArray(v) && !v.length)   // Airtable пустое в подписи пропускает
 
-// Сдвиг значения даты на delta дней (время и зона поля сохраняются).
+// Сдвиг значения даты на delta дней (время и зона поля сохраняются); дробный delta — часы (таймлайн «День»):
+// у даты со временем — точно, у даты без времени — до целых дней.
 export function shiftDate(field, value, delta) {
+  if (!Number.isInteger(delta)) {
+    if (hasTime(field) && typeof value === 'string' && value.includes('T')) return new Date(new Date(value).getTime() + Math.round(delta * 1440) * 60000).toISOString()
+    delta = Math.round(delta)
+    if (!delta) return value
+  }
   const p = dateParts(field, value)
   return p ? partsToValue(field, { ...p, ...fromNum(dayNum(p) + delta) }) : value
 }
 
 // Первые дни 6 недель сетки месяца (номера дней от эпохи).
-export function monthGrid(y, m) {
-  const start = monday(dayNum({ y, m, d: 1 }))
+export function monthGrid(y, m, first = 1) {
+  const start = weekStart(dayNum({ y, m, d: 1 }), first)
   return Array.from({ length: 6 }, (_, i) => start + i * 7)
 }
 
 // Строки сетки и дни в строке для режима: [[первый день, число дней], …].
-export function rowsFor(mode, anchor) {
-  if (mode === 'month') { const { y, m } = fromNum(anchor); return monthGrid(y, m).map(ws => [ws, 7]) }
-  if (mode === '2week') { const ws = monday(anchor); return [[ws, 7], [ws + 7, 7]] }
-  if (mode === 'week') return [[monday(anchor), 7]]
+export function rowsFor(mode, anchor, first = 1, weeks = 2) {
+  if (mode === 'month') { const { y, m } = fromNum(anchor); return monthGrid(y, m, first).map(ws => [ws, 7]) }
+  if (mode === '2week' || mode === 'custom') {   // «Custom» Airtable: 1–6 недель
+    const ws = weekStart(anchor, first), n = mode === '2week' ? 2 : weeks
+    return Array.from({ length: n }, (_, i) => [ws + i * 7, 7])
+  }
+  if (mode === 'week') return [[weekStart(anchor, first), 7]]
   return [[anchor, mode === '3day' ? 3 : 1]]
 }
 
@@ -114,6 +125,9 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
   const now = new Date()
   const today = dayNum({ y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() })
   const [mode, setMode] = useStored(storeKey && `${storeKey}.mode`, 'month', MODES.map(m => m[0]))
+  const [weeksS, setWeeks] = useStored(storeKey && `${storeKey}.weeks`, '3', ['1', '2', '3', '4', '5', '6'])
+  const [firstS, setFirst] = useStored(storeKey && `${storeKey}.weekStart`, 'mon', ['mon', 'sun'])
+  const weeks = Number(weeksS), first = firstS === 'sun' ? 0 : 1
   const [weekends, setWeekends] = useStored(storeKey && `${storeKey}.weekends`, 'show', ['show', 'collapse', 'hide'])
   const [anchor, setAnchor] = useState(today)
   const [popDay, setPopDay] = useState(null)
@@ -133,20 +147,21 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
   if (!startF) return <p className="dash-empty">Поле даты календаря не найдено</p>
   const movable = !!onMove && startF.editable && (!endF || endF.editable)
   const ids = events.map(e => e.row.id)
-  const grid = rowsFor(mode, anchor)
+  const grid = rowsFor(mode, anchor, first, weeks)
   const firstDay = grid[0][0], lastDay = grid.at(-1)[0] + grid.at(-1)[1] - 1
   const { y: ay, m: am } = fromNum(anchor)
   const monthFirst = dayNum({ y: ay, m: am, d: 1 }), monthLast = dayNum({ y: am === 12 ? ay + 1 : ay, m: am % 12 + 1, d: 1 }) - 1
   const step = d => {
     setPopDay(null)
     if (mode === 'month') { const t = am + d; setAnchor(dayNum({ y: ay + Math.floor((t - 1) / 12), m: ((t - 1) % 12 + 12) % 12 + 1, d: 1 })) }
-    else setAnchor(a => a + d * { '2week': 14, week: 7, '3day': 3, day: 1 }[mode])
+    else setAnchor(a => a + d * { '2week': 14, custom: 7 * weeks, week: 7, '3day': 3, day: 1 }[mode])
   }
   // ширины колонок: выходные в 7-дневных строках можно свернуть или скрыть
-  const weights = n => Array.from({ length: n }, (_, i) => (n === 7 && i > 4 ? { show: 1, collapse: 0.25, hide: 0 }[weekends] : 1))
-  const pos = n => { const w = weights(n), sum = w.reduce((a, b) => a + b, 0); let acc = 0; return w.map(x => { const l = acc; acc += x; return [l / sum * 100, x / sum * 100] }) }
-  const cols = n => weights(n).map(w => (w ? `minmax(0, ${w}fr)` : '0')).join(' ')
-  const lanes = LANES[mode] ?? Infinity
+  // выходные (сб, вс — где бы ни стояли при начале недели) в 7-дневных строках можно свернуть или скрыть
+  const weights = (ws, n) => Array.from({ length: n }, (_, i) => (n === 7 && wday(ws + i) > 4 ? { show: 1, collapse: 0.25, hide: 0 }[weekends] : 1))
+  const pos = (ws, n) => { const w = weights(ws, n), sum = w.reduce((a, b) => a + b, 0); let acc = 0; return w.map(x => { const l = acc; acc += x; return [l / sum * 100, x / sum * 100] }) }
+  const cols = (ws, n) => weights(ws, n).map(w => (w ? `minmax(0, ${w}fr)` : '0')).join(' ')
+  const lanes = mode === 'custom' ? (weeks <= 2 ? 8 : 3) : LANES[mode] ?? Infinity
 
   function drop(day) {
     const d = drag; setDrag(null)
@@ -179,11 +194,11 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
     </button>
   )
   const head = days => (
-    <div className="cal-wd" style={{ gridTemplateColumns: hourGrid ? `48px ${cols(days.length)}` : cols(days.length) }}>
+    <div className="cal-wd" style={{ gridTemplateColumns: hourGrid ? `48px ${cols(days[0], days.length)}` : cols(days[0], days.length) }}>
       {hourGrid && <div />}
       {days.map((d, i) => (
         <div key={d} className={wday(d) > 4 ? 'we' : ''} style={{ overflow: 'hidden' }}>
-          {WEEKDAYS[wday(d)]}{mode !== 'month' && mode !== '2week' && <> <span className={d === today ? 'cal-wd-today' : ''}>{fromNum(d).d}</span></>}
+          {WEEKDAYS[wday(d)]}{!['month', '2week', 'custom'].includes(mode) && <> <span className={d === today ? 'cal-wd-today' : ''}>{fromNum(d).d}</span></>}
         </div>
       ))}
     </div>
@@ -200,17 +215,26 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
         <select className="tool" aria-label="Режим" value={mode} onChange={e => { setPopDay(null); setMode(e.target.value) }}>
           {MODES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
         </select>
+        {mode === 'custom' && (
+          <label className="tool cal-weeks">
+            <input type="number" min={1} max={6} aria-label="Недель" value={weeks}
+              onChange={e => { const v = Math.round(Number(e.target.value)); if (v >= 1 && v <= 6) setWeeks(String(v)) }} />недель
+          </label>
+        )}
+        <select className="tool" aria-label="Начало недели" value={firstS} onChange={e => setFirst(e.target.value)}>
+          <option value="mon">Неделя с понедельника</option><option value="sun">Неделя с воскресенья</option>
+        </select>
         <select className="tool" aria-label="Выходные" value={weekends} onChange={e => setWeekends(e.target.value)}>
           <option value="show">Выходные: показывать</option><option value="collapse">Выходные: свернуть</option><option value="hide">Выходные: скрыть</option>
         </select>
       </header>
       {hourGrid ? (() => {
-        const [[ws, n]] = grid, days = span(ws, n), p = pos(n), nowFrac = (now.getHours() * 60 + now.getMinutes()) / 1440
+        const [[ws, n]] = grid, days = span(ws, n), p = pos(ws, n), nowFrac = (now.getHours() * 60 + now.getMinutes()) / 1440
         return (
           <>
             {head(days)}
             <div className="cal-hours" ref={hours}>
-              <div className="cal-hgrid" style={{ gridTemplateColumns: `48px ${cols(n)}`, height: 24 * HOUR }}>
+              <div className="cal-hgrid" style={{ gridTemplateColumns: `48px ${cols(ws, n)}`, height: 24 * HOUR }}>
                 <div className="cal-hlabels">{Array.from({ length: 24 }, (_, h) => <span key={h} style={{ top: h * HOUR }}>{pad2(h)}:00</span>)}</div>
                 {days.map((d, i) => (
                   <div key={d} className={`cal-hday${wday(d) > 4 ? ' we' : ''}${drag?.over === d ? ' over' : ''}`} style={{ backgroundSize: `100% ${HOUR}px` }} {...dropTarget(d)}>
@@ -236,9 +260,9 @@ export default function CalendarView({ fields, rows, primaryField, config, searc
           {head(span(grid[0][0], grid[0][1]))}
           <div className="cal-body" style={{ gridTemplateRows: `repeat(${grid.length}, minmax(110px, 1fr))` }}>
             {grid.map(([ws, n]) => {
-              const placed = placeWeek(events, ws, n), p = pos(n)
+              const placed = placeWeek(events, ws, n), p = pos(ws, n)
               return (
-                <div key={ws} className="cal-week" style={{ gridTemplateColumns: cols(n),
+                <div key={ws} className="cal-week" style={{ gridTemplateColumns: cols(ws, n),
                   minHeight: lanes === Infinity ? 34 + placed.reduce((m, x) => Math.max(m, x.lane + 1), 0) * 22 : undefined }}>
                   {span(ws, n).map((day, i) => {
                     const { d } = fromNum(day)
