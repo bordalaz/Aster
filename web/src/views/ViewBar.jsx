@@ -26,8 +26,8 @@ function useDismiss(open, close) {
 }
 
 // Значок вида, как в Airtable: таблица — синяя, галерея — фиолетовые квадраты.
-const ViewIcon = ({ kind, size }) => (kind === 'gallery'
-  ? <Icon name="gallery" size={size} style={{ color: '#7c37ef' }} />
+const ViewIcon = ({ kind, size }) => (kind === 'gallery' ? <Icon name="gallery" size={size} style={{ color: '#7c37ef' }} />
+  : kind === 'kanban' ? <Icon name="kanban" size={size} style={{ color: '#048a0e' }} />
   : <Icon name="table" size={size} style={{ color: 'var(--accent)' }} />)
 
 // Список видов слева (☰), как в Airtable: «+ Создать вид», поиск, разделы «Мои личные» и «Общие» (сворачиваются).
@@ -232,7 +232,10 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
           )}
         </div>
 
-        {view?.kind !== 'gallery' && <div style={{ position: 'relative' }}>{/* у галереи Airtable группировки нет */}
+        {view?.kind === 'kanban' && (   // как «Stacked by …» в Airtable: поле колонок
+          <span className="tool" style={{ cursor: 'default' }}><Icon name="kanban" />Колонки: {fields.find(f => f.column_name === config.stack)?.title ?? '—'}</span>
+        )}
+        {view?.kind !== 'gallery' && view?.kind !== 'kanban' && <div style={{ position: 'relative' }}>{/* у галереи и канбана Airtable группировки нет */}
           <button className={`tool group${groups.length ? ' on' : ''}`} aria-expanded={panel === 'group'} onClick={() => toggle('group')}>
             <Icon name="rows" />{label.group}
           </button>

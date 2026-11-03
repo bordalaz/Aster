@@ -3,6 +3,7 @@ import { api } from '../api.js'
 import { useRecords } from '../record/useRecords.js'
 import Grid from './Grid.jsx'
 import GalleryView from './GalleryView.jsx'
+import KanbanView from './KanbanView.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 import { groupCols, visibleColumns } from './viewConfig.js'
@@ -136,6 +137,28 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
     } catch { setError('Не удалось дублировать запись') }
   }
 
+  // Канбан: карточку перенесли в другую колонку — новое значение поля колонок; order — ручной порядок вида.
+  async function moveCard(row, value, order) {
+    setError('')
+    try {
+      if (value !== undefined) await patch(row, { [config.stack]: value })
+      if (order) { setConfig(c => ({ ...c, rowOrder: order })); await saveOrder(order) }
+    } catch (e) {
+      setError(e.status === 409 ? 'Запись изменил другой пользователь — показана свежая версия' : 'Не удалось перенести карточку')
+    }
+  }
+  // «+ Добавить запись» в колонке канбана: новая запись сразу с этим значением, открывается её карточка.
+  async function addToStack(value) {
+    setError('')
+    try {
+      const { id, updated_at } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      let rec = { id, updated_at }
+      if (value != null) rec = { id, ...(await api(`/api/tables/${tableId}/records/${id}`, { method: 'PATCH', body: { updated_at, values: { [config.stack]: value } } })) }
+      setOpen(rec)
+      await refresh()
+    } catch { setError('Не удалось добавить запись') }
+  }
+
   // Удаление — в корзину (решения владельца): одна запись — сразу, несколько — после вопроса; 10 с «Отменить».
   async function remove(rs) {
     setError(''); setAsking(null)
@@ -177,7 +200,10 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           } catch { setError('Не удалось создать вид') }
         }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {view?.kind === 'gallery'
+          {view?.kind === 'kanban'
+            ? <KanbanView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow}
+                canEdit={fields.some(f => f.editable)} canReorder={canReorder} onMove={moveCard} onAdd={fields.some(f => f.editable) ? addToStack : undefined} />
+            : view?.kind === 'gallery'
             ? <GalleryView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} />
             : <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
