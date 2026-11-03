@@ -20,9 +20,8 @@ export default function Forms({ open }) {
       <nav style={{ width: 280, borderRight: '1px solid var(--line)', overflowY: 'auto', padding: 8, display: 'grid', gap: 4, alignContent: 'start' }}>
         {forms.length === 0 && <div style={{ color: 'var(--muted)' }}>Доступных форм нет</div>}
         {forms.map(f => (
-          <button key={f.id} className="btn" aria-pressed={active === f.id} style={{ textAlign: 'left', whiteSpace: 'normal' }}
-            onClick={() => setActive(f.id)}>
-            {f.title}<div style={{ fontSize: 11, color: 'var(--muted)' }}>{f.table}</div>
+          <button key={f.id} className="form-item" aria-pressed={active === f.id} onClick={() => setActive(f.id)}>
+            {f.title}<small>{f.table}</small>
           </button>
         ))}
       </nav>
