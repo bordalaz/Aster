@@ -175,6 +175,7 @@ def history(table_id: int, record_id: int, user: dict = Depends(active_user)):
     """R11: кто, когда, какое поле, было → стало; новые сверху."""
     with engine.connect() as c:
         table_title(c, table_id, user)
+        hidden = hidden_columns(c, user, table_id)   # финансовые поля — и в истории только тем, кто их видит
         rows = c.execute(text(
             "select ch.at, ch.column_name, coalesce(f.title, ch.column_name) as field, ch.old, ch.new, "
             "coalesce(u.name, 'Автоматизация') as user "
@@ -183,7 +184,7 @@ def history(table_id: int, record_id: int, user: dict = Depends(active_user)):
             "left join app_user u on u.id = ch.user_id "
             "where ch.table_id = :t and ch.record_id = :r order by ch.at desc, ch.id desc"
         ), {"t": table_id, "r": record_id})
-        return [r._asdict() for r in rows]
+        return [r._asdict() for r in rows if r.column_name not in hidden]
 
 
 # Комментарии к записи (правая панель карточки, как в Airtable): видит и пишет всякий, кому видна таблица.

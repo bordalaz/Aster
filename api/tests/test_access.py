@@ -233,3 +233,18 @@ def test_single_superadmin_in_db():   # R2
     make_user("boss", "superadmin")
     with pytest.raises(Exception):
         make_user("boss2", "superadmin")
+
+
+def test_api_docs_only_for_admins_and_security_headers():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    anon = TestClient(app)
+    assert anon.get("/docs").status_code == 404 and anon.get("/openapi.json").status_code == 404
+    assert anon.get("/api/openapi.json").status_code == 401
+    assert as_user("u_docs", "user").get("/api/docs").status_code == 403
+    adm = as_user("a_docs", "admin")
+    assert adm.get("/api/openapi.json").json()["info"]["title"] == "БД гидроканал"
+    assert adm.get("/api/docs").status_code == 200
+    r = anon.get("/api/health")
+    assert r.headers["x-frame-options"] == "DENY" and "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    assert r.headers["x-content-type-options"] == "nosniff"

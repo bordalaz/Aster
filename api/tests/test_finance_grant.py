@@ -70,3 +70,18 @@ def test_primary_field_never_hidden(loaded_fixture):
                   {"o": json.dumps({"referencedFieldIds": ["fldBnom0000000000"]})})
     cols = {f["column_name"] for f in as_user("u", "user").get(f"/api/tables/{b}/fields").json()}
     assert "f_fldbinv0000000000" in cols and "f_fldbnom0000000000" not in cols
+
+
+def test_history_hides_finance_fields(loaded_fixture):
+    t = loaded_fixture
+    b = t["tblBBBBBBBBBBBBBB"]
+    with engine.begin() as c:
+        c.execute(text("update app_table set title = 'Договоры' where airtable_id = 'tblAAAAAAAAAAAAAA'"))
+        rid = c.execute(text("select min(record_id) from app_change where table_id = :t"), {"t": b}).scalar() or 1
+        c.execute(text("insert into app_change (table_id, record_id, column_name, old, new) values "
+                       "(:t, :r, 'f_fldbnom0000000000', null, '\"секрет\"'), (:t, :r, 'f_fldbformula000000', null, '1')"),
+                  {"t": b, "r": rid})
+    cols = lambda cl: {h["column_name"] for h in cl.get(f"/api/tables/{b}/records/{rid}/history").json()}  # noqa: E731
+    seen = cols(as_user("u", "user"))
+    assert "f_fldbnom0000000000" not in seen and "f_fldbformula000000" in seen
+    assert "f_fldbnom0000000000" in cols(as_user("a", "admin"))

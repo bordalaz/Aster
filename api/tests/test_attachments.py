@@ -119,3 +119,15 @@ def test_download_all_zip(loaded_fixture, root):
     empty = next(i for i, r in b_rows(adm, t).items() if not r[PHOTO])
     assert adm.get(f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/records/{empty}/attachments/{PHOTO}/zip").status_code == 404
     assert adm.get(f"/api/tables/999999/records/{rid}/attachments/{PHOTO}/zip").status_code == 404
+
+
+def test_trashed_record_files_only_for_admins(loaded_fixture, root):
+    t = loaded_fixture
+    adm = as_user("a", "admin")
+    rid = next(i for i, r in b_rows(adm, t).items() if r[PHOTO])
+    aid = b_rows(adm, t)[rid][PHOTO][0]["id"]
+    u = as_user("u", "user")
+    assert u.get(f"/api/attachments/{aid}").status_code == 200
+    assert adm.post(f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/records/delete", json={"ids": [rid]}).status_code == 200
+    assert u.get(f"/api/attachments/{aid}").status_code == 404      # запись в корзине — файл только админам
+    assert adm.get(f"/api/attachments/{aid}").status_code == 200
