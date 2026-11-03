@@ -40,7 +40,9 @@ export function ViewsSide({ views, current, onSelect, onCreate }) {
   const [naming, setNaming] = useState(null)   // null | строка названия
   const match = v => v.title.toLowerCase().includes(q.trim().toLowerCase())
   const item = v => (
-    <button key={v.id ?? 'all'} className="vs-item" aria-current={current === v.id ? 'true' : undefined} onClick={() => onSelect(v.id)} title={v.title}>
+    <button key={v.id ?? 'all'} className="vs-item" aria-current={current === v.id ? 'true' : undefined} onClick={() => onSelect(v.id)}
+      title={v.airtable_owner ? `${v.title}
+Автор: ${v.airtable_owner}` : v.title}>
       <ViewIcon kind={v.kind} size={16} /><span>{v.title}</span>
       {v.config?.locked && <Icon name="lock" size={12} style={{ color: 'var(--faint)', marginLeft: 'auto' }} title="Закреплённый вид" />}
     </button>
@@ -68,7 +70,7 @@ export function ViewsSide({ views, current, onSelect, onCreate }) {
       <div className="vs-list">{match({ title: 'Все записи' }) && item({ id: null, title: 'Все записи' })}</div>
       {section('mine', 'Мои личные виды', views.filter(v => v.mine && match(v)))}
       {section('shared', 'Общие виды', views.filter(v => v.shared && match(v)))}
-      {/* личные виды Airtable, ещё ничьи — только админам (сервер так и отдаёт), по авторам */}
+      {/* личные виды Airtable — всем админам (сервер так и отдаёт), по авторам; автор — в подсказке */}
       {[...new Set(views.filter(v => v.airtable_owner).map(v => v.airtable_owner))].map(who =>
         section(`at:${who}`, `Личные Airtable: ${who}`, views.filter(v => v.airtable_owner === who && match(v))))}
     </aside>
