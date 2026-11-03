@@ -211,3 +211,10 @@ def test_gallery_view_listed_with_kind_and_cover(tables):
     assert any(v["kind"] == "calendar" for v in u.get(f"/api/tables/{tables['eq']}/views").json())
     assert create(u, tables["eq"], config={"start": "nosuch"}).status_code == 422
     assert create(u, tables["eq"], config={"end": "nosuch"}).status_code == 422
+    # таймлайн: в списке; стили подписи — только по колонкам таблицы
+    with engine.begin() as c:
+        c.execute(text("insert into app_view (table_id, title, kind, config) values (:t, 'Таймлайн', 'timeline', cast(:c as jsonb))"),
+                  {"t": tables["eq"], "c": '{"start": "name", "layout": "stacked", "totals": {"label": "Всего"}}'})
+    assert any(v["kind"] == "timeline" for v in u.get(f"/api/tables/{tables['eq']}/views").json())
+    assert create(u, tables["eq"], config={"start": "name", "labelStyle": {"nosuch": {"bold": True}}}).status_code == 422
+    assert create(u, tables["eq"], config={"start": "name", "layout": "stacked", "groupDesc": True}).status_code == 200

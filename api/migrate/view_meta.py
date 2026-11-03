@@ -94,7 +94,79 @@ def load_view_meta(c, lines: list[dict]) -> int:
             extra["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text("update app_view set config = config || :e where airtable_id = :a")
                   .bindparams(bindparam("e", type_=JSONB)), {"e": extra, "a": v["id"]})
-    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs)
+    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs) + load_timelines(c, lines, raw, cols, recs)
+
+
+def _color(cc: dict, cols, recs) -> dict | None:
+    """colorConfig вида → наш цвет (по полю выбора или правилам), как у таблицы."""
+    if cc.get("type") == "selectColumn" and cc.get("selectColumnId") in cols:
+        return {"kind": "select", "col": cols[cc["selectColumnId"]]}
+    if cc.get("type") == "colorDefinitions":
+        rules = []
+        for d in cc.get("colorDefinitions") or []:
+            bad = []
+            f = _filters(compact(d), cols, recs, bad)
+            if f and not bad:
+                rules.append({"color": d["color"], "filters": f})
+        if rules:
+            return {"kind": "rules", "rules": rules}
+    return None
+
+
+def load_timelines(c, lines, raw, cols, recs) -> int:
+    """Общие таймлайны → app_view kind='timeline': start/end, подпись — видимые поля со стилем
+    (labelConfigByColumnId), группировка (groupLevels[0], порядок, скрытие пустых), layoutMode=stacked,
+    нижняя строка «Всего» (summaryBarsConfig: число записей по дням, цвет по порогам)."""
+    tables = dict(c.execute(text("select airtable_id, id from app_table")).all())
+    order: dict[str, int] = {}
+    n = 0
+    for x in lines:
+        v, vd = x["view"], x["viewData"]
+        i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1
+        tid = tables.get(x["tableId"])
+        t = (vd.get("metadata") or {}).get("timeline") or {}
+        rng = (t.get("dateColumnRanges") or [{}])[0]
+        if v["type"] != "timeline" or v.get("personalForUserId") or tid is None or rng.get("startColumnId") not in cols:
+            continue
+        config = {"source": "airtable", "start": cols[rng["startColumnId"]],
+                  "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
+        if rng.get("endColumnId") in cols:
+            config["end"] = cols[rng["endColumnId"]]
+        extra, problems = convert_view(raw[v["id"]], cols, recs)
+        config |= {k: val for k, val in extra.items() if k in ("filters", "sort")}
+        for p in problems:
+            print(f"Таймлайн «{x.get('table')} / {v['name']}»: фильтры не перенесены — {p}")
+        if t.get("layoutMode") == "stacked":
+            config["layout"] = "stacked"
+        g = (vd.get("groupLevels") or [{}])[0]
+        if g.get("columnId") in cols:
+            config["group"] = [cols[g["columnId"]]]
+            if g.get("order") == "descending":
+                config["groupDesc"] = True
+            if g.get("emptyGroupState") == "hidden":
+                config["hideEmpty"] = True
+        style = {cols[k]: {s: True for s, on in (("bold", st.get("isBold")), ("italic", st.get("isItalic")), ("underline", st.get("isUnderlined"))) if on}
+                 for k, st in (t.get("labelConfigByColumnId") or {}).items() if k in cols}
+        if style := {k: s for k, s in style.items() if s}:
+            config["labelStyle"] = style
+        sb = t.get("summaryBarsConfig") or {}
+        if sb.get("shouldShowOnBottomSummaryBar") and sb.get("aggregationFunction") == "count":
+            totals = {"label": (sb.get("label") or {}).get("customName") or "Всего"}
+            rules = [{"op": d["filterSet"][0]["operator"], "value": d["filterSet"][0]["value"], "color": d["color"]}
+                     for d in ((sb.get("color") or {}).get("colorDefinitions") or []) if len(d.get("filterSet") or []) == 1]
+            if rules:
+                totals["rules"] = rules
+            config["totals"] = totals
+        if color := _color(vd.get("colorConfig") or {}, cols, recs):
+            config["color"] = color
+        c.execute(text(
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
+            "values (:t, :n, 'timeline', :c, :o, :a) "
+            "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
+            "config = excluded.config, sort_order = excluded.sort_order"
+        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+        n += 1
+    return n
 
 
 def load_calendars(c, lines, raw, cols, recs) -> int:
