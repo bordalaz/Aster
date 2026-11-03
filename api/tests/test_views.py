@@ -145,6 +145,14 @@ def test_import_airtable_view_filters(loaded_fixture):
     assert config == {"columns": [cols["fldBwork000000000"]], "source": "airtable",
                       "filters": [{"col": cols["fldBwork000000000"], "op": "contains", "value": "a"}],
                       "group": [cols["fldBinv0000000000"]]}
+    # вариант выбора в условии — по id (sel…), как хранит веб-клиент → название варианта
+    raw = {"viwB1": {"f": {"c": "and", "f": [["fldAtype000000000", "=", "selAAAAAAAAAAAAA2"]]}}}
+    schema[0]["id"] = "tblAAAAAAAAAAAAAA"
+    with engine.begin() as c:
+        c.execute(text("delete from app_view"))
+        load_views(c, schema, raw)
+        f = c.execute(text("select config->'filters' from app_view")).scalar()
+    assert f == [{"col": cols["fldAtype000000000"], "op": "eq", "value": "скважинное"}]
 
 
 @pytest.mark.parametrize("config", [
@@ -196,3 +204,10 @@ def test_gallery_view_listed_with_kind_and_cover(tables):
     k = next(v for v in u.get(f"/api/tables/{tables['eq']}/views").json() if v["title"] == "Канбан")
     assert k["kind"] == "kanban" and k["config"]["stack"] == "name"
     assert create(u, tables["eq"], config={"stack": "nosuch"}).status_code == 422
+    # календарь: поля начала/конца — колонки таблицы; вид виден в списке
+    with engine.begin() as c:
+        c.execute(text("insert into app_view (table_id, title, kind, config) values (:t, 'Календарь', 'calendar', cast(:c as jsonb))"),
+                  {"t": tables["eq"], "c": '{"start": "name"}'})
+    assert any(v["kind"] == "calendar" for v in u.get(f"/api/tables/{tables['eq']}/views").json())
+    assert create(u, tables["eq"], config={"start": "nosuch"}).status_code == 422
+    assert create(u, tables["eq"], config={"end": "nosuch"}).status_code == 422

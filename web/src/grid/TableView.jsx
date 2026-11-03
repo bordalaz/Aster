@@ -4,6 +4,7 @@ import { useRecords } from '../record/useRecords.js'
 import Grid from './Grid.jsx'
 import GalleryView from './GalleryView.jsx'
 import KanbanView from './KanbanView.jsx'
+import CalendarView from './CalendarView.jsx'
 import Card from '../card/Card.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 import { groupCols, visibleColumns } from './viewConfig.js'
@@ -147,6 +148,13 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
       setError(e.status === 409 ? 'Запись изменил другой пользователь — показана свежая версия' : 'Не удалось перенести карточку')
     }
   }
+  // Календарь: полосу перетащили на другой день — новые начало и конец.
+  async function moveEvent(row, values) {
+    setError('')
+    try { await patch(row, values) } catch (e) {
+      setError(e.status === 409 ? 'Запись изменил другой пользователь — показана свежая версия' : 'Не удалось перенести запись')
+    }
+  }
   // «+ Добавить запись» в колонке канбана: новая запись сразу с этим значением, открывается её карточка.
   async function addToStack(value) {
     setError('')
@@ -200,7 +208,9 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           } catch { setError('Не удалось создать вид') }
         }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {view?.kind === 'kanban'
+          {view?.kind === 'calendar'
+            ? <CalendarView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow} onMove={moveEvent} />
+            : view?.kind === 'kanban'
             ? <KanbanView fields={fields} rows={rows} primaryField={primaryField} config={config} search={search} onOpen={openRow}
                 canEdit={fields.some(f => f.editable)} canReorder={canReorder} onMove={moveCard} onAdd={fields.some(f => f.editable) ? addToStack : undefined} />
             : view?.kind === 'gallery'

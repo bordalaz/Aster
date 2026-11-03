@@ -72,9 +72,11 @@ def convert_view(raw: dict, cols: dict, recs: dict) -> tuple[dict, list[str]]:
 
 
 def _record_names(c, raw: dict) -> dict:
-    """Названия записей, на которые ссылаются условия (id rec… → первичное поле)."""
+    """Названия записей, на которые ссылаются условия (id rec… → первичное поле), и вариантов выбора
+    (id sel… → название: веб-клиент Airtable хранит в условиях id варианта)."""
     ids = {v for r in raw.values() for v in _rec_ids(r.get("f", {}))}
-    names = {}
+    names = {ch["id"]: ch["name"] for (opts,) in c.execute(text("select options from app_field where options ? 'choices'"))
+             for ch in opts["choices"] if ch.get("id")}
     if not ids:
         return names
     comp = None
