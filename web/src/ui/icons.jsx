@@ -55,11 +55,13 @@ import key from '@phosphor-icons/core/assets/regular/key.svg?raw'
 import users from '@phosphor-icons/core/assets/regular/users.svg?raw'
 import textbox from '@phosphor-icons/core/assets/regular/textbox.svg?raw'
 import chat from '@phosphor-icons/core/assets/regular/chats.svg?raw'
+import snapshot from '@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw'
+import undo from '@phosphor-icons/core/assets/regular/arrow-counter-clockwise.svg?raw'
 
 export const ICONS = {
   aa, target, textLeft, hash, clock, fn, caretCircle, listBullets, checkSquare, calendar, paperclip, link, at, phone,
   binoculars, sigma, numbers, percent, star, rub, user, search, eyeSlash, eye, lock, info, funnel, list, rows, sort, caretDown,
-  table, download, floppy, trash, copy, plus, x, check, expand, collapse, expandV, collapseV, database, signOut, key, users, textbox, chat, send, arrowUp, arrowDown, arrowLeft, gallery, kanban, timeline,
+  table, download, floppy, trash, copy, plus, x, check, expand, collapse, expandV, collapseV, database, signOut, key, users, textbox, chat, send, arrowUp, arrowDown, arrowLeft, gallery, kanban, timeline, snapshot, undo,
 }
 
 // Значок типа поля — как в заголовках Airtable.

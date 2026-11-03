@@ -17,6 +17,7 @@ services:
       DATABASE_URL: postgresql+psycopg://bd:${POSTGRES_PASSWORD}@db/bd
       COOKIE_SECURE: ${COOKIE_SECURE:-1}
       AIRTABLE_TOKEN: ${AIRTABLE_TOKEN:-}
+      SNAPSHOT_URL: ${SNAPSHOT_URL:-}
       # R7: офисная сеть (CIDR через запятую; пусто — частные сети). За обратным прокси
       # обязательно TRUSTED_PROXIES — иначе все придут с адреса прокси (один лимит входа на всех)
       OFFICE_NETS: ${OFFICE_NETS:-}
@@ -34,20 +35,38 @@ services:
     # ponytail: код монтируется для разработки; для NAS — отдельный compose в этапе 3
     volumes: [./api:/app, ./data:/data]
     ports: ["8000:8000"]
-  # бэкап раз в сутки: дамп БД (проверяется восстановлением) + новые вложения; восстановление — ops/restore.sh
+    restart: unless-stopped   # после отката базы к снимку API выходит сам — поднимется на новой базе
+  # снимки базы, как в Airtable: раз в сутки + по кнопке, проверка восстановлением, хранятся год; docs/backups.md
   backup:
     image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       TZ: ${BACKUP_TZ:-Asia/Tomsk}
       BACKUP_HOUR: ${BACKUP_HOUR:-3}
-      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_DAYS: ${BACKUP_DAYS:-365}   # снимки хранятся год, как в Airtable (Team)
       BACKUP_FILES: ${BACKUP_FILES:-0}   # 1 — копировать и вложения (только на другой диск)
     command: ["sh", "/ops/backup.sh"]
     depends_on:
       db: { condition: service_healthy }
     # ponytail: на NAS BACKUP_DIR — на другом диске/томе, иначе бэкап погибнет вместе с базой
     volumes: [./ops:/ops:ro, ./data:/data:ro, "${BACKUP_DIR:-./backups}:/backups"]
+    restart: unless-stopped
+  # «Открыть снимок»: та же программа на базе снимка bd_snapshot, только чтение; веб — порт 5201 (npm run dev:snapshot)
+  snapshot-api:
+    build: ./api
+    environment:
+      DATABASE_URL: postgresql+psycopg://bd:${POSTGRES_PASSWORD}@db/bd_snapshot
+      OPS_DATABASE_URL: postgresql+psycopg://bd:${POSTGRES_PASSWORD}@db/bd_ops
+      SNAPSHOT_MODE: "1"
+      AUTOMATIONS_WORKER: "0"
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
+      OFFICE_NETS: ${OFFICE_NETS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    command: ["sh", "-c", "python -m app.snapshot_wait && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    depends_on:
+      db: { condition: service_healthy }
+    volumes: [./api:/app, ./data:/data:ro]
+    ports: ["8001:8000"]
     restart: unless-stopped
 volumes:
   pgdata: {}

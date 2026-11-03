@@ -6,13 +6,14 @@ import Users from './users/Users.jsx'
 import Forms from './forms/Forms.jsx'
 import Pages from './pages/Pages.jsx'
 import Trash from './trash/Trash.jsx'
+import Snapshots, { SnapshotBanner } from './snapshots/Snapshots.jsx'
 import Automations from './automations/Automations.jsx'
 import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
 import { Icon } from './ui/icons.jsx'
 
 // Профиль, как в Airtable: кружок с инициалом → имя, «Пользователи» (админы), «Сменить пароль», «Выйти».
-function ProfileMenu({ user, isAdmin, onUsers, onTrash, onPassword, onLogout }) {
+function ProfileMenu({ user, isAdmin, onUsers, onTrash, onSnapshots, onPassword, onLogout }) {
   const [open, setOpen] = useState(false)
   const box = useRef(null)
   useEffect(() => {
@@ -33,6 +34,7 @@ function ProfileMenu({ user, isAdmin, onUsers, onTrash, onPassword, onLogout }) 
           <div className="sep" />
           {isAdmin && <button role="menuitem" onClick={go(onUsers)}><Icon name="users" />Пользователи</button>}
           {isAdmin && <button role="menuitem" onClick={go(onTrash)}><Icon name="trash" />Корзина</button>}
+          {isAdmin && <button role="menuitem" onClick={go(onSnapshots)}><Icon name="snapshot" />Снимки</button>}
           <button role="menuitem" onClick={go(onPassword)}><Icon name="key" />Сменить пароль</button>
           <div className="sep" />
           <button role="menuitem" onClick={go(onLogout)}><Icon name="signOut" />Выйти</button>
@@ -77,6 +79,7 @@ export default function Workspace({ user, onLogout }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <SnapshotBanner />
       <header className="topbar" style={{ position: 'relative' }}>
         <div className="base">
           <span className="base-mark"><Icon name="database" size={16} /></span>
@@ -89,7 +92,7 @@ export default function Workspace({ user, onLogout }) {
           {isAdmin && <button aria-current={section('automations')} onClick={() => setScreen('automations')}>Автоматизации</button>}
         </nav>
         <div className="right">
-          <ProfileMenu user={user} isAdmin={isAdmin} onUsers={() => setScreen('users')} onTrash={() => setScreen('trash')} onPassword={() => setScreen('password')} onLogout={onLogout} />
+          <ProfileMenu user={user} isAdmin={isAdmin} onUsers={() => setScreen('users')} onTrash={() => setScreen('trash')} onSnapshots={() => setScreen('snapshots')} onPassword={() => setScreen('password')} onLogout={onLogout} />
         </div>
       </header>
       {screen === 'table' && <TableTabs tables={tables} activeId={activeId} onPick={setActiveId}
@@ -104,6 +107,7 @@ export default function Workspace({ user, onLogout }) {
         {screen === 'calibration' && <Calibration user={user} />}
         {screen === 'users' && <Users me={user} />}
         {screen === 'trash' && isAdmin && <Trash user={user} />}
+        {screen === 'snapshots' && isAdmin && <Snapshots />}
         {screen === 'password' && <ChangePassword onDone={() => setScreen('table')} onCancel={() => setScreen('table')} />}
         {screen === 'table' && active && <TableView key={activeId} user={user} tableId={activeId} title={active.title}
           primaryField={active.primary_field} openId={jump} onOpened={opened} onOpenLink={openLink} />}

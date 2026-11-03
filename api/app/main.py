@@ -4,10 +4,11 @@ import threading
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import attachments, auth, automations, calibration, forms, mail, meta, pages, records, trash, users, views
-from .db import engine
+from . import attachments, auth, automations, calibration, forms, mail, meta, pages, records, snapshots, trash, users, views
+from .db import SNAPSHOT, engine
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -15,6 +16,8 @@ async def lifespan(_app):
     stop = threading.Event()
     if os.environ.get("AUTOMATIONS_WORKER", "1") == "1":
         threading.Thread(target=automations.worker, args=(stop,), daemon=True, name="automations").start()
+    if os.environ.get("SNAPSHOT_WATCH", "1") == "1":   # откат базы / новый открытый снимок → перезапуск
+        threading.Thread(target=snapshots.watch, args=(stop,), daemon=True, name="snapshot-watch").start()
     yield
     stop.set()
 
@@ -23,6 +26,14 @@ async def lifespan(_app):
 app = FastAPI(title="БД гидроканал", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 SECURE = {"X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin"}
+
+
+@app.middleware("http")
+async def snapshot_read_only(request: Request, call_next):
+    """Экземпляр снимка — только просмотр: менять нечего (и БД запись не примет)."""
+    if SNAPSHOT and request.method not in ("GET", "HEAD", "OPTIONS"):
+        return JSONResponse({"detail": "Это снимок — только просмотр"}, status_code=405)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -51,6 +62,7 @@ app.include_router(pages.router)
 app.include_router(mail.router)
 app.include_router(trash.router)
 app.include_router(automations.router)
+app.include_router(snapshots.router)
 
 
 @app.get("/api/health")

@@ -8,6 +8,7 @@ export function resetDb() { recs = structuredClone(records1) }
 
 export const handlers = [
   http.get('/api/auth/me', () => HttpResponse.json(me)),
+  http.get('/api/snapshot-info', () => HttpResponse.json({ snapshot: null })),
   http.post('/api/auth/login', async ({ request }) => {
     const { password } = await request.json()
     return password === 'secret' ? HttpResponse.json({ ok: true }) : new HttpResponse(null, { status: 401 })
