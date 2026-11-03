@@ -78,7 +78,7 @@ test('«Сохранить как» — админ может сделать о�
   await userEvent.click(screen.getByLabelText('общий'))
   await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
   await screen.findByRole('button', { name: 'Вид: Копия' }).catch(() => null)
-  expect(posted).toEqual([{ title: 'Копия', shared: true, config: { columns: [QTY] } }])
+  expect(posted).toEqual([{ title: 'Копия', shared: true, kind: 'grid', config: { columns: [QTY] } }])
 })
 
 test('пользователь: общий вид не правит, «общий» не предлагается', async () => {

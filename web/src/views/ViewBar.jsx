@@ -95,6 +95,7 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
   const filters = config.filters ?? []
   const sorts = config.sort ?? []
   const titleOf = c => fields.find(f => f.column_name === c)?.title ?? c
+  const selfLinks = fields.filter(f => f.kind === 'multipleRecordLinks' && f.link_table === tableId)
 
   async function run(fn) {
     setError('')
@@ -109,7 +110,7 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
     e.preventDefault()
     run(async () => {
       const { source, ...own } = config   // копия — уже свой вид, не «из Airtable»
-      const { id } = await api(`/api/tables/${tableId}/views`, { method: 'POST', body: { title, shared, config: own } })
+      const { id } = await api(`/api/tables/${tableId}/views`, { method: 'POST', body: { title, shared, kind: view?.kind ?? 'grid', config: own } })
       close(); setTitle(''); setShared(false)
       await reload(id)
     })
@@ -245,6 +246,13 @@ export default function ViewBar({ tableId, fields, primaryField, user, views, cu
         )}
         {(view?.kind === 'calendar' || view?.kind === 'timeline') && (   // как «Using date field» в Airtable
           <span className="tool" style={{ cursor: 'default' }}><Icon name="calendar" />Дата: {[config.start, config.end].map(c => fields.find(f => f.column_name === c)?.title).filter(Boolean).join(' — ') || '—'}</span>
+        )}
+        {view?.kind === 'timeline' && selfLinks.length > 0 && (   // Gantt: связь на эту же таблицу — «после чего идёт» запись
+          <select className="tool" aria-label="Зависимости" value={config.deps ?? ''}
+            onChange={e => { const { deps, ...rest } = config; setConfig(e.target.value ? { ...rest, deps: e.target.value } : rest) }}>
+            <option value="">Без зависимостей</option>
+            {selfLinks.map(f => <option key={f.column_name} value={f.column_name}>Зависимости: {f.title}</option>)}
+          </select>
         )}
         {!['gallery', 'kanban', 'calendar', 'timeline', 'list'].includes(view?.kind) && <div style={{ position: 'relative' }}>{/* у галереи и канбана Airtable группировки нет */}
           <button className={`tool group${groups.length ? ' on' : ''}`} aria-expanded={panel === 'group'} onClick={() => toggle('group')}>

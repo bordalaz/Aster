@@ -419,6 +419,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tl-bar { position: absolute; height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid rgba(0,0,0,.1); border-radius: 4px; font-size: 12px;
   line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #1d1f25; z-index: 2; user-select: none; touch-action: none; }
 .tl-bar:hover { box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+.tl-deps { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 2; overflow: visible; }
+.tl-dep.ok { stroke: #8a94a6; fill: #8a94a6; stroke-width: 1.5; }
+.tl-dep.late { stroke: var(--danger); fill: var(--danger); stroke-width: 1.5; }
+.tl-deps > path { fill: none; }
 .tl-bar.dragging { opacity: .85; box-shadow: 0 2px 8px rgba(0,0,0,.2); z-index: 4; }
 .tl-empty { color: #8a8f98; }
 .tl-totals { display: flex; height: 28px; border-top: 1px solid var(--line); flex: none; font-size: 12px; }

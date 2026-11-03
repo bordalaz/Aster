@@ -11,6 +11,9 @@ import { useStored } from '../ui/useStored.js'
 // группы по полю выбора); layout='stacked' — записи плотно по дорожкам. Снизу «Всего» — число записей
 // в каждый день, цвет по порогам. Перетаскивание полосы сдвигает начало и конец на целые дни.
 // Перетаскивание: в «Дне» — шаг час, в остальных масштабах — целые дни. ponytail: «+ Record», вехи, растягивание края полосы — когда попросят.
+// Gantt (расширение Airtable): config.deps — связь на ту же таблицу «после чего идёт». Стрелка от конца
+// предшественника к началу записи; красная — запись начинается раньше, чем кончился предшественник.
+// ponytail: зависимые при перетаскивании не сдвигаются — подсветка конфликта красным; автосдвиг — когда попросят.
 
 export const SCALES = [['day', 'День'], ['week', 'Неделя'], ['2week', '2 недели'], ['month', 'Месяц'], ['quarter', 'Квартал'], ['6month', '6 месяцев'], ['year', 'Год']]
 const SPAN = { day: 1, week: 7, '2week': 14, month: 31, quarter: 91, '6month': 182, year: 365 }   // дней на ширину экрана
@@ -60,6 +63,18 @@ export function stack(events) {
     ends[lane] = e.t1
     return lane
   })
+}
+
+// Стрелки Gantt: пары {from, to} размещённых записей, late — нарушен порядок. Связи на записи вне вида — пропускаем.
+export function depLinks(placed, deps) {
+  if (!deps) return []
+  const byId = new Map(placed.map(p => [p.ev.row.id, p]))
+  const out = []
+  for (const to of placed) for (const l of Array.isArray(to.ev.row[deps]) ? to.ev.row[deps] : []) {
+    const from = byId.get(l?.id)
+    if (from && from !== to) out.push({ from, to, late: from.ev.t1 > to.ev.t0 + 1e-9 })
+  }
+  return out
 }
 
 // Цвет ячейки «Всего» по первому сработавшему порогу.
@@ -191,6 +206,7 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
   }
 
   const { top: topTicks, bottom: units } = ticks(scale, d0, d1)
+  const links = depLinks(layout.placed, byCol[config.deps] ? config.deps : null)
   const nowT = today + (now.getHours() * 60 + now.getMinutes()) / 1440
   const nowX = scale === 'day' ? nowT : today + 0.5   // в «Дне» — точное время, иначе — середина дня
   const totals = config.totals && units.map(u => events.reduce((n, e) => n + (e.t0 < u.b && e.t1 > u.a), 0))
@@ -234,6 +250,19 @@ export default function TimelineView({ fields, rows, primaryField, config, searc
             </div>
           ))}
           {layout.lines.map((l, i) => l.kind === 'group' && <div key={'g' + i} className="tl-grouprow" style={{ top: tops[i], left, width: (hi - lo + 1) * px }} />)}
+          {links.length > 0 && (
+            <svg className="tl-deps" width={left + (hi - lo + 1) * px} height={Math.max(y, 1)} aria-hidden="true">
+              <defs>{['ok', 'late'].map(k => <marker key={k} id={`tl-arr-${k}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" className={`tl-dep ${k}`} /></marker>)}</defs>
+              {links.map(({ from, to, late }) => {
+                const ox = p => (drag?.ev === p.ev ? drag.dx : 0)
+                const x1 = left + x(from.ev.t1) + ox(from), y1 = tops[from.line] + 17
+                const x2 = left + x(to.ev.t0) + ox(to), y2 = tops[to.line] + 17
+                const k = late ? 'late' : 'ok'
+                return <path key={`${from.ev.row.id}-${to.ev.row.id}`} className={`tl-dep ${k}`} markerEnd={`url(#tl-arr-${k})`}
+                  d={`M${x1},${y1} h8 V${(y1 + y2) / 2} H${x2 - 10} V${y2} H${x2}`} />
+              })}
+            </svg>
+          )}
           {layout.placed.filter(p => p.ev.t1 > d0 && p.ev.t0 < d1 + 1).map(({ ev, line }) => (
             <div key={ev.row.id} data-id={ev.row.id} role="button" tabIndex={0} className={`tl-bar${drag?.ev === ev ? ' dragging' : ''}`} title={ev.text}
               style={{ top: tops[line] + 4, left: left + x(ev.t0) + (drag?.ev === ev ? drag.dx : 0), width: Math.max(6, (ev.t1 - ev.t0) * px), background: ev.bg, cursor: movable ? 'grab' : 'pointer' }}

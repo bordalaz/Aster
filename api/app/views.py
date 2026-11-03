@@ -66,9 +66,10 @@ class ViewConfig(Strict):
     labelStyle: dict[Annotated[str, Col], dict[str, bool]] | None = Field(None, max_length=50)
     totals: dict[str, Any] | None = None
     levels: list[dict[str, Any]] | None = Field(None, max_length=6)   # List: уровни иерархии (таблица, связь, колонки)
+    deps: Annotated[str, Col] | None = None    # таймлайн как Gantt: связь на ту же таблицу — «после чего идёт» запись
 
     def used_columns(self) -> set[str]:
-        return (set(self.columns or ()) | set(self.widths or ()) | {x for x in (self.cover, self.stack, self.start, self.end) if x} | set(self.labelStyle or ()) | set(self.summary or ()) | {s.col for s in self.sort or ()}
+        return (set(self.columns or ()) | set(self.widths or ()) | {x for x in (self.cover, self.stack, self.start, self.end, self.deps) if x} | set(self.labelStyle or ()) | set(self.summary or ()) | {s.col for s in self.sort or ()}
                 | {f.col for f in self.filters or ()} | set([self.group] if isinstance(self.group, str) else self.group or ()))
 
 
@@ -107,6 +108,7 @@ def list_views(table_id: int, user: dict = Depends(active_user)):
 class NewView(Strict):
     title: str = Field(min_length=1, max_length=200)
     shared: bool = False
+    kind: Literal["grid", "gallery", "kanban", "calendar", "timeline", "list"] = "grid"   # «Сохранить как…» — тот же тип
     config: ViewConfig = ViewConfig()
 
 
@@ -118,9 +120,9 @@ def create_view(table_id: int, body: NewView, user: dict = Depends(active_user))
             raise HTTPException(403, "Общие виды создают администраторы")
         cfg = check_config(c, table_id, body.config)
         vid = c.execute(text(
-            "insert into app_view (table_id, title, owner_id, config) values (:t, :n, :o, :c) returning id"
+            "insert into app_view (table_id, title, kind, owner_id, config) values (:t, :n, :k, :o, :c) returning id"
         ).bindparams(bindparam("c", type_=JSONB)),
-            {"t": table_id, "n": body.title, "o": None if body.shared else user["id"], "c": cfg}).scalar()
+            {"t": table_id, "n": body.title, "k": body.kind, "o": None if body.shared else user["id"], "c": cfg}).scalar()
     return {"id": vid}
 
 

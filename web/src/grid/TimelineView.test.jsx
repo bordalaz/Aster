@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
-import TimelineView, { point, stack, totalColor } from './TimelineView.jsx'
+import TimelineView, { depLinks, point, stack, totalColor } from './TimelineView.jsx'
 
 test('точка на шкале: дата — начало/конец дня, дата со временем — доля дня в зоне поля', () => {
   const d = Date.UTC(2026, 9, 31) / 86400000
@@ -57,4 +57,20 @@ test('деления шкалы по масштабам', () => {
   const y = ticks('year', D(2026, 11, 3), D(2027, 1, 20))
   expect(y.top.map(t => t.label)).toEqual(['4 кв. 2026', '1 кв. 2027'])
   expect(y.bottom.map(u => u.label)).toEqual(['Ноя', 'Дек', 'Янв'])
+})
+
+test('Gantt: стрелка от предшественника, красная — если запись начинается раньше его конца; чужие связи — мимо', () => {
+  const p = (id, t0, t1, deps) => ({ ev: { row: { id, d: deps }, t0, t1 }, line: id })
+  const a = p(1, 0, 3), b = p(2, 3, 5, [{ id: 1, name: 'A' }]), c = p(3, 2, 4, [{ id: 1 }, { id: 99 }, { id: 3 }])
+  expect(depLinks([a, b, c], 'd').map(l => [l.from.ev.row.id, l.to.ev.row.id, l.late])).toEqual([[1, 2, false], [1, 3, true]])
+  expect(depLinks([a, b], null)).toEqual([])
+})
+
+test('Gantt: стрелки рисуются по полю зависимостей', () => {
+  globalThis.ResizeObserver ??= class { observe() {} disconnect() {} }
+  const fields = [{ column_name: 'name', kind: 'singleLineText' }, { column_name: 'a', kind: 'date' }, { column_name: 'b', kind: 'date' },
+    { column_name: 'dep', kind: 'multipleRecordLinks' }]
+  const rows = [{ id: 1, name: 'A', a: '2026-11-01', b: '2026-11-03' }, { id: 2, name: 'B', a: '2026-11-02', b: '2026-11-05', dep: [{ id: 1, name: 'A' }] }]
+  const { container } = render(<TimelineView fields={fields} rows={rows} primaryField="name" onOpen={() => {}} config={{ start: 'a', end: 'b', columns: ['name'], deps: 'dep' }} />)
+  expect(container.querySelectorAll('.tl-deps > path.late')).toHaveLength(1)
 })

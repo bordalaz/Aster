@@ -231,3 +231,14 @@ def test_airtable_personal_views_for_admins_only(tables):
     got = {v["title"]: v for v in as_user("adm", "admin").get(f"/api/tables/{t}/views").json()}
     assert got["Юрий's view"]["airtable_owner"] == "Юрий Чернов" and not got["Юрий's view"]["shared"]
     assert all("airtable_owner" not in v for v in as_user("u2", "user").get(f"/api/tables/{t}/views").json())
+
+
+def test_save_as_keeps_kind_and_gantt_deps(tables):
+    """«Сохранить как…» таймлайна — снова таймлайн (раньше становился сеткой); deps — колонка таблицы, иначе 422."""
+    u = as_user("u", "user")
+    r = u.post(f"/api/tables/{tables['eq']}/views", json={"title": "Gantt", "kind": "timeline", "config": {"start": "name", "deps": "name"}})
+    assert r.status_code == 200
+    v = next(v for v in u.get(f"/api/tables/{tables['eq']}/views").json() if v["id"] == r.json()["id"])
+    assert v["kind"] == "timeline" and v["config"]["deps"] == "name"
+    assert create(u, tables["eq"], config={"deps": "nosuch"}).status_code == 422
+    assert u.post(f"/api/tables/{tables['eq']}/views", json={"title": "x", "kind": "form"}).status_code == 422
