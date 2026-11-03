@@ -109,7 +109,7 @@ def _rec_ids(fs: dict):
 
 
 def load_views(c, schema: list[dict], raw: dict | None = None) -> int:
-    """Общие grid-виды (личные и прочие типы — вне v1). Повторный запуск обновляет по airtable_id.
+    """Grid-виды: общие и личные (личные — с автором at_owner, ничьи). Повторный запуск обновляет по airtable_id.
     raw — {id вида: {f, s, g}} из веб-клиента Airtable; непереводимые фильтры печатаются."""
     raw = raw or {}
     tables = dict(c.execute(text("select airtable_id, id from app_table")).all())
@@ -121,7 +121,7 @@ def load_views(c, schema: list[dict], raw: dict | None = None) -> int:
         if tid is None:
             continue
         for order, v in enumerate(t.get("views", [])):
-            if v["type"] != "grid" or v.get("personalForUserId"):
+            if v["type"] != "grid":
                 continue
             config = {"source": "airtable"}
             if "visibleFieldIds" in v:   # в старых снимках колонок нет — тогда видны все
@@ -130,11 +130,14 @@ def load_views(c, schema: list[dict], raw: dict | None = None) -> int:
             config |= extra
             for p in problems:
                 print(f"Вид «{t.get('name', t['id'])} / {v['name']}»: фильтры не перенесены — {p}")
+            # личный вид Airtable — ничей, с автором (видят админы; имя автора — migrate.view_meta.tag_personal)
+            owner = {"id": v["personalForUserId"], "name": v["personalForUserId"]} if v.get("personalForUserId") else None
             c.execute(text(
-                "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
-                "values (:t, :n, 'grid', :c, :o, :a) "
+                "insert into app_view (table_id, title, kind, config, sort_order, airtable_id, at_owner) "
+                "values (:t, :n, 'grid', :c, :o, :a, :w) "
                 "on conflict (airtable_id) do update set title = excluded.title, config = excluded.config, "
-                "sort_order = excluded.sort_order"
-            ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": order, "a": v["id"]})
+                "sort_order = excluded.sort_order, at_owner = coalesce(app_view.at_owner, excluded.at_owner)"
+            ).bindparams(bindparam("c", type_=JSONB), bindparam("w", type_=JSONB(none_as_null=True))),
+                {"t": tid, "n": v["name"], "c": config, "o": order, "a": v["id"], "w": owner})
             n += 1
     return n

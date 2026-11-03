@@ -14,6 +14,7 @@ export const handlers = [
   }),
   http.post('/api/auth/logout', () => HttpResponse.json({ ok: true })),
   http.get('/api/tables', () => HttpResponse.json(tables)),
+  http.get('/api/views/airtable/offer', () => HttpResponse.json([])),   // личные виды Airtable — по умолчанию нечего предложить
   http.get('/api/tables/1/fields', () => HttpResponse.json(fields1)),
   http.get('/api/tables/1/records', () => HttpResponse.json(recs)),
   http.post('/api/tables/1/records', () => {

@@ -97,7 +97,7 @@ def cmd_pages() -> int:
 
 def cmd_views_full() -> int:
     """Полные настройки видов из обхода веб-клиента Airtable (at_view_datas.jsonl); данные не трогает."""
-    from .view_meta import load_view_meta
+    from .view_meta import load_view_meta, tag_personal
     p = SNAP / "at_view_datas.jsonl"
     if not p.exists():
         print(f"Нет {p}")
@@ -108,7 +108,8 @@ def cmd_views_full() -> int:
     with engine.begin() as c:
         n = load_view_meta(c, lines)
         b = load_buttons(c, schema, lines)
-    print(f"Видов обновлено: {n} (из {len(lines)} снятых); полей-кнопок: {b}")
+        p = tag_personal(c, lines, schema)
+    print(f"Видов обновлено: {n} (из {len(lines)} снятых), из них личных Airtable: {p}; полей-кнопок: {b}")
     return 0
 
 
