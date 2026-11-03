@@ -116,7 +116,7 @@ def _update(c, t, fields, table_id: int, record_id: int, body: PatchBody, user: 
             "insert into app_change (table_id, record_id, column_name, old, new, user_id) "
             "values (:t, :r, :c, :o, :n, :u)"
         ).bindparams(bindparam("o", type_=JSONB), bindparam("n", type_=JSONB)), changes)
-        automations.after_update(c, table_id, record_id, {ch["c"] for ch in changes})
+        automations.after_change(c, table_id, record_id, changes)
     return {"id": row.id, "updated_at": row.updated_at}
 
 
