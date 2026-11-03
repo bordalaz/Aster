@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { CardValue, Carousel } from '../pages/Pages.jsx'
+import { FieldButton } from '../card/ButtonField.jsx'
 import { displayValue } from './cells.js'
 import { orderRows } from './layout.js'
 import { applyFilters, sortRows } from './viewConfig.js'
@@ -41,7 +42,7 @@ export function CardBody({ row, byCol, shown, cover, coverHeight, title, onOpen 
         {shown.map(c => (
           <div key={c} className="gv-field">
             <small>{byCol[c].title}</small>
-            <div className="gl-val"><CardValue field={byCol[c]} value={row[c]} /></div>
+            <div className="gl-val">{byCol[c].kind === 'button' ? <FieldButton field={byCol[c]} row={row} /> : <CardValue field={byCol[c]} value={row[c]} />}</div>
           </div>
         ))}
       </div>

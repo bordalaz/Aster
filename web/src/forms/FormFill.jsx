@@ -3,12 +3,13 @@ import { api, ApiError } from '../api.js'
 import FieldEditor from '../card/fields.jsx'
 import LinkPicker from './LinkPicker.jsx'
 import Files from '../files/Files.jsx'
+import { prefillValues } from '../card/ButtonField.jsx'
 
 const newKey = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`.slice(0, 40))
 const empty = v => v == null || v === '' || (Array.isArray(v) && v.length === 0)
 
 // Заполнение формы (R12). Ключ отправки живёт до успеха: двойной клик и повтор после обрыва — одна запись (E6).
-export default function FormFill({ formId }) {
+export default function FormFill({ formId, prefill }) {
   const [form, setForm] = useState(null)
   const [values, setValues] = useState({})
   const [staged, setStaged] = useState({})   // загруженные файлы по полю: [{id, name, size}]
@@ -19,7 +20,11 @@ export default function FormFill({ formId }) {
 
   useEffect(() => {
     setForm(null); setValues({}); setStaged({}); setDone(false); setError(''); key.current = newKey()
-    api(`/api/forms/${formId}`).then(setForm, () => setError('Форма недоступна'))
+    api(`/api/forms/${formId}`).then(f => {
+      setForm(f)
+      // кнопка «открыть форму»: значения из записи (как ?prefill_ в ссылке Airtable)
+      if (prefill) setValues(prefillValues(prefill.action, prefill.row, Object.fromEntries(f.fields.map(x => [x.column_name, x.kind]))))
+    }, () => setError('Форма недоступна'))
   }, [formId])
 
   async function submit(e) {

@@ -19,6 +19,15 @@ export function choiceColor(name) {
   const shade = SHADE[m[2]]
   return { bg: HUES[m[1]][shade], fg: shade >= 2 && m[1] !== 'yellow' ? '#ffffff' : '#1d1f25' }
 }
+// Цвет кнопки по варианту Airtable: solid* — насыщенный, light* — светлый, text* — только текст.
+export function buttonStyle(variant) {
+  const m = /^(solid|light|text)([A-Z][a-z]+)$/.exec(variant ?? '')
+  const hue = m && HUE_SHADES[m[2].toLowerCase()]
+  if (!hue) return { background: '#eeeeee', color: '#1d1f25' }
+  if (m[1] === 'solid') return { background: hue[2], color: m[2] === 'Yellow' ? '#1d1f25' : '#fff' }
+  if (m[1] === 'light') return { background: hue[0], color: '#1d1f25' }
+  return { background: 'transparent', color: hue[3] }
+}
 export const LINK_PILL = { bg: '#e9eef6', fg: '#1d1f25' }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -186,4 +195,23 @@ const date = {
   },
 }
 
-export const renderers = [pills, check, group, rownum, date]
+// Поле-кнопка: скруглённая кнопка с подписью цвета варианта (как в Airtable); щелчок — в Grid.onCellClicked.
+const btn = {
+  kind: GridCellKind.Custom,
+  isMatch: c => c.data?.kind === 'btn',
+  draw: ({ ctx, rect, theme }, cell) => {
+    const { label, bg, fg, off } = cell.data
+    ctx.save()
+    ctx.font = `500 12px ${theme.fontFamily}`
+    const w = Math.min(rect.width - 16, ctx.measureText(label).width + 20), h = 22
+    const x = rect.x + 8, y = rect.y + (rect.height - h) / 2
+    ctx.globalAlpha = off ? 0.5 : 1
+    if (bg !== 'transparent') { ctx.fillStyle = bg; roundRect(ctx, x, y, w, h, 4); ctx.fill() }
+    ctx.fillStyle = fg; ctx.textBaseline = 'middle'
+    ctx.fillText(fit(ctx, label, w - 20), x + 10, y + h / 2)
+    ctx.restore()
+    return true
+  },
+}
+
+export const renderers = [pills, check, group, rownum, date, btn]

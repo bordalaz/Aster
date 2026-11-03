@@ -49,6 +49,13 @@ export default function Workspace({ user, onLogout }) {
   const [jump, setJump] = useState(null)          // id записи, открыть после перехода по связи
   const openLink = useCallback((tableId, recordId) => { setActiveId(tableId); setJump(recordId); setScreen('table') }, [])
   const opened = useCallback(() => setJump(null), [])
+  // поле-кнопка «открыть форму» (card/ButtonField.jsx) — экран «Формы» с подстановкой значений
+  const [formOpen, setFormOpen] = useState(null)
+  useEffect(() => {
+    const on = e => { setFormOpen(e.detail); setScreen('forms') }
+    window.addEventListener('aster:open-form', on)
+    return () => window.removeEventListener('aster:open-form', on)
+  }, [])
   const isAdmin = user?.role === 'superadmin' || user?.role === 'admin'
 
   const TABLE_KEY = `aster.table.${user?.id ?? 0}`   // последняя открытая таблица — как Airtable
@@ -90,7 +97,7 @@ export default function Workspace({ user, onLogout }) {
         } : undefined} />}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {screen === 'pages' && <Pages />}
-        {screen === 'forms' && <Forms />}
+        {screen === 'forms' && <Forms open={formOpen} />}
         {screen === 'calibration' && <Calibration user={user} />}
         {screen === 'users' && <Users me={user} />}
         {screen === 'trash' && isAdmin && <Trash user={user} />}

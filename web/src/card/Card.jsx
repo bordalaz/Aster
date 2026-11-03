@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import FieldEditor from './fields.jsx'
+import { FieldButton } from './ButtonField.jsx'
 import History from './History.jsx'
 import Comments from './Comments.jsx'
 import Files from '../files/Files.jsx'
@@ -47,7 +48,12 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
   }
   const blur = f => () => { if (f.column_name in draft && !IMMEDIATE.has(f.kind)) commit(f.column_name, draft[f.column_name]) }
 
-  const render = f => f.kind === 'multipleAttachments' ? (
+  const render = f => f.kind === 'button' ? (
+    <div key={f.column_name} className="fld fld-inline">
+      <span className="fld-label"><Icon name={fieldIcon(f.kind)} size={14} />{f.title}</span>
+      <div className="fld-value"><FieldButton field={f} row={record} /></div>
+    </div>
+  ) : f.kind === 'multipleAttachments' ? (
     // вложения меняются сразу; править — если роль правит таблицу
     <div key={f.column_name} className="fld fld-inline">
       <span className="fld-label"><Icon name={fieldIcon(f.kind)} size={14} />{f.title}</span>

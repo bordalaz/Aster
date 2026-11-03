@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api")
 
 def _form(c, form_id: int, user: dict):
     """Форма, доступная пользователю, и её поля; недоступная — 404, как несуществующая."""
-    f = c.execute(text("select f.id, f.title, f.after_message, f.fields, f.table_id, t.title as table "
+    f = c.execute(text("select f.id, f.title, f.after_message, f.fields, f.table_id, f.airtable_id, t.title as table "
                        "from app_form f join app_table t on t.id = f.table_id where f.id = :i"), {"i": form_id}).first()
     if f is None or not can_read(user, f.table):
         raise HTTPException(404, "Нет такой формы")
@@ -51,7 +51,8 @@ def list_forms(user: dict = Depends(active_user)):
                 f, _ = _form(c, fid, user)
             except HTTPException:
                 continue
-            out.append({"id": f.id, "title": f.title, "table_id": f.table_id, "table": f.table})
+            # airtable_id — id вида-формы: по нему поле-кнопка находит свою форму
+            out.append({"id": f.id, "title": f.title, "table_id": f.table_id, "table": f.table, "airtable_id": f.airtable_id})
         return out
 
 
