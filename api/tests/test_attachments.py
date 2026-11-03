@@ -2,6 +2,8 @@
 скачивание под исходным именем, предпросмотр только безопасных типов по содержимому."""
 import shutil
 
+from urllib.parse import quote
+
 import pytest
 from sqlalchemy import text
 
@@ -106,13 +108,13 @@ def test_download_all_zip(loaded_fixture, root):
     adm = as_user("a", "admin")
     rid, row = next((i, r) for i, r in b_rows(adm, t).items() if r[PHOTO])
     url = f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/records/{rid}/attachments"
-    ids = [upload(adm, name="photo.jpg").json()["id"], upload(adm, name="../../etc/x.png").json()["id"]]
+    ids = [upload(adm, name=quote(n)).json()["id"] for n in ("photo.jpg", "../../etc/x.png", r"..\..\win\y.exe", "a:b\x01.txt", "..")]
     assert adm.post(url, json={"column": PHOTO, "ids": ids}).status_code == 200
     z = as_user("u", "user").get(f"{url}/{PHOTO}/zip")
     assert z.status_code == 200 and z.headers["content-type"] == "application/zip"
     assert "filename*=UTF-8''" in z.headers["content-disposition"]
     names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
-    assert names == ["photo.jpg", "photo (2).jpg", "x.png"]   # путь из имени отброшен
+    assert names == ["photo.jpg", "photo (2).jpg", "x.png", "y.exe", "a_b_.txt", "файл"]   # путь и спецсимволы отброшены
     assert adm.get(f"{url}/f_nosuchfield/zip").status_code == 404
     empty = next(i for i, r in b_rows(adm, t).items() if not r[PHOTO])
     assert adm.get(f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/records/{empty}/attachments/{PHOTO}/zip").status_code == 404

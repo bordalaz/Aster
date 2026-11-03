@@ -120,54 +120,70 @@ def _enqueue(c, key: str, table_id: int, record_id: int):
 
 # --- очередь и расписание ---
 
+MAX_ATTEMPTS = 5   # упавшее задание (исключение: SMTP недоступен и т.п.) повторяется: через 1, 2, 4, 8 мин
+
+
 def process_jobs(limit: int = 50) -> int:
-    """Выполнить задания очереди (каждое — своя транзакция). Возвращает число выполненных."""
+    """Выполнить задания очереди. Задание заблокировано (skip locked), пока выполняется: второй обработчик
+    его не возьмёт; удаляется после выполнения. Упало с исключением — повтор позже, до MAX_ATTEMPTS.
+    Ошибка-итог (нет получателей, почта не настроена) — не повторяется. Возвращает число выполненных."""
     n = 0
     for _ in range(limit):
         with engine.begin() as c:
-            job = c.execute(text("select id, key, table_id, record_id from app_automation_job order by id "
-                                 "limit 1 for update skip locked")).first()
+            job = c.execute(text("select id, key, table_id, record_id, attempts from app_automation_job "
+                                 "where next_at <= now() order by id limit 1 for update skip locked")).first()
             if job is None:
                 return n
-            c.execute(text("delete from app_automation_job where id = :i"), {"i": job.id})
-        run(job.key, job.table_id, job.record_id)
+            _ok, _msg, crashed = _run(job.key, job.table_id, job.record_id)
+            if crashed and job.attempts + 1 < MAX_ATTEMPTS:
+                c.execute(text("update app_automation_job set attempts = attempts + 1, "
+                               "next_at = now() + make_interval(mins => :m) where id = :i"),
+                          {"m": 2 ** job.attempts, "i": job.id})
+            else:
+                c.execute(text("delete from app_automation_job where id = :i"), {"i": job.id})
         n += 1
     return n
 
 
-def run(key: str, table_id=None, record_id=None) -> tuple[bool, str]:
-    """Выполнить автоматизацию и записать в журнал; ошибка не роняет вызывающего."""
+def _run(key: str, table_id=None, record_id=None) -> tuple[bool, str, bool]:
+    """Выполнить автоматизацию и записать в журнал; ошибка не роняет вызывающего. Третье — упала ли."""
     try:
         with engine.begin() as c:
             ok, msg = JOBS[key](c, table_id, record_id)
             _run_log(c, key, ok, msg, table_id, record_id)
+        return ok, msg, False
     except Exception as e:   # noqa: BLE001 — любая ошибка автоматизации — строка журнала, как в Airtable
         log.exception("автоматизация %s упала", key)
-        ok, msg = False, f"Ошибка: {e}"
+        msg = f"Ошибка: {e}"
         with engine.begin() as c:
-            _run_log(c, key, ok, msg, table_id, record_id)
+            _run_log(c, key, False, msg, table_id, record_id)
+        return False, msg, True
+
+
+def run(key: str, table_id=None, record_id=None) -> tuple[bool, str]:
+    ok, msg, _ = _run(key, table_id, record_id)
     return ok, msg
 
 
-def due(now: datetime, last: datetime | None, hour: int, minute: int) -> bool:
-    """Ежедневный запуск: сегодня (по Томску) время уже наступило, а сегодня ещё не запускали."""
+def due(now: datetime, hour: int, minute: int) -> bool:
+    """Сегодня (по Томску) время планового запуска уже наступило."""
     local = now.astimezone(TZ)
-    if (local.hour, local.minute) < (hour, minute):
-        return False
-    return last is None or last.astimezone(TZ).date() < local.date()
+    return (local.hour, local.minute) >= (hour, minute)
+
+
+def claim(key: str, now: datetime) -> bool:
+    """Занять сегодняшний плановый запуск: один update — атомарно, даже при нескольких процессах API."""
+    with engine.begin() as c:
+        return c.execute(text("update app_automation set last_scheduled = :d where key = :k and enabled "
+                              "and (last_scheduled is null or last_scheduled < :d) returning key"),
+                         {"d": now.astimezone(TZ).date(), "k": key}).first() is not None
 
 
 def tick(now: datetime | None = None):
     now = now or datetime.now(TZ)
     process_jobs()
     for a in REGISTRY:
-        if not a.get("schedule"):
-            continue
-        with engine.connect() as c:
-            if not enabled(c, a["key"]):
-                continue
-            last = c.execute(text("select max(at) from app_automation_run where key = :k"), {"k": a["key"]}).scalar()
-        if due(now, last, *a["schedule"]):
+        if a.get("schedule") and due(now, *a["schedule"]) and claim(a["key"], now):
             run(a["key"])
 
 

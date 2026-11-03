@@ -5,6 +5,7 @@
 import logging
 import mimetypes
 import os
+import re
 import tempfile
 import uuid
 import zipfile
@@ -20,6 +21,16 @@ from sqlalchemy.dialects.postgresql import JSONB
 from .access import can_edit, can_read, hidden_columns, table_title
 from .auth import active_user
 from .db import engine
+
+# имя файла из базы — только имя: ни «/», ни «\» (zip-slip при распаковке в Windows), ни управляющих
+# и запрещённых в Windows символов; «.», «..», пустое — «файл»
+_BAD = re.compile(r'[\/:*?"<>|\x00-\x1f\x7f]')
+
+
+def safe_name(name: str | None) -> str:
+    n = _BAD.sub("_", os.path.basename((name or "").replace("\\", "/"))).strip(" .")
+    return n[:200] or "файл"
+
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -125,7 +136,7 @@ def download_all(table_id: int, record_id: int, column: str, user: dict = Depend
             path = ROOT / rel
             if not path.is_file():
                 continue
-            name = os.path.basename(name or "файл") or "файл"   # имя из базы — только как имя, не путь
+            name = safe_name(name)
             n = seen[name] = seen.get(name, 0) + 1
             if n > 1:
                 stem, ext = os.path.splitext(name)

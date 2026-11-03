@@ -87,7 +87,38 @@ def test_nk_date_and_daily_schedule():
     assert automations.nk_date([{"name": "05-03-2024_акт"}, "23-11-2021"]) == date(2024, 3, 5)
     assert automations.nk_date("мусор") is None and automations.nk_date(None) is None
     tz = ZoneInfo("Asia/Tomsk")
-    assert not automations.due(datetime(2026, 11, 3, 7, 59, tzinfo=tz), None, 8, 0)
-    assert automations.due(datetime(2026, 11, 3, 8, 0, tzinfo=tz), None, 8, 0)
-    assert not automations.due(datetime(2026, 11, 3, 9, 0, tzinfo=tz), datetime(2026, 11, 3, 8, 1, tzinfo=tz), 8, 0)
-    assert automations.due(datetime(2026, 11, 4, 8, 5, tzinfo=tz), datetime(2026, 11, 3, 8, 1, tzinfo=tz), 8, 0)
+    assert not automations.due(datetime(2026, 11, 3, 7, 59, tzinfo=tz), 8, 0)
+    assert automations.due(datetime(2026, 11, 3, 8, 0, tzinfo=tz), 8, 0)
+
+
+def test_scheduled_run_claimed_once_per_day_and_manual_run_does_not_eat_it():
+    tz = ZoneInfo("Asia/Tomsk")
+    d1, d2 = datetime(2030, 1, 1, 8, 5, tzinfo=tz), datetime(2030, 1, 2, 8, 5, tzinfo=tz)
+    with engine.begin() as c:
+        c.execute(text("update app_automation set last_scheduled = null, enabled = true where key = 'defektoskopiya'"))
+        c.execute(text("insert into app_automation_run (key, ok, at) values ('defektoskopiya', true, :a)"), {"a": d1})  # ручной в 7:xx
+    try:
+        assert automations.claim("defektoskopiya", d1)          # ручной запуск плановый не съел
+        assert not automations.claim("defektoskopiya", d1)      # второй процесс в тот же день — нет
+        assert automations.claim("defektoskopiya", d2)
+    finally:
+        with engine.begin() as c:
+            c.execute(text("update app_automation set last_scheduled = null where key = 'defektoskopiya'"))
+            c.execute(text("delete from app_automation_run"))
+
+
+def test_crashed_job_retried_later_then_dropped(moves, monkeypatch):
+    calls = []
+    def boom(c, t, r):
+        calls.append(r)
+        raise OSError("SMTP недоступен")
+    monkeypatch.setitem(automations.JOBS, "mail_peremeshcheniya", boom)
+    with engine.begin() as c:
+        c.execute(text("insert into app_automation_job (key, table_id, record_id) values ('mail_peremeshcheniya', :t, 1)"), {"t": moves})
+    assert automations.process_jobs() == 1
+    with engine.connect() as c:
+        j = c.execute(text("select attempts, next_at > now() from app_automation_job")).one()
+    assert tuple(j) == (1, True) and automations.process_jobs() == 0   # отложено, а не потеряно
+    with engine.begin() as c:
+        c.execute(text("update app_automation_job set attempts = :n, next_at = now()"), {"n": automations.MAX_ATTEMPTS - 1})
+    assert automations.process_jobs() == 1 and _jobs() == [] and len(calls) == 2
