@@ -64,6 +64,7 @@ def smtp_config() -> dict | None:
 def smtp_send(cfg: dict, subject: str, sender: str, to: list, cc: list, text_body: str, html_body: str) -> None:
     """Письмо через SMTP из окружения; ошибки сервера — исключением (OSError / SMTPException)."""
     m = EmailMessage()
+    subject, sender = " ".join(subject.split()), " ".join(sender.split())   # перевод строки — подстановка заголовков
     m["Subject"], m["From"], m["To"] = subject, formataddr((sender, cfg["from"])), ", ".join(to)
     if cc:
         m["Cc"] = ", ".join(cc)
