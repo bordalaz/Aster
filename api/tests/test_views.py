@@ -196,3 +196,10 @@ def test_gallery_view_listed_with_kind_and_cover(tables):
     k = next(v for v in u.get(f"/api/tables/{tables['eq']}/views").json() if v["title"] == "Канбан")
     assert k["kind"] == "kanban" and k["config"]["stack"] == "name"
     assert create(u, tables["eq"], config={"stack": "nosuch"}).status_code == 422
+    # календарь: поля начала/конца — колонки таблицы; вид виден в списке
+    with engine.begin() as c:
+        c.execute(text("insert into app_view (table_id, title, kind, config) values (:t, 'Календарь', 'calendar', cast(:c as jsonb))"),
+                  {"t": tables["eq"], "c": '{"start": "name"}'})
+    assert any(v["kind"] == "calendar" for v in u.get(f"/api/tables/{tables['eq']}/views").json())
+    assert create(u, tables["eq"], config={"start": "nosuch"}).status_code == 422
+    assert create(u, tables["eq"], config={"end": "nosuch"}).status_code == 422

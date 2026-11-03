@@ -122,6 +122,14 @@ export function rowColor(color, fields, row) {
   return null
 }
 
+// Календарь: полоса записи — светлый оттенок того же цвета (как в Airtable), текст тёмный.
+export function lightColor(color, fields, row) {
+  const c = rowColor(color, fields, row)
+  if (!c) return null
+  const hue = Object.values(HUE_SHADES).find(sh => sh.includes(c))
+  return hue ? hue[0] : c
+}
+
 // --- ручной порядок вида: записи по rowOrder, новые (которых там нет) — в конце ---
 export function orderRows(rows, order) {
   if (!order?.length) return rows

@@ -94,7 +94,50 @@ def load_view_meta(c, lines: list[dict]) -> int:
             extra["rowOrder"] = [ids[r["rowId"]] for r in vd["rowOrder"] if r["rowId"] in ids]
         c.execute(text("update app_view set config = config || :e where airtable_id = :a")
                   .bindparams(bindparam("e", type_=JSONB)), {"e": extra, "a": v["id"]})
-    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids)
+    return n + load_galleries(c, lines, raw, cols, recs, rec_ids) + load_kanbans(c, lines, raw, cols, recs, rec_ids) + load_calendars(c, lines, raw, cols, recs)
+
+
+def load_calendars(c, lines, raw, cols, recs) -> int:
+    """Общие календари → app_view kind='calendar': start/end — metadata.calendar.dateColumnRanges[0],
+    подпись — видимые поля (columnOrder), фильтр, цвет (colorConfig, как у таблицы)."""
+    tables = dict(c.execute(text("select airtable_id, id from app_table")).all())
+    order: dict[str, int] = {}
+    n = 0
+    for x in lines:
+        v, vd = x["view"], x["viewData"]
+        i = order[x["tableId"]] = order.get(x["tableId"], -1) + 1
+        tid = tables.get(x["tableId"])
+        rng = (((vd.get("metadata") or {}).get("calendar") or {}).get("dateColumnRanges") or [{}])[0]
+        if v["type"] != "calendar" or v.get("personalForUserId") or tid is None or rng.get("startColumnId") not in cols:
+            continue
+        config = {"source": "airtable", "start": cols[rng["startColumnId"]],
+                  "columns": [cols[o["columnId"]] for o in vd.get("columnOrder", []) if o.get("visibility") and o["columnId"] in cols]}
+        if rng.get("endColumnId") in cols:
+            config["end"] = cols[rng["endColumnId"]]
+        extra, problems = convert_view(raw[v["id"]], cols, recs)
+        config |= {k: val for k, val in extra.items() if k in ("filters", "sort")}
+        for p in problems:
+            print(f"Календарь «{x.get('table')} / {v['name']}»: фильтры не перенесены — {p}")
+        cc = vd.get("colorConfig") or {}
+        if cc.get("type") == "selectColumn" and cc.get("selectColumnId") in cols:
+            config["color"] = {"kind": "select", "col": cols[cc["selectColumnId"]]}
+        elif cc.get("type") == "colorDefinitions":
+            rules = []
+            for d in cc.get("colorDefinitions") or []:
+                bad = []
+                f = _filters(compact(d), cols, recs, bad)
+                if f and not bad:
+                    rules.append({"color": d["color"], "filters": f})
+            if rules:
+                config["color"] = {"kind": "rules", "rules": rules}
+        c.execute(text(
+            "insert into app_view (table_id, title, kind, config, sort_order, airtable_id) "
+            "values (:t, :n, 'calendar', :c, :o, :a) "
+            "on conflict (airtable_id) do update set title = excluded.title, kind = excluded.kind, "
+            "config = excluded.config, sort_order = excluded.sort_order"
+        ).bindparams(bindparam("c", type_=JSONB)), {"t": tid, "n": v["name"], "c": config, "o": i, "a": v["id"]})
+        n += 1
+    return n
 
 
 def load_kanbans(c, lines, raw, cols, recs, rec_ids) -> int:

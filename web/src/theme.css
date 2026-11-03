@@ -367,3 +367,31 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .kb-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gl-card .gl-val { flex-wrap: nowrap; overflow: hidden; }   /* многозначные поля — одной строкой с обрезкой, как в Airtable */
 .gl-card .gl-val .pill { flex-shrink: 0; }
+
+/* Календарь — месяц, как в Airtable */
+.cal { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--surface, #fff); }
+.cal-head { display: flex; align-items: center; gap: 6px; padding: 8px 12px; }
+.cal-head h2 { font-size: 17px; font-weight: 600; margin: 0 auto 0 0; }
+.cal-head h2 span { font-weight: 400; }
+.cal-wd { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted, #616670); }
+.cal-wd > div { text-align: center; padding: 4px 0; }
+.cal-body { flex: 1; min-height: 0; display: grid; grid-template-rows: repeat(6, minmax(110px, 1fr)); overflow-y: auto; }
+.cal-week { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.cal-day { position: relative; border-right: 1px solid var(--line); }
+.cal-day.we, .cal-wd .we { background: #f6f7f9; }
+.cal-day.over { background: var(--accent-tint); }
+.cal-num { position: absolute; top: 4px; right: 8px; font-size: 12px; min-width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 4px; }
+.cal-day.out .cal-num { color: #a0a4ab; }
+.cal-num.today { background: var(--accent); color: #fff; font-weight: 600; }
+.cal-bar { display: block; height: 20px; padding: 0 6px; border: 0; border-radius: 3px; font: inherit; font-size: 12px; line-height: 20px; color: #1d1f25;
+  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; z-index: 1; }
+.cal-bar:hover { filter: brightness(0.96); }
+.cal-bar.cont-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.cal-bar.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.cal-time { color: #616670; font-size: 11px; margin-right: 5px; }
+.cal-more { position: absolute; left: 6px; border: 0; background: none; padding: 0; font: inherit; font-size: 11px; color: #616670; cursor: pointer; }
+.cal-more:hover { color: var(--accent); }
+.cal-pop { position: absolute; top: 0; left: 0; z-index: 5; width: max(100%, 220px); max-height: 320px; overflow-y: auto; background: #fff;
+  border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.14); padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.cal-pop-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.cal-pop-head button { border: 0; background: none; cursor: pointer; padding: 2px; }
