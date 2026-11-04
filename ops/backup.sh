@@ -8,8 +8,9 @@
 # - вложения — только при BACKUP_FILES=1 (одна копия на другом диске, каждую ночь докопируются новые).
 # Разово снимок из консоли: docker compose exec backup sh /ops/backup.sh now
 set -u
-OUT=/backups DAYS=${BACKUP_DAYS:-365} HOUR=${BACKUP_HOUR:-3} FILES=${BACKUP_FILES:-0}
-export PGHOST=db PGUSER=bd PGPASSWORD="$POSTGRES_PASSWORD"
+OUT=${BACKUP_DIR:-/backups} DAYS=${BACKUP_DAYS:-365} HOUR=${BACKUP_HOUR:-3} FILES=${BACKUP_FILES:-0}
+DATA=${ATTACH_ROOT:-/data/snapshot}   # вложения (в контейнере — /data/snapshot; на сервере без Docker — из .env)
+export PGHOST=${PGHOST:-db} PGUSER=bd PGPASSWORD="$POSTGRES_PASSWORD"
 
 q() { psql -d bd_ops -v ON_ERROR_STOP=1 -tAqc "$1"; }
 lit() { [ -n "$1" ] && printf "'%s'" "$(printf %s "$1" | sed "s/'/''/g")" || printf null; }   # строка → SQL-литерал
@@ -70,14 +71,14 @@ snap() { ( flock 9; _snap "$@" ) 9>"$OUT/.lock"; }   # снимки по одн�
 copy_files() {   # BACKUP_FILES=1 — только если BACKUP_DIR на другом диске
   [ "$FILES" = 1 ] || return 0
   for d in files uploads; do
-    [ -d "/data/snapshot/$d" ] || continue
+    [ -d "$DATA/$d" ] || continue
     # ponytail: перебор файлов (busybox cp -n не заходит в существующие папки); тысячи файлов — секунды
-    (cd "/data/snapshot/$d" && find . -type f) | while IFS= read -r x; do
+    (cd "$DATA/$d" && find . -type f) | while IFS= read -r x; do
       [ -e "$OUT/files/$d/$x" ] && continue
-      mkdir -p "$(dirname "$OUT/files/$d/$x")" && cp -p "/data/snapshot/$d/$x" "$OUT/files/$d/$x.part" &&
+      mkdir -p "$(dirname "$OUT/files/$d/$x")" && cp -p "$DATA/$d/$x" "$OUT/files/$d/$x.part" &&
         mv "$OUT/files/$d/$x.part" "$OUT/files/$d/$x" || log "ОШИБКА: не скопирован $d/$x"
     done
-    src=$(find "/data/snapshot/$d" -type f | wc -l) dst=$(find "$OUT/files/$d" -type f | wc -l)
+    src=$(find "$DATA/$d" -type f | wc -l) dst=$(find "$OUT/files/$d" -type f | wc -l)
     [ "$dst" -ge "$src" ] || log "ОШИБКА: вложений $d в копии $dst из $src"
   done
 }

@@ -1,0 +1,39 @@
+# Caddy на сервере без Docker (docs/deploy.md): собранный веб из /srv/aster, /api → API.
+# ASTER_HOST — адрес, по которому заходят (IP в локалке или домен); ASTER_TLS: internal — свой сертификат
+# Caddy (локалка), e-mail — настоящий сертификат Let's Encrypt (домен). Задаются в .env, ops/deploy.sh передаёт их Caddy.
+{
+	default_sni {$ASTER_HOST}   # заход по IP: браузер не шлёт имя — отдать сертификат этого адреса
+}
+
+(app) {
+	encode gzip
+	# как в vite.config.js: не встраивать во фрейм чужого сайта
+	header {
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+	}
+	handle {
+		root * /srv/aster
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+https://{$ASTER_HOST} {
+	tls {$ASTER_TLS:internal}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	import app
+}
+
+# «Открыть снимок» — тот же веб, API экземпляра снимка (только чтение)
+https://{$ASTER_HOST}:5201 {
+	tls {$ASTER_TLS:internal}
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+	import app
+}

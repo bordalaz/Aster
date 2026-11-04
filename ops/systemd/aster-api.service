@@ -1,0 +1,17 @@
+[Unit]
+Description=Aster API
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@/api
+EnvironmentFile=@DIR@/.env
+ExecStartPre=@VENV@/bin/alembic upgrade head
+ExecStart=@VENV@/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+# после «Вернуть базу» API выходит сам — systemd поднимет его на возвращённой базе
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
