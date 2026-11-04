@@ -1,5 +1,6 @@
 import { GridCellKind } from '@glideapps/glide-data-grid'
 import SelectEditor from './SelectEditor.jsx'
+import LinkEditor from '../links/LinkEditor.jsx'
 import { GridDateEditor } from '../ui/DatePicker.jsx'
 import { parseDateText } from './cells.js'
 
@@ -61,7 +62,8 @@ const pills = {
     return true
   },
   // свои поля выбора: список вариантов поверх ячейки
-  provideEditor: c => (c.data.choices ? { editor: SelectEditor, disablePadding: true, disableStyling: true } : undefined),
+  provideEditor: c => (c.data.choices ? { editor: SelectEditor, disablePadding: true, disableStyling: true }
+    : c.data.link ? { editor: LinkEditor, disablePadding: true, disableStyling: true } : undefined),
 }
 
 // Галочка как в Airtable: цветная ✓ без рамки; пусто — ничего. Клик переключает.

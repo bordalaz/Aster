@@ -6,6 +6,9 @@ const SERVED = new Set(['formula', 'rollup', 'multipleLookupValues', 'count', 'm
 // Сервер пересчитывает зависящие от правки формулы в фоне (обычно < 1 с) — после правки перечитываем
 // строки с ?fresh=1: сервер отвечает, когда пересчёт закончен. Пауза склеивает серию правок в одно чтение.
 const REFRESH_MS = 300
+// Связи в интерфейсе — [{id, name}], на сервер уходят списком id; в строке остаются с названиями до перечитывания.
+const wire = values => Object.fromEntries(Object.entries(values).map(([k, v]) =>
+  [k, Array.isArray(v) && v.length && v[0] !== null && typeof v[0] === 'object' && 'id' in v[0] ? v.map(x => x.id) : v]))
 
 // Поля таблицы + строки + точечный PATCH.
 export function useRecords(tableId, refreshMs = REFRESH_MS) {
@@ -38,7 +41,7 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
   const patch = useCallback(async (row, values) => {
     try {
       const res = await api(`/api/tables/${tableId}/records/${row.id}`, {
-        method: 'PATCH', body: { updated_at: row.updated_at, values },
+        method: 'PATCH', body: { updated_at: row.updated_at, values: wire(values) },
       })
       setRows(rs => rs.map(r => r.id === row.id ? { ...r, ...values, updated_at: res.updated_at } : r))
       clearTimeout(timer.current)   // серия правок — одно перечитывание после последней
@@ -53,7 +56,7 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
   const patchMany = useCallback(async edits => {
     try {
       const res = await api(`/api/tables/${tableId}/records`, {
-        method: 'PATCH', body: { items: edits.map(e => ({ id: e.row.id, updated_at: e.row.updated_at, values: e.values })) },
+        method: 'PATCH', body: { items: edits.map(e => ({ id: e.row.id, updated_at: e.row.updated_at, values: wire(e.values) })) },
       })
       const by = new Map(edits.map((e, i) => [e.row.id, { ...e.values, updated_at: res[i].updated_at }]))
       setRows(rs => rs.map(r => (by.has(r.id) ? { ...r, ...by.get(r.id) } : r)))

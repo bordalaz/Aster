@@ -1,72 +1,62 @@
 import { useEffect, useRef, useState } from 'react'
 import DatePicker from '../ui/DatePicker.jsx'
 import { api } from '../api.js'
-import { displayValue, durText, isLink, kindOf, parseDuration } from '../grid/cells.js'
-import { choiceColor } from '../grid/renderers.js'
+import { displayValue, durText, isLink, parseDuration } from '../grid/cells.js'
 import { fieldIcon, Icon } from '../ui/icons.jsx'
+import LinkSearch from '../links/LinkSearch.jsx'
+import MiniFields, { Pill } from '../links/MiniFields.jsx'
+import { tableMeta } from '../links/data.js'
 
 const TEXT = new Set(['singleLineText', 'email', 'url', 'phoneNumber'])
 const MULTILINE = new Set(['multilineText', 'richText'])
 const NUMBER = new Set(['number', 'currency', 'percent', 'rating'])
 
-const Pill = ({ name, color, round = true }) => {
-  const c = color === 'link' ? { bg: '#e9eef6', fg: '#1d1f25' } : choiceColor(color)
-  return <span className="pill" style={{ background: c.bg, color: c.fg, borderRadius: round ? 999 : 4 }}>{name}</span>
-}
-
 // Мини-карточки связей, как в Airtable: название + первые 3 поля первого общего вида связанной таблицы.
-// ponytail: метаданные таблицы кешируются на сессию вкладки; поля таблиц меняются редко
-const meta = new Map()
-const tableMeta = tableId => {
-  if (!meta.has(tableId)) {
-    meta.set(tableId, Promise.all([api('/api/tables'), api(`/api/tables/${tableId}/fields`), api(`/api/tables/${tableId}/views`)])
-      .then(([tables, fields, views]) => {
-        const primary = tables.find(t => t.id === tableId)?.primary_field
-        const order = views[0]?.config?.columns ?? fields.map(f => f.column_name)
-        return order.filter(c => c !== primary).map(c => fields.find(f => f.column_name === c)).filter(Boolean).slice(0, 3)
-      })
-      .catch(e => { meta.delete(tableId); throw e }))
-  }
-  return meta.get(tableId)
-}
-
-function LinkCards({ id, field, list, onOpenLink }) {
-  const [prev, setPrev] = useState(null)   // {cols, rows: {id: row}}
+// Правится (роль правит таблицу и видит связанную): «+ Добавить» — поиск записи, «×» на карточке — убрать связь.
+function LinkField({ id, field, list, onChange, onOpenLink }) {
+  const [cols, setCols] = useState([])
+  const [rows, setRows] = useState({})
+  const [adding, setAdding] = useState(false)
   const key = list.map(v => v.id).join(',')
+  const editable = field.editable && field.link_table && onChange
+  const single = !!field.options?.prefersSingleRecordLink
   useEffect(() => {
+    if (!field.link_table || !key) return
     let live = true
     Promise.all([tableMeta(field.link_table), api(`/api/tables/${field.link_table}/records?ids=${key}`)])
-      .then(([cols, rows]) => live && setPrev({ cols, rows: Object.fromEntries(rows.map(r => [r.id, r])) }))
+      .then(([c, rs]) => { if (live) { setCols(c); setRows(Object.fromEntries(rs.map(r => [r.id, r]))) } })
       .catch(() => {})   // нет данных — карточки только с названием
     return () => { live = false }
   }, [field.link_table, key])
+  if (!list.length && !editable) return <div id={id} className="fld-ro">—</div>
   return (
-    <div id={id} className="link-cards">{list.map(v => {
-      const row = prev?.rows[v.id]
-      return (
-        <button key={v.id} type="button" className="link-card" title={v.name} onClick={() => onOpenLink?.(field.link_table, v.id)}>
-          <span className="link-card-name">{v.name || `№${v.id}`}</span>
-          {row && prev.cols.length > 0 && (
-            <span className="link-card-fields">{prev.cols.map(c => (
-              <span key={c.column_name}><small>{c.title}</small><MiniValue field={c} value={row[c.column_name]} /></span>
-            ))}</span>
-          )}
-        </button>
-      )
-    })}</div>
+    <div className="link-field">
+      {editable && (!single || !list.length) && (
+        <button id={id} type="button" className="btn link-add" aria-label={`Добавить: ${field.title}`} onClick={() => setAdding(true)}><Icon name="plus" size={14} />Добавить</button>
+      )}
+      {adding && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onMouseDown={() => setAdding(false)} />
+          <div className="link-pop">
+            <LinkSearch field={field} exclude={list.map(v => v.id)} onClose={() => setAdding(false)}
+              onPick={n => { setAdding(false); onChange([...list, { id: n.id, name: n.name }]) }} />
+          </div>
+        </>
+      )}
+      {list.length > 0 && (
+        <div className="link-cards">{list.map(v => (
+          <div key={v.id} className="link-card-wrap">
+            <button type="button" className="link-card" title={v.name} onClick={() => onOpenLink?.(field.link_table, v.id)}>
+              <span className="link-card-name">{v.name || `№${v.id}`}</span>
+              <MiniFields cols={cols} row={rows[v.id]} />
+            </button>
+            {editable && <button type="button" className="link-card-x" aria-label={`Убрать ${v.name}`}
+              onClick={() => onChange(list.filter(x => x.id !== v.id))}>×</button>}
+          </div>
+        ))}</div>
+      )}
+    </div>
   )
-}
-
-// Значение в мини-карточке, как в Airtable: галочка — ✓, выбор — плашка цвета варианта, пусто — ничего.
-function MiniValue({ field, value }) {
-  if (kindOf(field) === 'checkbox') return value ? <span className="link-card-check" aria-label="да"><Icon name="check" size={14} /></span> : <span />
-  if (value == null || value === '' || (Array.isArray(value) && !value.length)) return <span />
-  const choices = (field.options?.result?.options ?? field.options)?.choices
-  if (choices) {
-    const colors = Object.fromEntries(choices.map(c => [c.name, c.color]))
-    return <span>{[].concat(value).map(v => <Pill key={v} name={v} color={colors[v]} />)}</span>
-  }
-  return <span className="link-card-val">{displayValue(field, value)}</span>
 }
 
 // Дата в карточке, как в Airtable: значение в формате поля, щелчок — календарь под полем.
@@ -105,12 +95,9 @@ export default function FieldEditor({ field, value, onChange, onOpenLink, inline
   )
   const wrap = control => <div className={inline ? 'fld fld-inline' : 'fld'}>{label}<div className="fld-value">{control}</div></div>
 
-  // связанные записи (R11): мини-карточки, щелчок — переход к записи; правка связей — позже
+  // связанные записи (R11): мини-карточки, щелчок — переход к записи; правка — «+ Добавить» и «×»
   if (isLink(field)) {
-    const list = Array.isArray(value) ? value : []
-    return wrap(list.length && field.link_table
-      ? <LinkCards id={id} field={field} list={list} onOpenLink={onOpenLink} />
-      : <div id={id} className="fld-ro">—</div>)
+    return wrap(<LinkField id={id} field={field} list={Array.isArray(value) ? value : []} onChange={onChange} onOpenLink={onOpenLink} />)
   }
   if (!field.editable) {
     const choices = (field.options?.result?.options ?? field.options)?.choices

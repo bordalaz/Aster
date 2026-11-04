@@ -137,7 +137,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .link-cards { display: grid; gap: 6px; }
 .link-card { text-align: left; border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 8px 10px; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); display: grid; gap: 6px; min-width: 0; }
 .link-card-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.link-card-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.link-card-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .link-card-fields > span { display: grid; gap: 2px; min-width: 0; }
 .link-card-fields small { color: var(--text2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .link-card-check { color: #048a0e; display: inline-flex; }
@@ -492,3 +492,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* экземпляр «Открыть снимок»: плашка над всем окном */
 .snapshot-banner { display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: #fff4d6; color: #6b4e00;
   border-bottom: 1px solid #f2d68a; font-size: 13px; }
+
+/* выбор связанной записи, как в Airtable: поиск и мини-карточки */
+.link-search { width: 460px; max-width: calc(100vw - 32px); background: #fff; border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 8px; display: grid; gap: 6px; }
+.link-search input { height: 30px; border: 1px solid var(--line); border-radius: 4px; padding: 0 8px; }
+.link-search ul { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; display: grid; gap: 4px; }
+.link-search li { display: grid; gap: 6px; padding: 8px 10px; border-radius: 6px; cursor: pointer; min-width: 0; }
+.link-search li[aria-selected="true"] { background: #f1f2f4; }
+.link-search li.empty { color: var(--muted); cursor: default; }
+.link-field { display: grid; gap: 6px; position: relative; }
+.link-add { justify-self: start; display: inline-flex; align-items: center; gap: 4px; }
+.link-pop { position: absolute; top: 34px; left: 0; z-index: 40; }
+.link-card-wrap { position: relative; display: grid; }
+.link-card-x { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: #616670; color: #fff; font-size: 12px; line-height: 18px; cursor: pointer; display: none; padding: 0; }
+.link-card-wrap:hover .link-card-x, .link-card-x:focus { display: block; }
+.link-editor { min-width: 320px; background: #fff; border: 2px solid var(--accent); border-radius: 3px; padding: 4px 6px; display: grid; gap: 6px; }
+.link-editor-pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 22px; }
+.link-editor-add { width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--text2); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.link-editor .link-search { box-shadow: none; border: 0; padding: 0; width: 100%; }

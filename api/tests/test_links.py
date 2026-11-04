@@ -47,3 +47,34 @@ def test_links_to_hidden_table_are_hidden(loaded_fixture):
     assert all(r[col("fldBtrips00000000")] is not None for r in rows)
     f = {x["column_name"]: x for x in u.get(f"/api/tables/{t['tblBBBBBBBBBBBBBB']}/fields").json()}
     assert col("fldBnom0000000000") not in f
+
+
+def test_edit_links(loaded_fixture):
+    """Правка связи из сетки/карточки: список id целиком; обе стороны пары, история, порядок."""
+    computed.reset()
+    t = loaded_fixture
+    with engine.connect() as c:
+        a, b, cc = ids(c, "tblAAAAAAAAAAAAAA"), ids(c, "tblBBBBBBBBBBBBBB"), ids(c, "tblCCCCCCCCCCCCCC")
+    u = as_user("adm", "admin")
+    tb, trips = t["tblBBBBBBBBBBBBBB"], col("fldBtrips00000000")
+    f = {x["column_name"]: x for x in u.get(f"/api/tables/{tb}/fields").json()}
+    assert f[trips]["editable"] is True
+    rows = {r["id"]: r for r in u.get(f"/api/tables/{tb}/records").json()}
+    b2 = rows[b["recB2000000000000"]]
+    r = u.patch(f"/api/tables/{tb}/records/{b2['id']}", json={"updated_at": b2["updated_at"], "values": {trips: [cc["recC1000000000000"]]}})
+    assert r.status_code == 200, r.text
+    rows = {x["id"]: x for x in u.get(f"/api/tables/{tb}/records").json()}
+    assert rows[b2["id"]][trips] == [{"id": cc["recC1000000000000"], "name": "1"}]
+    hist = u.get(f"/api/tables/{tb}/records/{b2['id']}/history").json()
+    assert hist[0]["column_name"] == trips and hist[0]["old"] == [] and hist[0]["new"][0]["name"] == "1"
+    # убрать связь
+    r = u.patch(f"/api/tables/{tb}/records/{b2['id']}", json={"updated_at": r.json()["updated_at"], "values": {trips: []}})
+    assert r.status_code == 200
+    assert {x["id"]: x for x in u.get(f"/api/tables/{tb}/records").json()}[b2["id"]][trips] == []
+    # чужие id и не-числа — отказ
+    upd = r.json()["updated_at"]
+    assert u.patch(f"/api/tables/{tb}/records/{b2['id']}", json={"updated_at": upd, "values": {trips: [999999]}}).status_code == 422
+    assert u.patch(f"/api/tables/{tb}/records/{b2['id']}", json={"updated_at": upd, "values": {trips: ["x"]}}).status_code == 422
+    # пользователь без права правки — 403
+    assert as_user("ro", "user").patch(f"/api/tables/{tb}/records/{b2['id']}",
+                                        json={"updated_at": upd, "values": {trips: []}}).status_code == 403

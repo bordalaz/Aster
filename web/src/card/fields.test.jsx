@@ -54,3 +54,22 @@ test('множественный выбор: как в Airtable — плашки
   await userEvent.click(screen.getByRole('button', { name: 'Убрать Пульсатор' }))
   expect(onChange).toHaveBeenLastCalledWith([])
 })
+
+test('связь: «+ Добавить» — поиск записи, выбор добавляет; «×» убирает; одна запись — без «Добавить»', async () => {
+  const { http, HttpResponse } = await import('msw')
+  const { server } = await import('../test/server.js')
+  server.use(http.get('/api/tables/1/names', () => HttpResponse.json([{ id: 1, name: 'Кольцо' }, { id: 2, name: 'Корпус батареи_№_4288' }, { id: 3, name: 'Пенал_№_2' }])))
+  const field = { kind: 'multipleRecordLinks', title: 'Оборудование', column_name: 'x', link_table: 1, editable: true, options: { virtual: true } }
+  const onChange = vi.fn()
+  const { rerender } = render(<FieldEditor inline field={field} value={[{ id: 1, name: 'Кольцо' }]} onChange={onChange} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить: Оборудование' }))
+  await userEvent.type(await screen.findByLabelText('Поиск: Оборудование'), '4288')
+  expect(screen.queryByRole('option', { name: 'Пенал_№_2' })).toBeNull()
+  expect(screen.queryByRole('option', { name: 'Кольцо' })).toBeNull()          // уже выбранное в списке не повторяется
+  await userEvent.keyboard('{Enter}')
+  expect(onChange).toHaveBeenLastCalledWith([{ id: 1, name: 'Кольцо' }, { id: 2, name: 'Корпус батареи_№_4288' }])
+  await userEvent.click(screen.getByRole('button', { name: 'Убрать Кольцо' }))
+  expect(onChange).toHaveBeenLastCalledWith([])
+  rerender(<FieldEditor inline field={{ ...field, options: { prefersSingleRecordLink: true } }} value={[{ id: 1, name: 'Кольцо' }]} onChange={onChange} />)
+  expect(screen.queryByRole('button', { name: 'Добавить: Оборудование' })).toBeNull()
+})

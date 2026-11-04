@@ -9,7 +9,7 @@ import { displayValue } from '../grid/cells.js'
 import { fieldIcon, Icon } from '../ui/icons.jsx'
 
 // сразу сохраняются — как в Airtable; текст и числа — при уходе с поля или Enter
-const IMMEDIATE = new Set(['checkbox', 'singleSelect', 'multipleSelects', 'date', 'dateTime', 'duration'])
+const IMMEDIATE = new Set(['checkbox', 'singleSelect', 'multipleSelects', 'date', 'dateTime', 'duration', 'multipleRecordLinks'])
 
 // Раскрытая запись как в Airtable: окно по центру; поля в порядке вида, остальные — под «Показать N скрытых полей».
 // shown — колонки текущего вида по порядку (без него — все поля); onPrev/onNext — соседние записи сетки.

@@ -181,8 +181,10 @@ export function toCell(field, value) {
     return { ...cell, allowOverlay: true, readonly: false,
       data: { ...cell.data, choices, multi: field.kind === 'multipleSelects', value: value ?? (field.kind === 'multipleSelects' ? [] : null) } }
   }
-  if (kind === 'multipleRecordLinks') {   // связи — «таблетки» с названиями записей
-    return pillsCell(asList(value).filter(v => v?.name).map(v => ({ text: v.name, ...LINK_PILL })), false)
+  if (kind === 'multipleRecordLinks') {   // связи — «таблетки» с названиями записей; свои связи правятся в ячейке
+    const cell = pillsCell(asList(value).filter(v => v?.name).map(v => ({ text: v.name, ...LINK_PILL })), false)
+    if (!(field.editable && field.kind === 'multipleRecordLinks' && field.link_table)) return cell
+    return { ...cell, allowOverlay: true, readonly: false, data: { ...cell.data, link: field, value: asList(value).filter(v => v?.id) } }
   }
   if (kind === 'duration' && (value == null || typeof value === 'number')) {
     const text = value == null ? '' : durText(field, value)
@@ -203,6 +205,7 @@ export function toCell(field, value) {
 }
 
 export function fromCell(field, cell) {
+  if (field.kind === 'multipleRecordLinks') return cell.kind === GridCellKind.Custom && cell.data?.link ? cell.data.value : undefined
   if (field.kind === 'checkbox') return !!(cell.kind === GridCellKind.Custom ? cell.data.value : cell.data)
   if (SELECT.has(field.kind)) return cell.kind === GridCellKind.Custom ? cell.data.value : undefined
   if (field.kind === 'duration') return parseDuration(cell.data)
