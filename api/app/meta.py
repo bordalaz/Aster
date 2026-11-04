@@ -48,5 +48,6 @@ def fields(table_id: int, user: dict = Depends(active_user)):
         targets = links.link_tables(c, rows, user)
         # editable — с учётом роли: интерфейс по нему решает, давать ли правку;
         # link_table — куда ведёт ссылка (None — таблица скрыта от роли)
-        return [{**r._asdict(), "editable": r.editable and edit,
+        # связи правятся, если видна связанная таблица (правка меняет и её обратное поле)
+        return [{**r._asdict(), "editable": edit and (r.editable or (r.kind == links.LINK and targets.get(r.column_name) is not None)),
                  **({"link_table": targets[r.column_name]} if r.column_name in targets else {})} for r in rows]

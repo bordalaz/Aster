@@ -16,6 +16,12 @@ import SendDialog from './SendDialog.jsx'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
   const { fields, rows, loading, patch, patchMany, refresh, dropRows } = useRecords(tableId)
+  // закрыли карточку новой связанной записи — у связей могли смениться названия
+  useEffect(() => {
+    const on = () => refresh(false).catch(() => {})
+    window.addEventListener('aster:records-changed', on)
+    return () => window.removeEventListener('aster:records-changed', on)
+  }, [refresh])
   const [open, setOpen] = useState(null)   // запись, открытая в карточке
   const [press, setPress] = useState(null)   // окно кнопки «правка»: {field, row}
   const [order, setOrder] = useState([])   // id строк сетки по порядку — для ▲▼ в карточке

@@ -1,11 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api.js'
-
-const cache = new Map()   // таблица → названия записей (на сессию; новые записи увидит перезагрузка)
-const load = id => {
-  if (!cache.has(id)) cache.set(id, api(`/api/tables/${id}/names`).catch(e => { cache.delete(id); throw e }))
-  return cache.get(id)
-}
+import { linkNames as load } from '../links/data.js'
 
 // Выбор связанных записей: поиск по названию, выбранные — плашками с «×» (R12).
 export default function LinkPicker({ field, title, value, onChange }) {

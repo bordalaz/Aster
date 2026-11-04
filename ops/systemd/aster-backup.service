@@ -1,0 +1,15 @@
+[Unit]
+Description=Aster — снимки базы (docs/backups.md)
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+EnvironmentFile=@DIR@/.env
+ExecStart=/bin/sh @DIR@/ops/backup.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

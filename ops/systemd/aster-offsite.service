@@ -1,0 +1,15 @@
+[Unit]
+Description=Aster — копия снимков в шифрованное облако
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+EnvironmentFile=@DIR@/.env
+ExecStart=/bin/sh @DIR@/ops/offsite.sh
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

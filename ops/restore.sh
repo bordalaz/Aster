@@ -6,7 +6,7 @@
 # Второй аргумент — другая база (проверить дамп, не трогая рабочую): sh /ops/restore.sh <дамп> bd_test
 set -eu
 f=$1 db=${2:-bd}
-export PGHOST=db PGUSER=bd PGPASSWORD="$POSTGRES_PASSWORD"
+export PGHOST=${PGHOST:-db} PGUSER=bd PGPASSWORD="$POSTGRES_PASSWORD"
 [ -f "$f" ] || { echo "нет файла $f"; exit 1; }
 psql -d postgres -qc "drop database if exists $db with (force)" -c "create database $db"
 pg_restore -d "$db" --no-owner "$f"

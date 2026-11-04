@@ -87,15 +87,19 @@ def _editable_table(c, table_id: int, user: dict, what: str):
 
 
 def _update(c, t, fields, table_id: int, record_id: int, body: PatchBody, user: dict, many: bool = False) -> dict:
-    """Правка одной записи с проверкой версии и записью истории; вызывается внутри транзакции."""
-    bad = set(body.values) - {f.column_name for f in fields if f.editable}
+    """Правка одной записи с проверкой версии и записью истории; вызывается внутри транзакции.
+    Связи (списки id записей) — в таблицы пар, остальное — в колонки таблицы."""
+    link_f = {f.column_name: f for f in fields if f.kind == links.LINK}
+    linked = {k: v for k, v in body.values.items() if k in link_f}
+    values = {k: v for k, v in body.values.items() if k not in link_f}
+    bad = set(values) - {f.column_name for f in fields if f.editable}
     if bad:
         raise HTTPException(422, "Нельзя менять поля: " + ", ".join(sorted(bad)))
     # Postgres молча кладёт true в int как 1 — отсекаем сами
-    bad = {k for k, v in body.values.items() if isinstance(v, bool) and not isinstance(t.c[k].type, Boolean)}
+    bad = {k for k, v in values.items() if isinstance(v, bool) and not isinstance(t.c[k].type, Boolean)}
     if bad:
         raise HTTPException(422, "Неверное значение: " + ", ".join(sorted(bad)))
-    cols = sorted(body.values)
+    cols = sorted(values)
     as_json = [func.to_jsonb(t.c[k]).label(k) for k in cols]   # значения в JSON — как их хранит история
     mine = (t.c.id == record_id, t.c.updated_at == body.updated_at)
     old = c.execute(select(t.c.id, *as_json).where(*mine).with_for_update()).first()
@@ -106,11 +110,17 @@ def _update(c, t, fields, table_id: int, record_id: int, body: PatchBody, user: 
         raise HTTPException(404, "Нет такой записи" + where)
     row = c.execute(
         update(t).where(*mine)
-        .values(**body.values, updated_at=func.now(), updated_by=user["id"])
+        .values(**values, updated_at=func.now(), updated_by=user["id"])
         .returning(t.c.id, t.c.updated_at, *as_json)
     ).first()
     changes = [{"t": table_id, "r": record_id, "c": k, "o": old._mapping[k], "n": row._mapping[k], "u": user["id"]}
                for k in cols if old._mapping[k] != row._mapping[k]]
+    if linked:
+        names = links.Names(c, user)
+        for k, ids in linked.items():
+            diff = links.set_links(c, names, record_id, link_f[k], ids)
+            if diff:
+                changes.append({"t": table_id, "r": record_id, "c": k, "o": diff[0], "n": diff[1], "u": user["id"]})
     if changes:   # R11: только реально изменённые поля
         c.execute(text(
             "insert into app_change (table_id, record_id, column_name, old, new, user_id) "
@@ -118,6 +128,10 @@ def _update(c, t, fields, table_id: int, record_id: int, body: PatchBody, user: 
         ).bindparams(bindparam("o", type_=JSONB), bindparam("n", type_=JSONB)), changes)
         automations.after_change(c, table_id, record_id, changes)
     return {"id": row.id, "updated_at": row.updated_at}
+
+
+def _touches_links(fields, values: dict) -> bool:
+    return any(f.kind == links.LINK and f.column_name in values for f in fields)
 
 
 @router.post("/{table_id}/records")
@@ -140,7 +154,8 @@ def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = De
         with engine.begin() as c:
             t, fields = _editable_table(c, table_id, user, f"запись {record_id}")
             res = _update(c, t, fields, table_id, record_id, body, user)
-        computed.invalidate()   # после commit: зависящие от правки формулы и итоги пересчитаются
+        # после commit: зависящие от правки формулы и итоги пересчитаются; связи — во всех итогах по связям
+        computed.invalidate(full=_touches_links(fields, body.values))
         return res
     except DBAPIError:
         # не отдаём текст ошибки БД наружу (раскрывает структуру) — деталь уходит в лог
@@ -163,7 +178,7 @@ def patch_records(table_id: int, body: BatchBody, user: dict = Depends(active_us
         with engine.begin() as c:
             t, fields = _editable_table(c, table_id, user, f"пакет из {len(body.items)}")
             res = [_update(c, t, fields, table_id, it.id, it, user, many=True) for it in body.items]
-        computed.invalidate()
+        computed.invalidate(full=any(_touches_links(fields, it.values) for it in body.items))
         return res
     except DBAPIError:
         log.warning("patch_records %s отклонён БД", table_id, exc_info=True)

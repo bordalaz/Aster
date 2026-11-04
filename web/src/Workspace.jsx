@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import RecordHost from './links/RecordHost.jsx'
 import { api } from './api.js'
 import TableTabs from './tables/TableTabs.jsx'
 import TableView from './grid/TableView.jsx'
@@ -112,6 +113,7 @@ export default function Workspace({ user, onLogout }) {
         {screen === 'table' && active && <TableView key={activeId} user={user} tableId={activeId} title={active.title}
           primaryField={active.primary_field} openId={jump} onOpened={opened} onOpenLink={openLink} />}
       </main>
+      <RecordHost />
     </div>
   )
 }
