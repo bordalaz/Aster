@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api.js'
 
 // Виртуальные поля, которые API отдаёт: вычисляемые (считает сам), связи (названиями), вложения.
-const SERVED = new Set(['formula', 'rollup', 'multipleLookupValues', 'count', 'multipleRecordLinks', 'multipleAttachments', 'button'])   // button — значения нет, только действие (card/ButtonField.jsx)
+export const SERVED = new Set(['formula', 'rollup', 'multipleLookupValues', 'count', 'multipleRecordLinks', 'multipleAttachments', 'button'])   // button — значения нет, только действие (card/ButtonField.jsx)
 // Сервер пересчитывает зависящие от правки формулы в фоне (обычно < 1 с) — после правки перечитываем
 // строки с ?fresh=1: сервер отвечает, когда пересчёт закончен. Пауза склеивает серию правок в одно чтение.
 const REFRESH_MS = 300
 // Связи в интерфейсе — [{id, name}], на сервер уходят списком id; в строке остаются с названиями до перечитывания.
-const wire = values => Object.fromEntries(Object.entries(values).map(([k, v]) =>
+export const wire = values => Object.fromEntries(Object.entries(values).map(([k, v]) =>
   [k, Array.isArray(v) && v.length && v[0] !== null && typeof v[0] === 'object' && 'id' in v[0] ? v.map(x => x.id) : v]))
 
 // Поля таблицы + строки + точечный PATCH.

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { LINK_PILL } from '../grid/renderers.js'
 import { Icon } from '../ui/icons.jsx'
 import LinkSearch from './LinkSearch.jsx'
+import { createLinked, openRecord } from './data.js'
 
 // Связи прямо в ячейке сетки, как в Airtable: плашки с «×» и «+»; набор текста на ячейке — сразу поиск.
 // Выбор или «×» сохраняет сразу и закрывает правку (Enter — открыть снова).
@@ -24,7 +25,8 @@ export default function LinkEditor({ value: cell, onFinishedEditing, initialValu
       </div>
       {adding && (
         <LinkSearch field={field} exclude={value.map(v => v.id)} initial={initialValue ?? ''}
-          onPick={n => save(single ? [n] : [...value, n])} onClose={() => setAdding(false)} />
+          onPick={n => save(single ? [n] : [...value, n])} onClose={() => setAdding(false)}
+          onCreate={async q => { const n = await createLinked(field, q); save(single ? [n] : [...value, n]); openRecord(field.link_table, n.id) }} />
       )}
     </div>
   )

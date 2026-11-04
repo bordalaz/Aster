@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import FieldEditor from './fields.jsx'
 import { FieldButton } from './ButtonField.jsx'
 import History from './History.jsx'
@@ -17,9 +17,11 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
   const [draft, setDraft] = useState({})
   const [error, setError] = useState('')
   const [showHidden, setShowHidden] = useState(false)
+  const box = useRef(null)
   useEffect(() => { setDraft({}); setError('') }, [record.id])
   useEffect(() => {
-    const key = e => { if (e.key === 'Escape') onClose() }
+    // Esc — только верхняя карточка (поверх может быть карточка новой связанной записи)
+    const key = e => { if (e.key === 'Escape' && [...document.querySelectorAll('.card-backdrop')].pop() === box.current) onClose() }
     document.addEventListener('keydown', key)
     return () => document.removeEventListener('keydown', key)
   }, [onClose])
@@ -78,7 +80,7 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
 
   const title = primary ? displayValue(primary, record[primary.column_name]) : `Запись №${record.id}`
   return (
-    <div className="card-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div ref={box} className="card-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="card" role="dialog" aria-modal="true" aria-label={title}>
         <header className="card-head">
           <button className="quiet" aria-label="Предыдущая запись" disabled={!onPrev} onClick={onPrev}><Icon name="caretDown" size={14} style={{ transform: 'rotate(180deg)' }} /></button>

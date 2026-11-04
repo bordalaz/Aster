@@ -5,7 +5,7 @@ import { displayValue, durText, isLink, parseDuration } from '../grid/cells.js'
 import { fieldIcon, Icon } from '../ui/icons.jsx'
 import LinkSearch from '../links/LinkSearch.jsx'
 import MiniFields, { Pill } from '../links/MiniFields.jsx'
-import { tableMeta } from '../links/data.js'
+import { createLinked, openRecord, tableMeta } from '../links/data.js'
 
 const TEXT = new Set(['singleLineText', 'email', 'url', 'phoneNumber'])
 const MULTILINE = new Set(['multilineText', 'richText'])
@@ -39,7 +39,8 @@ function LinkField({ id, field, list, onChange, onOpenLink }) {
           <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onMouseDown={() => setAdding(false)} />
           <div className="link-pop">
             <LinkSearch field={field} exclude={list.map(v => v.id)} onClose={() => setAdding(false)}
-              onPick={n => { setAdding(false); onChange([...list, { id: n.id, name: n.name }]) }} />
+              onPick={n => { setAdding(false); onChange([...list, { id: n.id, name: n.name }]) }}
+              onCreate={async q => { const n = await createLinked(field, q); setAdding(false); onChange([...list, n]); openRecord(field.link_table, n.id) }} />
           </div>
         </>
       )}

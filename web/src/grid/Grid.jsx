@@ -8,6 +8,7 @@ import { columnTotal, groupRows, moveRows, orderRows, parsePastedBool, parsePast
 import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 import { renderers, rownumHit, ROWNUM_W } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
+import { linkNames, matchLinkPaste } from '../links/data.js'
 
 function GroupMenu({ at, onClose, onToggle, onExpandAll, onCollapseAll }) {
   const run = fn => () => { fn(); onClose() }
@@ -266,7 +267,13 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     return true
   }, [cols, items, onEditMany])   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // названия связанных таблиц — заранее: вставка из Excel ищет записи по названию сразу
+  useEffect(() => { for (const c of cols) if (c.editable && c.kind === 'multipleRecordLinks' && c.link_table) linkNames(c.link_table).catch(() => {}) }, [cols])
   const coercePasteValue = useCallback((val, cell) => {
+    if (cell.kind === GridCellKind.Custom && cell.data?.link) {   // связь: названия через запятую; не нашлось — ячейку не трогаем
+      const list = matchLinkPaste(cell.data.link, val)
+      return list === undefined ? cell : { ...cell, data: { ...cell.data, value: list } }
+    }
     if (cell.kind === GridCellKind.Number) {
       const n = parsePastedNumber(val)
       return n === undefined ? cell : { ...cell, data: n ?? undefined }

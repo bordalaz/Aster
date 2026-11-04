@@ -73,3 +73,28 @@ test('связь: «+ Добавить» — поиск записи, выбор
   rerender(<FieldEditor inline field={{ ...field, options: { prefersSingleRecordLink: true } }} value={[{ id: 1, name: 'Кольцо' }]} onChange={onChange} />)
   expect(screen.queryByRole('button', { name: 'Добавить: Оборудование' })).toBeNull()
 })
+
+test('связь: «Создать запись» — новая запись в связанной таблице с текстом поиска, сразу в связи', async () => {
+  const { http, HttpResponse } = await import('msw')
+  const { server } = await import('../test/server.js')
+  const posts = []
+  server.use(
+    http.get('/api/tables/7/names', () => HttpResponse.json([{ id: 1, name: 'НЮ_РемЦех' }])),
+    http.get('/api/tables/7/fields', () => HttpResponse.json([{ column_name: 'name', title: 'Код', kind: 'singleLineText', editable: true }])),
+    http.get('/api/tables/7/views', () => HttpResponse.json([])),
+    http.get('/api/tables', () => HttpResponse.json([{ id: 7, title: 'Заказчики', primary_field: 'name' }])),
+    http.post('/api/tables/7/records', () => HttpResponse.json({ id: 50, updated_at: 't' })),
+    http.patch('/api/tables/7/records/50', async ({ request }) => { posts.push(await request.json()); return HttpResponse.json({ id: 50, updated_at: 't2' }) }),
+  )
+  const field = { kind: 'multipleRecordLinks', title: 'Заказчик', column_name: 'x', link_table: 7, editable: true, options: {} }
+  const onChange = vi.fn()
+  const opened = vi.fn()
+  window.addEventListener('aster:open-record', e => opened(e.detail))
+  render(<FieldEditor inline field={field} value={[]} onChange={onChange} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить: Заказчик' }))
+  await userEvent.type(await screen.findByLabelText('Поиск: Заказчик'), 'ГПН')
+  await userEvent.click(await screen.findByRole('button', { name: 'Создать запись «ГПН»' }))
+  await vi.waitFor(() => expect(onChange).toHaveBeenLastCalledWith([{ id: 50, name: 'ГПН' }]))
+  expect(posts[0].values).toEqual({ name: 'ГПН' })
+  expect(opened).toHaveBeenCalledWith({ tableId: 7, id: 50 })   // карточка новой записи — поверх
+})

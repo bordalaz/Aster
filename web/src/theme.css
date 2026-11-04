@@ -510,3 +510,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .link-editor-pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 22px; }
 .link-editor-add { width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--text2); display: grid; place-items: center; cursor: pointer; padding: 0; }
 .link-editor .link-search { box-shadow: none; border: 0; padding: 0; width: 100%; }
+.link-search-head { display: flex; gap: 6px; align-items: center; }
+.link-search-head input { flex: 1; min-width: 0; }
+.link-create { border: 0; background: none; color: var(--accent); cursor: pointer; text-align: left; padding: 6px 10px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-create:hover { background: #f1f2f4; }
