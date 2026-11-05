@@ -114,10 +114,21 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
     } catch { setError('Не удалось добавить запись') }
   }
 
-  // Ручной порядок: двигать строки может тот, кто меняет вид (общий — администратор, личный — владелец).
+  // Ручной порядок: двигать строки может тот, кто меняет вид (личный — владелец; общий и перенесённый
+  // из Airtable личный вид, ещё ничей, — администратор: как и на сервере, views._own).
   const view = views.find(v => v.id === current)
   const isAdmin = user?.role === 'superadmin' || user?.role === 'admin'
-  const canReorder = !!view && (view.mine || (view.shared && isAdmin))
+  const canReorder = !!view && (view.mine || ((view.shared || !!view.airtable_owner) && isAdmin))
+  // «Убрать сортировку» перед ручной перестановкой: строки остаются на местах (order — как видны сейчас)
+  async function unsort(order) {
+    setError('')
+    const drop = c => { const { sort, ...rest } = c; return { ...rest, rowOrder: order } }
+    setConfig(drop)
+    try {
+      await api(`/api/views/${current}`, { method: 'PATCH', body: { config: drop(view.config) } })
+      setViews(vs => vs.map(v => (v.id === current ? { ...v, config: drop(v.config) } : v)))
+    } catch { setError('Не удалось убрать сортировку') }
+  }
   async function saveOrder(order) {
     setError('')
     try {
@@ -253,7 +264,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
             onAdd={fields.some(f => f.editable) ? addRecord : undefined}
             onCreate={fields.some(f => f.editable) ? createInline : undefined}
-            canReorder={canReorder} onReorder={saveOrder}
+            canReorder={canReorder} onReorder={saveOrder} onUnsort={unsort}
             onInsert={fields.some(f => f.editable) ? insertNear : undefined}
             onDuplicate={fields.some(f => f.editable) ? duplicate : undefined}
             onSend={(rs, columns) => setSending({ rows: rs, columns })}
