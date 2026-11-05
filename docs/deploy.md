@@ -38,17 +38,31 @@
 
 ## Обновление
 
-На ПК (Git Bash, из папки проекта, на нужной ветке):
+На ПК (PowerShell, из папки проекта): собрать веб и скопировать его на ноутбук. Ключ — явно
+(`-i … -o IdentitiesOnly=yes`): иначе Windows перебирает ключи агента и сервер рвёт связь на 3-й попытке.
+У `scp` порт — `-P`, у `ssh` — `-p`.
 
 ```
-npm --prefix web run build && tar -C web -cf - dist | ssh -p 2222 aster-su@192.168.1.57 "tar -C ~/aster/web -xf -"
+cd E:\ideas\BD
+git pull
+npm --prefix web run build
+scp -r -i $HOME\.ssh\id_ed25519 -o IdentitiesOnly=yes -P 2222 web\dist aster-su@192.168.1.57:~/aster/web/
 ```
 
-На ноутбуке:
+Менялся сервер (или не уверены) — обновить код и всё перезапустить; `-t` — чтобы sudo спросил пароль
+(docs/security.md), формулы после перезапуска считаются ~30 с:
 
 ```
-cd ~/aster && git pull && sh ops/deploy.sh   # с ПК: ssh -t -p 2222 … — sudo спросит пароль (docs/security.md)
+ssh -t -i $HOME\.ssh\id_ed25519 -o IdentitiesOnly=yes -p 2222 aster-su@192.168.1.57 "cd ~/aster && git pull && sh ops/deploy.sh"
 ```
+
+Менялся только веб — без перезапуска, только переложить его туда, откуда отдаёт Caddy (`/srv/aster`):
+
+```
+ssh -t -i $HOME\.ssh\id_ed25519 -o IdentitiesOnly=yes -p 2222 aster-su@192.168.1.57 "sudo rsync -a --delete ~/aster/web/dist/ /srv/aster/"
+```
+
+`Connection timed out` — пропала связь с ноутбуком (расширитель сети): повторить команду.
 
 Миграции базы применяются сами при старте `aster-api`. Новые пакеты Python — снова через `aster-wheels` (шаг 4).
 
