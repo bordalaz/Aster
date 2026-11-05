@@ -21,6 +21,24 @@
 	}
 }
 
+# По обычному http — только страница «Доверять серверу» и корневой сертификат Caddy (ops/trust.html,
+# раскладывает ops/deploy.sh): с ними браузер перестаёт писать «Подключение не защищено». Остальное — на https.
+http://{$ASTER_HOST} {
+	handle /aster-ca.crt {
+		root * /srv/aster-trust
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+	handle /trust {
+		root * /srv/aster-trust
+		rewrite * /index.html
+		file_server
+	}
+	handle {
+		redir https://{host}{uri} permanent
+	}
+}
+
 https://{$ASTER_HOST} {
 	tls {$ASTER_TLS:internal}
 	handle /api/* {

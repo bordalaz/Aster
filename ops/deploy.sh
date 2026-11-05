@@ -30,5 +30,14 @@ sudo systemctl daemon-reload
 sudo systemctl enable -q aster-api aster-snapshot-api aster-backup aster-offsite caddy
 sudo systemctl restart aster-api aster-snapshot-api aster-backup aster-offsite caddy
 sleep 3
+# корневой сертификат Caddy (свой, ASTER_TLS=internal) — на страницу http://$ASTER_HOST/trust: поставить его
+# в доверенные на компьютерах и телефонах, и браузер не пишет «Подключение не защищено» (docs/https-local.md)
+CA=/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+if sudo test -f "$CA"; then
+  sudo mkdir -p /srv/aster-trust
+  sudo cp "$CA" /srv/aster-trust/aster-ca.crt && sudo chmod 644 /srv/aster-trust/aster-ca.crt
+  FP=$(openssl x509 -in /srv/aster-trust/aster-ca.crt -noout -fingerprint -sha256 | cut -d= -f2)
+  sed "s|@HOST@|$ASTER_HOST|g; s|@FP@|$FP|g" ops/trust.html | sudo tee /srv/aster-trust/index.html >/dev/null
+fi
 systemctl --no-pager --lines=0 status aster-api aster-snapshot-api aster-backup aster-offsite caddy | grep -E "^●|Active:"
-echo "готово: https://$ASTER_HOST"
+echo "готово: https://$ASTER_HOST  (если браузер пишет «не защищено» — http://$ASTER_HOST/trust)"
