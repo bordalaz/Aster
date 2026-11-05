@@ -468,7 +468,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
               && onText(getCellContent([ci, ri]), e.localEventX)) onOpen(rowAt(ri), shownRows.map(r => r.id))
           }}
           gridSelection={selection}
-          onGridSelectionChange={setSelection}
+          // ячейку номера (галочка, ручка, раскрытие) не выделяем, как в Airtable: без синей рамки вокруг галочки
+          onGridSelectionChange={s => setSelection(s.current?.cell?.[0] === 0 ? { ...s, current: undefined } : s)}
           onKeyDown={onKeyDown}
           onColumnResize={(col, w) => col.id !== '__n' && patchConfig({ widths: { ...widths, [col.id]: Math.round(Math.min(2000, Math.max(40, w))) } })}
           onColumnMoved={(from, to) => {
