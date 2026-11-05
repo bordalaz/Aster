@@ -118,12 +118,14 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   // из Airtable личный вид, ещё ничей, — администратор: как и на сервере, views._own).
   const view = views.find(v => v.id === current)
   const isAdmin = user?.role === 'superadmin' || user?.role === 'admin'
-  const canReorder = !!view && (view.mine || ((view.shared || !!view.airtable_owner) && isAdmin))
+  // «Все записи» (без сохранённого вида) — свой порядок у каждого, хранится в браузере вместе с настройкой
+  const canReorder = !view || view.mine || ((view.shared || !!view.airtable_owner) && isAdmin)
   // «Убрать сортировку» перед ручной перестановкой: строки остаются на местах (order — как видны сейчас)
   async function unsort(order) {
     setError('')
     const drop = c => { const { sort, ...rest } = c; return { ...rest, rowOrder: order } }
     setConfig(drop)
+    if (!view) return
     try {
       await api(`/api/views/${current}`, { method: 'PATCH', body: { config: drop(view.config) } })
       setViews(vs => vs.map(v => (v.id === current ? { ...v, config: drop(v.config) } : v)))
@@ -131,6 +133,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   }
   async function saveOrder(order) {
     setError('')
+    if (!view) return   // «Все записи»: порядок уже в config (Grid), config — в localStorage
     try {
       await api(`/api/views/${current}/row-order`, { method: 'PUT', body: { order } })
       setViews(vs => vs.map(v => (v.id === current ? { ...v, config: { ...v.config, rowOrder: order } } : v)))   // вид не «изменён»
