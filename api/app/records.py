@@ -1,9 +1,11 @@
+import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import Boolean, MetaData, Table, bindparam, func, insert, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
@@ -35,7 +37,13 @@ def load_table(c, table_id: int):
 
 # ponytail: отдаём все строки сразу (13,6 тыс. ≈ 3 МБ JSON) — сетке нужен весь набор; постранично — если упрёмся
 @router.get("/{table_id}/records")
-def list_records(table_id: int, fresh: bool = False, ids: str | None = None, user: dict = Depends(active_user)):
+def get_records(table_id: int, fresh: bool = False, ids: str | None = None, user: dict = Depends(active_user)):
+    # ponytail: json.dumps сразу, без jsonable_encoder — на 10 МБ «Оборудования» это ~2 с на ноутбуке-сервере
+    return Response(json.dumps(list_records(table_id, fresh, ids, user), default=_plain, ensure_ascii=False),
+                    media_type="application/json")
+
+
+def list_records(table_id: int, fresh: bool = False, ids: str | None = None, user: dict | None = None):
     """fresh — после правки: дождаться пересчёта вычисляемых полей (не дольше 20 с), отдать свежие.
     ids — только эти записи (через запятую): мини-карточки связей в карточке."""
     try:
@@ -59,7 +67,7 @@ def list_records(table_id: int, fresh: bool = False, ids: str | None = None, use
         # связи — названиями связанных записей (R11); lookup ссылок — тоже
         opts = dict(c.execute(text("select airtable_id, options from app_field where kind = :k"), {"k": links.LINK}).all())
         mappers = links.lookup_mappers(c, fields, user, opts)
-        linked = links.link_values(c, fields, user)
+        linked = links.link_values(c, fields, user, only)
         files = [(f.column_name, f.airtable_id) for f in fields if f.kind == attachments.ATTACH]
         att = attachments.values_for(c, c.execute(text("select airtable_id from app_table where id = :t"), {"t": table_id}).scalar()) if files else {}
         out = []
@@ -72,6 +80,15 @@ def list_records(table_id: int, fresh: bool = False, ids: str | None = None, use
             d.update((col, att.get((at, fid), [])) for col, fid in files)
             out.append(d)
         return out
+
+
+def _plain(v):
+    """Как jsonable_encoder FastAPI: дата/время — ISO, Decimal — int или float."""
+    if isinstance(v, (datetime, date, time)):
+        return v.isoformat()
+    if isinstance(v, Decimal):
+        return int(v) if v.as_tuple().exponent >= 0 else float(v)
+    return str(v)
 
 
 class PatchBody(BaseModel):
