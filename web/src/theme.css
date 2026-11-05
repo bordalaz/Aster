@@ -519,3 +519,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .link-search-head input { flex: 1; min-width: 0; }
 .link-create { border: 0; background: none; color: var(--accent); cursor: pointer; text-align: left; padding: 6px 10px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .link-create:hover { background: #f1f2f4; }
+
+/* «Распечатать запись»: на бумагу — только раскрытая карточка, целиком */
+@media print {
+  body * { visibility: hidden; }
+  .printing .card, .printing .card * { visibility: visible; }
+  .printing { position: static; background: none; padding: 0; }
+  .printing .card { position: absolute; left: 0; top: 0; width: 100%; height: auto; max-height: none; box-shadow: none; }
+  .printing .card-main, .printing .card-body { overflow: visible; height: auto; max-height: none; }
+  .printing .card-head button, .printing .card-side { display: none; }
+}

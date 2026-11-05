@@ -62,3 +62,13 @@ test('связанные записи — мини-карточками; щел�
   expect(onOpenLink).toHaveBeenCalledWith(5, 9)
   expect(screen.getByText('Договор').closest('.fld').textContent).toContain('—')
 })
+
+test('«⋯» в шапке, как в Airtable: отправить, распечатать, удалить запись', async () => {
+  const onDelete = vi.fn(), onSend = vi.fn()
+  render(<Card record={records1[0]} fields={fields} primaryField={NAME} onSave={vi.fn()} onClose={vi.fn()} onSend={onSend} onDelete={onDelete} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Ещё' }))
+  expect(screen.getByRole('menuitem', { name: 'Распечатать запись…' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Удалить запись' }))
+  expect(onDelete).toHaveBeenCalled()
+  expect(screen.queryByRole('menu')).toBeNull()
+})
