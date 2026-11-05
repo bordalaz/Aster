@@ -363,7 +363,7 @@ def _deps(conn, opts: dict, kind: str) -> set:
 
 
 def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None, changed: set | None = None,
-                touched: dict | None = None, new: dict | None = None, prev_today=None) -> dict:
+                touched: dict | None = None, new: dict | None = None, prev_today=None, report: dict | None = None) -> dict:
     """Все вычисляемые поля базы от сырых данных, по цепочке зависимостей (at_computed не читается).
     → {field_id: {airtable_id записи: значение в виде API}}. Битые и неописанные в aggs rollup — пустые.
     prev + changed (airtable_id изменённых сырых полей) — пересчёт только зависящих от них полей
@@ -371,7 +371,8 @@ def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None,
     Вычисляемое поле в changed считается заново (новая запись в его таблице).
     prev + touched {поле: {записи}} (+ new {таблица: {новые записи}}) — пересчёт только задетых записей:
     дальше по цепочке идут лишь записи, чьё значение изменилось. Формулы с TODAY()/NOW() — целиком,
-    только если сменился день (prev_today)."""
+    только если сменился день (prev_today). report — сюда {таблица: {записи}}, чьи значения могли измениться
+    (задетые правкой и пересчитанные): сетка перечитывает только их."""
     meta = {r.airtable_id: r for r in conn.execute(text(
         "select f.airtable_id, f.kind, f.column_name, f.options, t.pg_name, t.airtable_id as t_at "
         "from app_field f join app_table t on t.id = f.table_id where f.airtable_id is not null"))}
@@ -381,7 +382,7 @@ def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None,
     conn.info["aster_meta"], conn.info["aster_primary"] = meta, primary
     try:
         if prev is not None and touched is not None:
-            return _compute_records(conn, today, aggs, prev, touched, new or {}, prev_today)
+            return _compute_records(conn, today, aggs, prev, touched, new or {}, prev_today, report)
         return _compute_fields(conn, today, aggs, prev, changed)
     finally:
         conn.info.pop("aster_meta", None)
@@ -435,7 +436,7 @@ def _compute_fields(conn, today, aggs, prev, changed) -> dict:
     return cache.computed
 
 
-def _compute_records(conn, today, aggs, prev, touched, new, prev_today) -> dict:
+def _compute_records(conn, today, aggs, prev, touched, new, prev_today, report=None) -> dict:
     """Пересчёт по записям: у каждого вычисляемого поля — только записи, задетые правкой
     (своей или по цепочке, через связи — у связанных записей)."""
     from graphlib import TopologicalSorter
@@ -490,4 +491,11 @@ def _compute_records(conn, today, aggs, prev, touched, new, prev_today) -> dict:
             merged.update(part)
             cache.computed[fid] = merged
             dirty[fid] = {k for k in only if part.get(k) != prev[fid].get(k)}
+    if report is not None:   # правки (обе стороны связей), новые записи и изменившиеся вычисляемые значения
+        for f, recs in [*touched.items(), *((f, r) for f, r in dirty.items() if f in info)]:
+            m = _field_meta(conn, f)
+            if m is not None and recs:
+                report.setdefault(m.t_at, set()).update(recs)
+        for t, recs in new.items():
+            report.setdefault(t, set()).update(recs)
     return cache.computed

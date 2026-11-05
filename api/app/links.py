@@ -19,18 +19,40 @@ class Names:
             "select t.id, t.title, t.pg_name, t.primary_field, f.airtable_id as prim_at, t.airtable_id "
             "from app_table t left join app_field f on f.table_id = t.id and f.column_name = t.primary_field"))}
         self._cache = {}
+        self._stored = None   # {pg_name} таблиц, где первичное поле — колонка (иначе вычисляемое)
+
+    def stored(self, t) -> bool:
+        if self._stored is None:   # одним запросом на все таблицы, а не по запросу на каждую
+            self._stored = set(self.c.execute(text(
+                "select c.table_name from information_schema.columns c join app_table t "
+                "on t.pg_name = c.table_name and t.primary_field = c.column_name")).scalars())
+        return t.pg_name in self._stored
 
     def readable(self, tbl_at: str):
         t = self.tables.get(tbl_at)
         return t if t is not None and can_read(self.user, t.title) else None
 
+    def named(self, tbl_at: str, ids) -> dict:
+        """{наш id: название} только этих записей — когда строк мало (изменившиеся, мини-карточки),
+        не читать названия всей связанной таблицы."""
+        if tbl_at in self._cache:
+            title = self._cache[tbl_at][0]
+            return {i: title.get(i, "") for i in ids}
+        t = self.tables[tbl_at]
+        ids = list(ids)
+        if not ids:
+            return {}
+        stored = self.stored(t)
+        sel = f', "{t.primary_field}"::text' if stored else ", null"
+        rows = self.c.execute(text(f"select id, airtable_id{sel} from {t.pg_name} where id = any(:i)"), {"i": ids}).all()
+        comp = {} if stored else computed.values().get(t.prim_at, {})
+        return {i: _text(v if stored else comp.get(at)) for i, at, v in rows}
+
     def of(self, tbl_at: str) -> tuple[dict, dict]:
         """({наш id: название}, {airtable id записи: наш id}) таблицы."""
         if tbl_at not in self._cache:
             t = self.tables[tbl_at]
-            stored = self.c.execute(text(
-                "select 1 from information_schema.columns where table_name = :t and column_name = :c"),
-                {"t": t.pg_name, "c": t.primary_field}).first()
+            stored = self.stored(t)
             sel = f', "{t.primary_field}"::text' if stored else ", null"
             rows = self.c.execute(text(f"select id, airtable_id{sel} from {t.pg_name}")).all()
             comp = {} if stored else computed.values().get(t.prim_at, {})
@@ -62,12 +84,14 @@ def link_values(c, fields, user, only=None) -> list[tuple[str, dict | None]]:
             continue
         lt, side = meta[f.airtable_id].split(":")
         mine, other, pos = ("src", "dst", "pos") if side == "src" else ("dst", "src", "rpos")
-        title, _ = names.of(target)
         # список собирает база (array_agg): строка на запись, а не на пару — у оборудования их десятки тысяч
         where = f" where {mine} = any(:o)" if only is not None else ""
-        vals = {m: [{"id": o, "name": title.get(o, "")} for o in os] for m, os in c.execute(text(
+        lists = c.execute(text(
             f"select {mine}, array_agg({other} order by {pos} nulls last, {other}) from {lt}{where} group by {mine}"),
-            {"o": list(only or ())})}
+            {"o": list(only or ())}).all()
+        # несколько строк — названия только связанных с ними записей; вся таблица — названия всех сразу
+        title = names.named(target, {o for _, os in lists for o in os}) if only is not None else names.of(target)[0]
+        vals = {m: [{"id": o, "name": title.get(o, "")} for o in os] for m, os in lists}
         out.append((f.column_name, vals))
     return out
 
