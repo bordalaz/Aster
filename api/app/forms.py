@@ -169,7 +169,7 @@ def submit(form_id: int, body: SubmitBody, user: dict = Depends(active_user)):
     except DBAPIError:
         log.warning("submit формы %s отклонён БД", form_id, exc_info=True)
         raise HTTPException(422, "Неверное значение поля")
-    computed.invalidate(full=True)   # новая запись со связями
+    computed.invalidate(table=f.table_id)   # новая запись: формулы её таблицы и итоги по её связям
     log.info("форма %s: %s создал запись %s", form_id, user["login"], rid)
     return {"id": rid}
 

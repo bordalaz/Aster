@@ -351,7 +351,8 @@ def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None,
     """Все вычисляемые поля базы от сырых данных, по цепочке зависимостей (at_computed не читается).
     → {field_id: {airtable_id записи: значение в виде API}}. Битые и неописанные в aggs rollup — пустые.
     prev + changed (airtable_id изменённых сырых полей) — пересчёт только зависящих от них полей
-    (прямо или по цепочке); остальные берутся из prev. Формулы с TODAY()/NOW() считаются всегда."""
+    (прямо или по цепочке); остальные берутся из prev. Формулы с TODAY()/NOW() считаются всегда.
+    Вычисляемое поле в changed считается заново (новая запись в его таблице)."""
     from graphlib import TopologicalSorter
 
     from .rollup_aggs import AGG
@@ -369,7 +370,7 @@ def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None,
         r = info[fid]
         if dirty is not None:
             clock = r.kind == "formula" and any(w in _as_dict(r.options).get("formula", "").upper() for w in ("TODAY(", "NOW("))
-            if fid in prev and not clock and not deps[fid] & dirty:
+            if fid in prev and not clock and fid not in changed and not deps[fid] & dirty:
                 cache.computed[fid] = prev[fid]
                 continue
             dirty.add(fid)

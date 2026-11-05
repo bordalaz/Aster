@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import FieldEditor from './fields.jsx'
 import { FieldButton } from './ButtonField.jsx'
 import History from './History.jsx'
@@ -13,11 +13,14 @@ const IMMEDIATE = new Set(['checkbox', 'singleSelect', 'multipleSelects', 'date'
 
 // Раскрытая запись как в Airtable: окно по центру; поля в порядке вида, остальные — под «Показать N скрытых полей».
 // shown — колонки текущего вида по порядку (без него — все поля); onPrev/onNext — соседние записи сетки.
-export default function Card({ tableId, record, fields, shown, primaryField, onSave, onClose, onPrev, onNext, onOpenLink, onChanged }) {
+// depth > 0 — карточка связанной записи поверх других (стопкой, ниже предыдущей); from — её таблица:
+// подпись «Запись из …» и линия от вкладки этой таблицы к карточке, как в Airtable.
+export default function Card({ tableId, record, fields, shown, primaryField, onSave, onClose, onPrev, onNext, onOpenLink, onChanged, depth = 0, from }) {
   const [draft, setDraft] = useState({})
   const [error, setError] = useState('')
   const [showHidden, setShowHidden] = useState(false)
   const box = useRef(null)
+  const branch = useBranch(box, depth > 0 ? tableId : null)
   useEffect(() => { setDraft({}); setError('') }, [record.id])
   useEffect(() => {
     // Esc — только верхняя карточка (поверх может быть карточка новой связанной записи)
@@ -80,7 +83,9 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
 
   const title = primary ? displayValue(primary, record[primary.column_name]) : `Запись №${record.id}`
   return (
-    <div ref={box} className="card-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div ref={box} className={depth ? 'card-backdrop card-stacked' : 'card-backdrop'} style={depth ? { paddingTop: 72 + depth * 28 } : undefined}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      {branch && <svg className="card-branch" aria-hidden="true"><path d={branch.d} /><circle cx={branch.x} cy={branch.y} r="4" /></svg>}
       <div className="card" role="dialog" aria-modal="true" aria-label={title}>
         <header className="card-head">
           <button className="quiet" aria-label="Предыдущая запись" disabled={!onPrev} onClick={onPrev}><Icon name="caretDown" size={14} style={{ transform: 'rotate(180deg)' }} /></button>
@@ -90,6 +95,7 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
         </header>
         <div className="card-main">
         <div className="card-body">
+          {from && <div className="card-from">Запись из «{from}»</div>}
           {primary && <div className="card-primary"><Icon name={fieldIcon(primary.kind)} size={14} />{primary.title}</div>}
           <h2 className="card-title">{title}</h2>
           {error && <div className="err" role="alert">{error}</div>}
@@ -111,4 +117,23 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
       </div>
     </div>
   )
+}
+
+// Линия-«веточка» от вкладки таблицы (если она видна) к шапке карточки: {d для <path>, x, y начала} или null.
+function useBranch(box, tableId) {
+  const [d, setD] = useState(null)
+  useLayoutEffect(() => {
+    if (tableId == null) return
+    const draw = () => {
+      const tab = document.querySelector(`.tabs [data-table="${tableId}"]`)?.getBoundingClientRect()
+      const card = box.current?.querySelector('.card')?.getBoundingClientRect()
+      if (!tab || !card || !tab.width) { setD(null); return }
+      const x1 = tab.left + tab.width / 2, y1 = tab.bottom, x2 = card.left, y2 = card.top + 20
+      setD({ d: `M${x1},${y1} C${x1},${y2} ${x1},${y2} ${x2},${y2}`, x: x1, y: y1 })
+    }
+    draw()
+    window.addEventListener('resize', draw)
+    return () => window.removeEventListener('resize', draw)
+  }, [box, tableId])
+  return d
 }

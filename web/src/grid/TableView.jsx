@@ -8,6 +8,7 @@ import CalendarView from './CalendarView.jsx'
 import TimelineView from './TimelineView.jsx'
 import ListView from './ListView.jsx'
 import Card from '../card/Card.jsx'
+import { openRecord } from '../links/data.js'
 import { ButtonDialog, ButtonRun, openForm } from '../card/ButtonField.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 import { groupCols, visibleColumns } from './viewConfig.js'
@@ -288,7 +289,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             onPrev={i > 0 ? () => go(-1) : undefined}
             onNext={i >= 0 && i < order.length - 1 ? () => go(1) : undefined}
             onClose={() => setOpen(null)}
-            onOpenLink={onOpenLink}
+            onOpenLink={openRecord}
             onChanged={refresh}
           />
         )

@@ -429,3 +429,37 @@ def test_compute_all_incremental_recomputes_only_dependents(tmp_path):
     assert out["fldOname000000000"] == full["fldOname000000000"] == {"recO1": "Кольцо_7", "recO2": "Кольцо_7"}
     assert out["fldOprice00000000"] == full["fldOprice00000000"]
     assert out["fldNbang000000000"] == {"recN1": "из прошлого"}   # не зависит от Цены — не пересчитано
+
+
+def test_incremental_link_edit_and_new_record(tmp_path, monkeypatch):
+    """Связь правят со стороны Оборудования — счётчик у Номенклатуры (по её полю-связи) пересчитан без
+    полного расчёта; новая запись получает значения вычисляемых полей своей таблицы."""
+    from app import computed
+    from migrate import compute
+    schema, records = _two_tables()
+    schema[0]["fields"].append({"id": "fldNcount00000000", "name": "Штук", "type": "count", "options": {
+        "isValid": True, "recordLinkFieldId": "fldNequip00000000"}})
+    schema[1]["fields"].append({"id": "fldOcount00000000", "name": "НомШтук", "type": "count", "options": {
+        "isValid": True, "recordLinkFieldId": "fldOnom0000000000"}})
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+    assert computed.values()["fldNcount00000000"] == {"recN1": 2}
+    full_calls = []
+    real = compute.compute_all
+    monkeypatch.setattr(computed, "compute_all", lambda *a, **k: (full_calls.append(k.get("changed")), real(*a, **k))[1])
+    with engine.begin() as c:
+        tid, col = c.execute(text("select table_id, column_name from app_field where airtable_id = 'fldOnom0000000000'")).one()
+        lt, side = c.execute(text("select link_table, side from at_link_meta where field_id = 'fldOnom0000000000'")).one()
+        me = "src" if side == "src" else "dst"
+        c.execute(text(f"delete from {lt} where {me} = 1"))          # INV-1 больше не связан с Кольцом
+        c.execute(text("insert into app_change (table_id, record_id, column_name) values (:t, 1, :c)"), {"t": tid, "c": col})
+        tbl = c.execute(text("select pg_name from app_table where id = :t"), {"t": tid}).scalar()
+        c.execute(text(f"insert into {tbl} (airtable_id) values ('recO3')"))
+    computed.invalidate(table=tid)
+    computed.wait()
+    assert full_calls[-1] is not None                                   # не полный расчёт
+    assert computed.values()["fldNcount00000000"] == {"recN1": 1}
+    assert computed.values()["fldOcount00000000"] == {"recO1": 0, "recO2": 1, "recO3": 0}   # новая — со значением
