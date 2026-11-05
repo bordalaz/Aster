@@ -91,7 +91,7 @@ describe('ячейка номера строки', () => {
     expect(rownumHit(6)).toBe('number')            // отсортированный вид — ручки нет
     expect(rownumHit(20)).toBe('check')
     expect(rownumHit(45)).toBe('expand')
-    expect(rownumHit(ROWNUM_W - 4)).toBe('number')   // полоса цвета у края — не кнопка
+    expect(rownumHit(ROWNUM_W - 4)).toBe('number')   // правый край — не кнопка
   })
 })
 

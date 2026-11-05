@@ -119,10 +119,10 @@ const group = {
 }
 
 // Ячейка номера, как в Airtable (rowActionsCell): при наведении на строку — ручка ⋮⋮ (перетаскивание,
-// только без сортировки), галочка выбора вместо номера и кнопка раскрытия у названия; у правого края —
+// только без сортировки), галочка выбора вместо номера и кнопка раскрытия у названия; сразу за номером —
 // цветная полоса строки (colorConfig вида). Отмеченная строка держит галочку и без наведения.
 export const ROWNUM_W = 72
-const DRAG_W = 14, CHECK_X = 14, CHECK_W = 22, EXPAND_X = 38, EXPAND_W = 24
+const DRAG_W = 14, CHECK_X = 14, CHECK_W = 22, BAR_X = 37, EXPAND_X = 44, EXPAND_W = 24
 // Что под курсором в ячейке номера (localX — от левого края ячейки); ручка — только если строки можно двигать.
 export function rownumHit(localX, { drag = false } = {}) {
   if (drag && localX < DRAG_W) return 'drag'
@@ -170,9 +170,9 @@ const rownum = {
       ctx.fillText(n, rect.x + CHECK_X + CHECK_W / 2, mid)
     }
     if (hover) expandIcon(ctx, rect.x + EXPAND_X + (EXPAND_W - 16) / 2, mid - 8)
-    if (color) {
+    if (color) {   // как в Airtable: тонкая полоса сразу за номером, почти на всю высоту строки
       ctx.fillStyle = color
-      roundRect(ctx, rect.x + rect.width - 7, rect.y + 4, 4, rect.height - 8, 2); ctx.fill()
+      roundRect(ctx, rect.x + BAR_X, rect.y + 5, 3, rect.height - 10, 1.5); ctx.fill()
     }
     ctx.restore()
     return true
