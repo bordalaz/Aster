@@ -11,8 +11,9 @@ while :; do
   elif ! ls "$OUT"/bd-*.dump >/dev/null 2>&1; then
     log "ОШИБКА: в $OUT нет снимков — облако не трогаю"   # пустой/неподключённый диск не должен стереть облако
   else
+    # flock: ручной запуск и служба не копируют разом (Google Drive допускает дубли имён)
     # --max-delete: за раз стирается не больше 3 (год хранения — 1 в сутки); больше — что-то не так, ничего не стирать
-    rclone sync "$OUT" "$R" --include '/bd-*.dump' --max-delete 3 && log "облако: снимки скопированы" ||
+    flock -n /tmp/aster-offsite.lock rclone sync "$OUT" "$R" --include '/bd-*.dump' --max-delete 3 && log "облако: снимки скопированы" ||
       log "ОШИБКА: копия в облако не удалась"
   fi
   sleep 3600

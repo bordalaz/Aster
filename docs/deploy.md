@@ -70,17 +70,26 @@ journalctl -u aster-api -f                # программа
 
 Снимки шифруются на ноутбуке; Google видит только зашифрованные файлы. Вложения в облако не идут — их копия на USB-диске.
 
-1. На ПК скачать rclone (rclone.org/downloads, Windows, zip) и распаковать.
-2. На ноутбуке: `rclone config`
-   - `n` (новый remote), имя **`gdrive`**, тип **`drive`**; `client_id`, `client_secret` — пусто;
-   - scope — **`drive.file`** (rclone видит только свои файлы, остальной Диск — нет);
-   - `Use web browser to automatically authenticate?` — **`n`**;
-   - на ПК: `.\rclone.exe authorize "drive"` → войти в Google → скопировать токен → вставить на ноутбуке в `config_token>`;
-   - `Shared Drive?` — `n`, затем `y`.
-3. Второй remote: `n`, имя **`aster`**, тип **`crypt`**, remote **`gdrive:aster`**, filename_encryption `standard`,
-   directory_name_encryption `true`, пароль и salt — `g` (сгенерировать). **Оба пароля записать вне ноутбука** —
-   без них копия не расшифровывается. `y`, `q`.
-4. `sudo systemctl restart aster-offsite && journalctl -u aster-offsite -f` — ждать «облако: снимки скопированы».
+Общий client_id rclone для Google Drive отключается в 2026 году — нужен свой (бесплатно, Google Cloud):
+
+1. console.cloud.google.com → новый проект (`aster-backup`) → APIs & Services → включить **Google Drive API**.
+2. **OAuth consent screen** → Get started: имя `rclone`, своя почта, Audience **External** → Create.
+   - **Data Access** → Manually add scopes: `https://www.googleapis.com/auth/drive.file` → Update → Save;
+   - **Audience** → Add users (своя почта) и **Publish app** — в режиме Testing Google отзывает доступ каждые 7 дней;
+   - **Clients** → Create client, тип **Desktop app** → Client ID и Client secret.
+3. Шифрование — на ноутбуке (пароли генерируются там же, в чат и на экран не выводятся):
+   ```
+   umask 077; P1=$(openssl rand -base64 32); P2=$(openssl rand -base64 32)
+   printf "password:  %s\npassword2: %s\n" "$P1" "$P2" > ~/aster-cloud-passwords.txt
+   rclone config create aster crypt remote=gdrive:aster filename_encryption=standard directory_name_encryption=true password="$P1" password2="$P2" --non-interactive
+   ```
+   **Оба пароля — в менеджер паролей** (`cat ~/aster-cloud-passwords.txt`, без скриншотов), затем `shred -u ~/aster-cloud-passwords.txt`.
+   Без них копия не расшифровывается. В `~/.config/rclone/rclone.conf` они только замаскированы — от кражи ноутбука не защищают.
+4. Google Drive — на ПК с браузером: скачать rclone для Windows (rclone.org/downloads), положить `rclone.exe` рядом
+   с `ops\gdrive-setup.ps1` и запустить его в PowerShell. Скрипт спросит Client ID и secret, откроет вход в Google
+   («приложение не проверено» — «Дополнительно» → «Перейти»), токен передаст на ноутбук по ssh. В конце — «Google Drive подключён».
+5. `sudo systemctl restart aster-offsite && journalctl -u aster-offsite -f` — ждать «облако: снимки скопированы».
+   Проверка: `rclone check ~/aster/backups aster: --include "/bd-*.dump"` — «N matching files».
 
 Защита: если на ноутбуке снимков нет (диск отвалился), облако не трогается; за проход стирается не больше 3 снимков.
 Достать из облака: `rclone copy aster: ~/aster/backups`.
