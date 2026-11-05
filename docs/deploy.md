@@ -47,7 +47,7 @@ npm --prefix web run build && tar -C web -cf - dist | ssh -p 2222 aster-su@192.1
 На ноутбуке:
 
 ```
-cd ~/aster && git pull && sh ops/deploy.sh
+cd ~/aster && git pull && sh ops/deploy.sh   # с ПК: ssh -t -p 2222 … — sudo спросит пароль (docs/security.md)
 ```
 
 Миграции базы применяются сами при старте `aster-api`. Новые пакеты Python — снова через `aster-wheels` (шаг 4).
