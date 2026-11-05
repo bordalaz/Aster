@@ -160,3 +160,17 @@ test('«По дате»: вопрос «Да / Нет», «Больше не с�
   await userEvent.click(screen.getByRole('button', { name: 'По дате' }))   // больше не спрашивает
   expect(screen.queryByRole('alertdialog')).toBeNull()
 })
+
+test('мини-карточки связей перечитываются после сохранения записи — с ожиданием пересчёта (fresh)', async () => {
+  const { http, HttpResponse } = await import('msw')
+  const { server } = await import('../test/server.js')
+  const urls = []
+  server.use(http.get('/api/tables/5/records', ({ request }) => { urls.push(request.url); return HttpResponse.json([{ id: 1, loc: 'ВК_1' }]) }))
+  const field = { kind: 'multipleRecordLinks', title: 'ID_Оборудования', column_name: 'x', link_table: 5, editable: true, options: { virtual: true } }
+  const { rerender } = render(<FieldEditor inline field={field} value={[{ id: 1, name: 'П-1' }]} onChange={vi.fn()} version="v1" />)
+  await vi.waitFor(() => expect(urls).toHaveLength(1))
+  expect(urls[0]).not.toContain('fresh')
+  rerender(<FieldEditor inline field={field} value={[{ id: 1, name: 'П-1' }]} onChange={vi.fn()} version="v2" />)
+  await vi.waitFor(() => expect(urls).toHaveLength(2))
+  expect(urls[1]).toContain('fresh=1')
+})

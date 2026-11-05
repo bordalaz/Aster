@@ -9,6 +9,7 @@ import { applyFilters, groupCols, visibleColumns } from './viewConfig.js'
 import { renderers, rownumHit, ROWNUM_W } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
 import { linkNames, matchLinkPaste } from '../links/data.js'
+import Ask from '../ui/Ask.jsx'
 
 // Меню у курсора, как в Airtable: не влезает снизу — встаёт над курсором, справа — левее; всегда в пределах окна.
 function useFit(at) {
@@ -98,7 +99,7 @@ function onText(cell, x) {
 // canReorder — можно двигать строки (вид без сортировки, правит тот, кто может менять вид); onReorder(ids) — новый порядок.
 // onInsert(row, 'above'|'below'|null), onDuplicate(row), onSend(rows, columns), onDelete(rows) — пункты меню записи.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd, onCreate, collapseKey, scrollKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend, onDelete }) {
+  search = '', exportRef, onAdd, onCreate, collapseKey, scrollKey, canReorder = false, onReorder, onUnsort, onInsert, onDuplicate, onSend, onDelete }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -218,6 +219,9 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     })
   }, [items])
   const movable = canReorder && !config.sort?.length && !search
+  // ручка ⋮⋮ видна и при сортировке: потянул — вопрос «убрать сортировку и двигать вручную?»
+  const grabbable = canReorder && !search && (movable || !!onUnsort)
+  const [askUnsort, setAskUnsort] = useState(false)
   const shownIds = useMemo(() => new Set(shownRows.map(r => r.id)), [shownRows])
   const checkedShown = [...checked].filter(id => shownIds.has(id))
   const fieldAt = ci => cols[ci - 1]
@@ -239,13 +243,13 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     }
     if (ci === 0) return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: String(nums[ri]),
       data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row), hover: ri === hoverRow && !drag,
-        checked: checked.has(it.row.id), drag: movable } }
+        checked: checked.has(it.row.id), drag: grabbable } }
     const field = fieldAt(ci)
     const cell = toCell(field, it.row[field.column_name])
     // название в выделенной ячейке — синяя ссылка на карточку, как в Airtable
     if (ci === 1 && isSel(selection, ci, ri)) return { ...cell, themeOverride: { textDark: LINK_COLOR }, cursor: 'pointer' }
     return cell
-  }, [cols, items, totals, groupFields, nums, config.color, fields, hoverRow, selection, checked, movable, drag])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cols, items, totals, groupFields, nums, config.color, fields, hoverRow, selection, checked, grabbable, drag])   // eslint-disable-line react-hooks/exhaustive-deps
   const rowAt = ri => (items[ri]?.kind === 'row' ? items[ri].row : null)
   const gridRef = useRef(null)
   const pendingCell = useRef(null)   // {id, ci} — выделить ячейку новой записи, когда она появится в сетке
@@ -375,8 +379,9 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           const [ci, ri] = hovered.current ?? []
           // ручка ⋮⋮ — начать перетаскивание; Glide этот щелчок не видит (иначе он начнёт выделять ячейки).
           // Именно mousedown, не pointerdown: отмена pointerdown гасит и mousemove, по которым Glide ведёт курсор.
-          if (e.button === 0 && ci === 0 && rowAt(ri) && rownumHit(hoverX.current, { drag: movable }) === 'drag') {
+          if (e.button === 0 && ci === 0 && rowAt(ri) && rownumHit(hoverX.current, { drag: grabbable }) === 'drag') {
             e.preventDefault(); e.stopPropagation()
+            if (!movable) { setAskUnsort(true); return }
             const id = rowAt(ri).id
             const ids = checked.has(id)
               ? items.filter((it, i) => it.kind === 'row' && checked.has(it.row.id) && groupOf[i] === groupOf[ri]).map(it => it.row.id)
@@ -403,6 +408,16 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
             onChange={() => setChecked(allChecked ? new Set() : new Set(shownRows.map(r => r.id)))} />
         </label>
         {rowMenu && <RowMenu at={rowMenu} onClose={() => setRowMenu(null)} />}
+        {askUnsort && <Ask title="Убрать сортировку?" yes="Убрать сортировку" no="Нет"
+          onNo={() => setAskUnsort(false)}
+          onYes={() => {
+            setAskUnsort(false)
+            const shown = new Set(shownRows.map(r => r.id))
+            onUnsort([...shownRows.map(r => r.id), ...rows.filter(r => !shown.has(r.id)).map(r => r.id)])
+          }}>
+          В виде включена сортировка — строки стоят по ней, вручную их не переставить. Убрать сортировку и
+          расставлять строки вручную? Сейчас они останутся на своих местах.
+        </Ask>}
         {info?.text && (
           <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setInfo(null)} />

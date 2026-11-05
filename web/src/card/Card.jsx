@@ -84,7 +84,7 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
     </div>
   ) : (
     <div key={f.column_name} onBlur={blur(f)} onKeyDown={e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.target.blur() }}>
-      <FieldEditor inline field={f} value={valueOf(f)} onChange={change(f)} onOpenLink={onOpenLink} />
+      <FieldEditor inline field={f} value={valueOf(f)} onChange={change(f)} onOpenLink={onOpenLink} version={record.updated_at} />
     </div>
   )
 

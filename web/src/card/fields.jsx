@@ -6,6 +6,9 @@ import { fieldIcon, Icon } from '../ui/icons.jsx'
 import LinkSearch from '../links/LinkSearch.jsx'
 import MiniFields, { Pill } from '../links/MiniFields.jsx'
 import { createLinked, openRecord, tableMeta } from '../links/data.js'
+import Ask, { askOff } from '../ui/Ask.jsx'
+
+const ASK_SORT = 'aster.ask.sortLinks'
 
 const TEXT = new Set(['singleLineText', 'email', 'url', 'phoneNumber'])
 const MULTILINE = new Set(['multilineText', 'richText'])
@@ -18,7 +21,7 @@ const NUMBER = new Set(['number', 'currency', 'percent', 'rating'])
 // (сервер ставит новую по дате события), а показываются свежими сверху. Карточку можно перетащить.
 const SHOWN = 15
 
-function LinkField({ id, field, list, onChange, onOpenLink }) {
+function LinkField({ id, field, list, onChange, onOpenLink, version }) {
   const [adding, setAdding] = useState(false)
   const [all, setAll] = useState(false)
   const [asking, setAsking] = useState(false)
@@ -68,7 +71,7 @@ function LinkField({ id, field, list, onChange, onOpenLink }) {
         (например, «Местонахождение»), примут значение из верхней плашки.
       </Ask>}
       {adding && <LinkAdd field={field} list={list} single={single} onChange={onChange} onClose={() => setAdding(false)} />}
-      <LinkCards field={field} list={view} shown={view.slice(0, SHOWN)} onChange={editable ? put : undefined} onOpenLink={onOpenLink} />
+      <LinkCards field={field} list={view} shown={view.slice(0, SHOWN)} onChange={editable ? put : undefined} onOpenLink={onOpenLink} version={version} />
       {list.length > SHOWN && (
         <button type="button" className="link link-all" onClick={() => setAll(true)}>Показать все связанные записи ({list.length})</button>
       )}
@@ -82,7 +85,7 @@ function LinkField({ id, field, list, onChange, onOpenLink }) {
             </header>
             <div className="link-all-body link-field">
               {tools}
-              <LinkCards field={field} list={view} shown={view} onChange={editable ? put : undefined} onOpenLink={onOpenLink} />
+              <LinkCards field={field} list={view} shown={view} onChange={editable ? put : undefined} onOpenLink={onOpenLink} version={version} />
             </div>
           </div>
         </div>
@@ -107,21 +110,25 @@ function LinkAdd({ field, list, single, onChange, onClose }) {
 // Перетаскивание, как в Airtable: карточка «поднимается» и едет за указателем, остальные плавно раздвигаются;
 // отпустили — встаёт на место. Указателем, не HTML5 drag (тот в Firefox не тянет за кнопку).
 const GAP = 6
-function LinkCards({ field, list, shown, onChange, onOpenLink }) {
+function LinkCards({ field, list, shown, onChange, onOpenLink, version }) {
   const [cols, setCols] = useState([])
   const [rows, setRows] = useState({})
   const [drag, setDrag] = useState(null)   // {from, to, dy, h} — индексы в shown
   const moved = useRef(false)
   const box = useRef(null)
   const key = shown.map(v => v.id).join(',')
+  // запись сохранили (новая версия) — перечитать мини-карточки, дождавшись пересчёта формул на сервере:
+  // у добавленного оборудования «Местонахождение» уже новое, без перезагрузки страницы
+  const first = useRef(version)
   useEffect(() => {
     if (!field.link_table || !key) return
     let live = true
-    Promise.all([tableMeta(field.link_table), api(`/api/tables/${field.link_table}/records?ids=${key}`)])
+    const fresh = version !== first.current ? '&fresh=1' : ''
+    Promise.all([tableMeta(field.link_table), api(`/api/tables/${field.link_table}/records?ids=${key}${fresh}`)])
       .then(([c, rs]) => { if (live) { setCols(c); setRows(r => ({ ...r, ...Object.fromEntries(rs.map(x => [x.id, x])) })) } })
       .catch(() => {})   // нет данных — карточки только с названием
     return () => { live = false }
-  }, [field.link_table, key])
+  }, [field.link_table, key, version])
 
   const down = (e, from) => {
     if (!onChange || e.button > 0) return
@@ -182,28 +189,6 @@ function LinkCards({ field, list, shown, onChange, onOpenLink }) {
   )
 }
 
-// Вопрос перед действием, как в хороших интерфейсах: «Да / Нет» и мелко «Больше не спрашивать».
-// Отказ от вопроса помнится в браузере (aster.ask.*); вернуть — «Сбросить настройки» в меню профиля.
-const ASK_SORT = 'aster.ask.sortLinks'
-const askOff = k => { try { return localStorage.getItem(k) === 'off' } catch { return false } }
-function Ask({ title, children, yes, no, storeKey, onYes, onNo }) {
-  const [quiet, setQuiet] = useState(false)
-  const ok = () => { if (quiet) try { localStorage.setItem(storeKey, 'off') } catch { /* приватный режим */ } onYes() }
-  return (
-    <div className="card-backdrop card-stacked" onMouseDown={e => { if (e.target === e.currentTarget) onNo() }}
-      onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onNo() } }}>
-      <div className="confirm" role="alertdialog" aria-modal="true" aria-label={title}>
-        <h2>{title}</h2>
-        <p>{children}</p>
-        <label className="ask-quiet"><input type="checkbox" checked={quiet} onChange={e => setQuiet(e.target.checked)} />Больше не спрашивать</label>
-        <div className="send-foot">
-          <button type="button" className="btn" onClick={onNo}>{no}</button>
-          <button type="button" className="btn primary" autoFocus onClick={ok}>{yes}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // Дата в карточке, как в Airtable: значение в формате поля, щелчок — календарь под полем.
 // Выбор дня (у даты) или Enter — сохранить; щелчок мимо — сохранить введённое; Esc — отменить.
@@ -231,7 +216,7 @@ function DateField({ id, field, value, onChange }) {
 
 // Один редактор поля по его kind. Неэдитируемое — только показ.
 // inline — раскладка карточки Airtable (подпись слева); без него — подпись сверху (формы).
-export default function FieldEditor({ field, value, onChange, onOpenLink, inline = false }) {
+export default function FieldEditor({ field, value, onChange, onOpenLink, inline = false, version }) {
   const id = `f-${field.column_name ?? field.title}`
   const label = (
     <label htmlFor={id} className="fld-label">
@@ -243,7 +228,7 @@ export default function FieldEditor({ field, value, onChange, onOpenLink, inline
 
   // связанные записи (R11): мини-карточки, щелчок — переход к записи; правка — «+ Добавить» и «×»
   if (isLink(field)) {
-    return wrap(<LinkField id={id} field={field} list={Array.isArray(value) ? value : []} onChange={onChange} onOpenLink={onOpenLink} />)
+    return wrap(<LinkField id={id} field={field} list={Array.isArray(value) ? value : []} onChange={onChange} onOpenLink={onOpenLink} version={version} />)
   }
   if (!field.editable) {
     const choices = (field.options?.result?.options ?? field.options)?.choices
