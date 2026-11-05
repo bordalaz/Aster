@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import FieldEditor from './fields.jsx'
 import { FieldButton } from './ButtonField.jsx'
-import History from './History.jsx'
 import Comments from './Comments.jsx'
 import Files from '../files/Files.jsx'
 import { api } from '../api.js'
@@ -130,9 +129,8 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
             </div>
           )}
           {showHidden && hidden.map(render)}
-          {tableId && <History tableId={tableId} recordId={record.id} version={record.updated_at} fields={fields} />}
         </div>
-        {tableId && <Comments tableId={tableId} recordId={record.id} />}
+        {tableId && <Comments tableId={tableId} recordId={record.id} fields={fields} version={record.updated_at} />}
         </div>
       </div>
     </div>

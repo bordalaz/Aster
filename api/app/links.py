@@ -116,15 +116,66 @@ def set_links(c, names: Names, rid: int, field, ids) -> tuple[list, list] | None
     lt, side = c.execute(text("select link_table, side from at_link_meta where field_id = :f"), {"f": field.airtable_id}).one()
     me, other, pos, opos = ("src", "dst", "pos", "rpos") if side == "src" else ("dst", "src", "rpos", "pos")
     old = list(c.execute(text(f"select {other} from {lt} where {me} = :r order by {pos} nulls last, {other}"), {"r": rid}).scalars())
+    # связанные записи — события (перемещения, рейсы, ремонты): новые встают по дате события, а не в конец;
+    # уже стоящие — в порядке, который прислали (его можно менять вручную, перетаскиванием)
+    far = event_date(c, target.pg_name, target.id)
+    if far:
+        ids = place_by_date([x for x in ids if x in old], [x for x in ids if x not in old], _dates(c, far, ids))
     if old == ids:
         return None
     c.execute(text(f"delete from {lt} where {me} = :r and not ({other} = any(:i))"), {"r": rid, "i": ids})
+    own = c.execute(text("select t.id, t.pg_name from app_field f join app_table t on t.id = f.table_id where f.airtable_id = :f"),
+                    {"f": field.airtable_id}).first()
+    mine = event_date(c, own.pg_name, own.id) if own else None   # с той стороны эта запись — событие
+    my_date = _dates(c, mine, [rid]).get(rid) if mine else None
     for i, x in enumerate(ids):
         if x in old:
             c.execute(text(f"update {lt} set {pos} = :i where {me} = :r and {other} = :o"), {"i": i, "r": rid, "o": x})
+        elif mine:
+            there = list(c.execute(text(f"select {me} from {lt} where {other} = :o order by {opos} nulls last, {me}"), {"o": x}).scalars())
+            order = place_by_date(there, [rid], {**_dates(c, mine, there), rid: my_date})
+            c.execute(text(f"insert into {lt} ({me}, {other}, {pos}, {opos}) values (:r, :o, :i, :p)"),
+                      {"r": rid, "o": x, "i": i, "p": order.index(rid)})
+            for k, y in enumerate(order):
+                if y != rid:
+                    c.execute(text(f"update {lt} set {opos} = :k where {me} = :y and {other} = :o"), {"k": k, "y": y, "o": x})
         else:
             c.execute(text(f"insert into {lt} ({me}, {other}, {pos}, {opos}) values (:r, :o, :i, "
                            f"(select coalesce(max({opos}), -1) + 1 from {lt} where {other} = :o))"), {"r": rid, "o": x, "i": i})
     title, _ = names.of(o["linkedTableId"])
     named = lambda xs: [{"id": x, "name": title.get(x, "")} for x in xs]   # noqa: E731
     return named(old), named(ids)
+
+
+# ponytail: дата события — поле с таким названием (первое найденное по списку); иначе связи стоят как добавлены.
+# Поля дат «Оборудования», «Договоров» сюда не входят: оборудование в перемещении по дате ввода не сортируем.
+EVENT_DATES = ("Дата", "Начало", "Дефектоскопия от")
+
+
+def event_date(c, pg_name: str, table_id: int) -> tuple[str, str] | None:
+    """(pg-таблица, колонка даты события) или None."""
+    col = c.execute(text(
+        "select column_name from app_field where table_id = :t and kind in ('date', 'dateTime') and title = any(:n) "
+        "and not coalesce((options->>'virtual')::boolean, false) order by array_position(:n, title) limit 1"),
+        {"t": table_id, "n": list(EVENT_DATES)}).scalar()
+    return (pg_name, col) if col else None
+
+
+def _dates(c, where: tuple[str, str], ids) -> dict:
+    pg, col = where
+    return dict(c.execute(text(f'select id, "{col}" from {pg} where id = any(:i)'), {"i": list(ids)}).all())
+
+
+def place_by_date(kept: list, new: list, dates: dict) -> list:
+    """Новые — в список kept по дате события, как хранит Airtable: старые раньше, свежие в конце
+    (формулы «последнего» — местонахождение — берут конец списка). Встаёт после последней записи не новее неё;
+    без даты — в конец. Карточка показывает такие стопки свежими сверху."""
+    out = list(kept)
+    for n in new:
+        d = dates.get(n)
+        at = len(out)
+        if d is not None:
+            later = [i for i, y in enumerate(out) if dates.get(y) is not None and dates[y] > d]
+            at = later[0] if later else len(out)
+        out.insert(at, n)
+    return out

@@ -13,50 +13,123 @@ const NUMBER = new Set(['number', 'currency', 'percent', 'rating'])
 
 // Мини-карточки связей, как в Airtable: название + первые 3 поля первого общего вида связанной таблицы.
 // Правится (роль правит таблицу и видит связанную): «+ Добавить» — поиск записи, «×» на карточке — убрать связь.
+// Стопка, как в Airtable: первые SHOWN карточек, остальное — «Показать все N» (окно со всеми, там же добавить).
+// Порядок — как хранится; связи-события (link_events: перемещения, рейсы) хранятся старые→новые, как в Airtable
+// (сервер ставит новую по дате события), а показываются свежими сверху. Карточку можно перетащить.
+const SHOWN = 15
+
 function LinkField({ id, field, list, onChange, onOpenLink }) {
-  const [cols, setCols] = useState([])
-  const [rows, setRows] = useState({})
   const [adding, setAdding] = useState(false)
-  const key = list.map(v => v.id).join(',')
+  const [all, setAll] = useState(false)
   const editable = field.editable && field.link_table && onChange
   const single = !!field.options?.prefersSingleRecordLink
-  useEffect(() => {
-    if (!field.link_table || !key) return
-    let live = true
-    Promise.all([tableMeta(field.link_table), api(`/api/tables/${field.link_table}/records?ids=${key}`)])
-      .then(([c, rs]) => { if (live) { setCols(c); setRows(Object.fromEntries(rs.map(r => [r.id, r]))) } })
-      .catch(() => {})   // нет данных — карточки только с названием
-    return () => { live = false }
-  }, [field.link_table, key])
   if (!list.length && !editable) return <div id={id} className="fld-ro">—</div>
+  const rev = !!field.link_events
+  const view = rev ? [...list].reverse() : list   // как видно в карточке
+  const put = v => onChange(rev ? [...v].reverse() : v)   // обратно в хранимый порядок
   return (
     <div className="link-field">
       {editable && (!single || !list.length) && (
         <button id={id} type="button" className="btn link-add" aria-label={`Добавить: ${field.title}`} onClick={() => setAdding(true)}><Icon name="plus" size={14} />Добавить</button>
       )}
-      {adding && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onMouseDown={() => setAdding(false)} />
-          <div className="link-pop">
-            <LinkSearch field={field} exclude={list.map(v => v.id)} onClose={() => setAdding(false)}
-              onPick={n => { if (single) setAdding(false); onChange([...list, { id: n.id, name: n.name }]) }}   // несколько — поиск открыт для следующей
-              onCreate={async q => { const n = await createLinked(field, q); setAdding(false); onChange([...list, n]); openRecord(field.link_table, n.id) }} />
-          </div>
-        </>
+      {adding && <LinkAdd field={field} list={list} single={single} onChange={onChange} onClose={() => setAdding(false)} />}
+      <LinkCards field={field} list={view} shown={view.slice(0, SHOWN)} onChange={editable ? put : undefined} onOpenLink={onOpenLink} />
+      {list.length > SHOWN && (
+        <button type="button" className="link link-all" onClick={() => setAll(true)}>Показать все связанные записи ({list.length})</button>
       )}
-      {list.length > 0 && (
-        <div className="link-cards">{list.map(v => (
-          <div key={v.id} className="link-card-wrap">
-            <button type="button" className="link-card" title={v.name} onClick={() => onOpenLink?.(field.link_table, v.id)}>
-              <span className="link-card-name">{v.name || `№${v.id}`}</span>
-              <MiniFields cols={cols} row={rows[v.id]} />
-            </button>
-            {editable && <button type="button" className="link-card-x" aria-label={`Убрать ${v.name}`}
-              onClick={() => onChange(list.filter(x => x.id !== v.id))}>×</button>}
+      {all && (
+        <div className="card-backdrop card-stacked" onMouseDown={e => { if (e.target === e.currentTarget) setAll(false) }}
+          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setAll(false) } }}>
+          <div className="card link-all-box" role="dialog" aria-modal="true" aria-label={field.title}>
+            <header className="card-head">
+              <span className="card-head-title">{field.title}</span>
+              <button className="quiet" aria-label="Закрыть" autoFocus onClick={() => setAll(false)} style={{ marginLeft: 'auto' }}><Icon name="x" /></button>
+            </header>
+            <div className="link-all-body link-field">
+              {editable && <button type="button" className="btn link-add" onClick={() => setAdding(true)}><Icon name="plus" size={14} />Добавить</button>}
+              {adding && <LinkAdd field={field} list={list} single={single} onChange={onChange} onClose={() => setAdding(false)} />}
+              <LinkCards field={field} list={view} shown={view} onChange={editable ? put : undefined} onOpenLink={onOpenLink} />
+            </div>
           </div>
-        ))}</div>
+        </div>
       )}
     </div>
+  )
+}
+
+// Поиск записи для связи; несколько — поиск открыт для следующей.
+function LinkAdd({ field, list, single, onChange, onClose }) {
+  return <>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onMouseDown={onClose} />
+    <div className="link-pop">
+      <LinkSearch field={field} exclude={list.map(v => v.id)} onClose={onClose}
+        onPick={n => { if (single) onClose(); onChange([...list, { id: n.id, name: n.name }]) }}
+        onCreate={async q => { const n = await createLinked(field, q); onClose(); onChange([...list, n]); openRecord(field.link_table, n.id) }} />
+    </div>
+  </>
+}
+
+// Карточки связанных записей: поля мини-карточек — только показанных (не всех сотен); перетаскивание меняет порядок.
+function LinkCards({ field, list, shown, onChange, onOpenLink }) {
+  const [cols, setCols] = useState([])
+  const [rows, setRows] = useState({})
+  const [drag, setDrag] = useState(null)   // id перетаскиваемой
+  const [over, setOver] = useState(null)   // id, над которой держат
+  const key = shown.map(v => v.id).join(',')
+  useEffect(() => {
+    if (!field.link_table || !key) return
+    let live = true
+    Promise.all([tableMeta(field.link_table), api(`/api/tables/${field.link_table}/records?ids=${key}`)])
+      .then(([c, rs]) => { if (live) { setCols(c); setRows(r => ({ ...r, ...Object.fromEntries(rs.map(x => [x.id, x])) })) } })
+      .catch(() => {})   // нет данных — карточки только с названием
+    return () => { live = false }
+  }, [field.link_table, key])
+  const drop = (from, target) => {
+    if (from == null || target == null || from === target) return
+    const moved = list.find(v => v.id === from)
+    const rest = list.filter(v => v.id !== from)
+    const at = rest.findIndex(v => v.id === target)
+    rest.splice(list.findIndex(v => v.id === from) < list.findIndex(v => v.id === target) ? at + 1 : at, 0, moved)   // вниз — под цель, вверх — над ней
+    onChange(rest)
+  }
+  // перетаскивание указателем (не HTML5 drag: тот не тянет за кнопку в Firefox): сдвиг > 5 px — тащим, отпустили — на место цели
+  const moved = useRef(false)
+  const down = (e, id) => {
+    if (!onChange || e.button > 0) return   // только левая кнопка
+    const x0 = e.clientX, y0 = e.clientY
+    moved.current = false
+    let target = null
+    const move = ev => {
+      if (!moved.current && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return
+      if (!moved.current) { moved.current = true; setDrag(id); document.body.style.cursor = 'grabbing' }
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-link-id]')
+      target = el ? Number(el.dataset.linkId) : null
+      setOver(target)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      document.body.style.cursor = ''
+      if (moved.current) drop(id, target)
+      setDrag(null); setOver(null)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  if (!shown.length) return null
+  return (
+    <div className="link-cards">{shown.map(v => (
+      <div key={v.id} data-link-id={v.id} className={'link-card-wrap' + (onChange ? ' movable' : '') + (over === v.id && drag !== v.id ? ' drop' : '') + (drag === v.id ? ' dragging' : '')}
+        onPointerDown={e => down(e, v.id)}>
+        <button type="button" className="link-card" title={v.name}
+          onClick={() => { if (moved.current) { moved.current = false; return } onOpenLink?.(field.link_table, v.id) }}>
+          <span className="link-card-name">{v.name || `№${v.id}`}</span>
+          <MiniFields cols={cols} row={rows[v.id]} />
+        </button>
+        {onChange && <button type="button" className="link-card-x" aria-label={`Убрать ${v.name}`}
+          onPointerDown={e => e.stopPropagation()} onClick={() => onChange(list.filter(x => x.id !== v.id))}>×</button>}
+      </div>
+    ))}</div>
   )
 }
 

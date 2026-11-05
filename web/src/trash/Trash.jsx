@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import FieldEditor from '../card/fields.jsx'
-import History from '../card/History.jsx'
 import Comments from '../card/Comments.jsx'
 import Files from '../files/Files.jsx'
 import { fieldIcon, Icon } from '../ui/icons.jsx'
@@ -130,9 +129,8 @@ function TrashCard({ id, superadmin, onClose, onRestore, onPurge }) {
                   : '—'}</div>
               </div>
             ) : <FieldEditor key={f.column_name} inline field={{ ...f, editable: false }} value={rec.values[f.column_name]} />))}
-            <History tableId={rec.table_id} recordId={rec.record_id} fields={rec.fields} />
           </div>
-          <Comments tableId={rec.table_id} recordId={rec.record_id} readOnly />
+          <Comments tableId={rec.table_id} recordId={rec.record_id} fields={rec.fields} readOnly />
         </div>
       </div>
     </div>

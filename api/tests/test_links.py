@@ -78,3 +78,59 @@ def test_edit_links(loaded_fixture):
     # пользователь без права правки — 403
     assert as_user("ro", "user").patch(f"/api/tables/{tb}/records/{b2['id']}",
                                         json={"updated_at": upd, "values": {trips: []}}).status_code == 403
+
+
+def test_place_by_date():
+    from datetime import date
+    from app.links import place_by_date
+    d = {1: date(2026, 3, 1), 2: date(2026, 1, 1), 3: date(2026, 2, 1), 4: None, 5: date(2026, 1, 1)}
+    assert place_by_date([2, 1], [3], d) == [2, 3, 1]          # по дате, старые раньше, свежие в конце
+    assert place_by_date([2, 1], [5], d) == [2, 5, 1]          # та же дата — после
+    assert place_by_date([2, 1], [4], d) == [2, 1, 4]          # без даты — в конец
+    assert place_by_date([1, 2], [3], d) == [3, 1, 2]          # ручной порядок не трогаем — перед первой новее
+
+
+def test_links_to_events_by_date_and_manual_order(loaded_fixture):
+    """Связанные записи-события (с «Датой») встают по дате, а не по времени добавления; переставленное вручную
+    остаётся как есть; sort-links один раз раскладывает старые стопки по дате."""
+    computed.reset()
+    t = loaded_fixture
+    with engine.begin() as c:
+        b = ids(c, "tblBBBBBBBBBBBBBB")
+        bpg = c.execute(text("select pg_name from app_table where airtable_id = 'tblBBBBBBBBBBBBBB'")).scalar()
+        c.execute(text(f"update {bpg} set {col('fldBdate000000000')} = :d where id = :i"), {"d": "2026-01-01", "i": b["recB1000000000000"]})
+        c.execute(text(f"update {bpg} set {col('fldBdate000000000')} = :d where id = :i"), {"d": "2026-03-01", "i": b["recB2000000000000"]})
+        cc = ids(c, "tblCCCCCCCCCCCCCC")
+    u = as_user("adm", "admin")
+    tc, eq = t["tblCCCCCCCCCCCCCC"], col("fldCequip00000000")
+    b1, b2 = b["recB1000000000000"], b["recB2000000000000"]
+    rows = {r["id"]: r for r in u.get(f"/api/tables/{tc}/records").json()}
+    c1 = rows[cc["recC1000000000000"]]
+    assert [x["id"] for x in c1[eq]] == [b1]
+    r = u.patch(f"/api/tables/{tc}/records/{c1['id']}", json={"updated_at": c1["updated_at"], "values": {eq: [b1, b2]}})
+    assert r.status_code == 200, r.text
+    got = lambda: [x["id"] for x in {x["id"]: x for x in u.get(f"/api/tables/{tc}/records").json()}[c1["id"]][eq]]  # noqa: E731
+    r = u.patch(f"/api/tables/{tc}/records/{c1['id']}", json={"updated_at": r.json()["updated_at"], "values": {eq: [b2]}})
+    r = u.patch(f"/api/tables/{tc}/records/{c1['id']}", json={"updated_at": r.json()["updated_at"], "values": {eq: [b2, b1]}})
+    assert got() == [b1, b2]                                    # добавлена в конец, а встала по дате — раньше свежей
+    r = u.patch(f"/api/tables/{tc}/records/{c1['id']}", json={"updated_at": r.json()["updated_at"], "values": {eq: [b2, b1]}})
+    assert got() == [b2, b1]                                    # перетащили вручную — так и осталось
+    from app.cli import sort_links
+    assert sort_links() >= 1
+    assert got() == [b1, b2]
+    # правка со стороны события: B1 (теперь новее) снова связали с рейсом — в стопке рейса встаёт после B2
+    tb, trips = t["tblBBBBBBBBBBBBBB"], col("fldBtrips00000000")
+    with engine.begin() as c:
+        c.execute(text(f"update {bpg} set {col('fldBdate000000000')} = :d where id = :i"), {"d": "2026-05-01", "i": b1})
+    rb = lambda: {x["id"]: x for x in u.get(f"/api/tables/{tb}/records").json()}[b1]  # noqa: E731
+    r = u.patch(f"/api/tables/{tb}/records/{b1}", json={"updated_at": rb()["updated_at"], "values": {trips: []}})
+    assert r.status_code == 200, r.text
+    assert got() == [b2]
+    r = u.patch(f"/api/tables/{tb}/records/{b1}", json={"updated_at": rb()["updated_at"], "values": {trips: [c1["id"]]}})
+    assert r.status_code == 200, r.text
+    assert got() == [b2, b1]
+    with engine.begin() as c:   # а если B1 старше B2 — встаёт перед ним, хоть добавлена последней
+        c.execute(text(f"update {bpg} set {col('fldBdate000000000')} = :d where id = :i"), {"d": "2025-12-01", "i": b1})
+    r = u.patch(f"/api/tables/{tb}/records/{b1}", json={"updated_at": rb()["updated_at"], "values": {trips: []}})
+    r = u.patch(f"/api/tables/{tb}/records/{b1}", json={"updated_at": rb()["updated_at"], "values": {trips: [c1["id"]]}})
+    assert got() == [b1, b2]
