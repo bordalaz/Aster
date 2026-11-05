@@ -98,3 +98,40 @@ test('связь: «Создать запись» — новая запись в
   expect(posts[0].values).toEqual({ name: 'ГПН' })
   expect(opened).toHaveBeenCalledWith({ tableId: 7, id: 50 })   // карточка новой записи — поверх
 })
+
+test('стопка связей: видно 15, «Показать все N» — окно со всеми; карточку можно перетащить', async () => {
+  const { fireEvent, within } = await import('@testing-library/react')
+  const field = { kind: 'multipleRecordLinks', title: 'Перемещения', column_name: 'x', link_table: 1, editable: true, options: { virtual: true } }
+  const list = Array.from({ length: 35 }, (_, i) => ({ id: i + 1, name: `П-${i + 1}` }))
+  const onChange = vi.fn()
+  render(<FieldEditor inline field={field} value={list} onChange={onChange} />)
+  expect(screen.getAllByRole('button', { name: /^Убрать П-/ })).toHaveLength(15)
+  expect(screen.queryByText('П-16')).toBeNull()
+  await userEvent.click(screen.getByRole('button', { name: 'Показать все связанные записи (35)' }))
+  const box = screen.getByRole('dialog', { name: 'Перемещения' })
+  expect(within(box).getAllByRole('button', { name: /^Убрать П-/ })).toHaveLength(35)
+  // П-3 перетащили на место П-1 — встаёт первой
+  const wrap = name => within(box).getByText(name).closest('.link-card-wrap')
+  document.elementFromPoint = () => wrap('П-1')   // jsdom не раскладывает — под указателем П-1
+  fireEvent.pointerDown(wrap('П-3'), { button: 0, clientX: 10, clientY: 100 })
+  fireEvent.pointerMove(window, { clientX: 10, clientY: 10 })
+  fireEvent.pointerUp(window)
+  expect(onChange.mock.calls.at(-1)[0].slice(0, 4).map(v => v.name)).toEqual(['П-3', 'П-1', 'П-2', 'П-4'])
+})
+
+test('связи-события (link_events) — свежие сверху; перетаскивание уходит в хранимом порядке (старые→новые)', async () => {
+  const { fireEvent } = await import('@testing-library/react')
+  const field = { kind: 'multipleRecordLinks', title: 'Перемещения', column_name: 'x', link_table: 1, editable: true, link_events: true, options: { virtual: true } }
+  const list = [{ id: 1, name: 'старое' }, { id: 2, name: 'среднее' }, { id: 3, name: 'свежее' }]
+  const onChange = vi.fn()
+  render(<FieldEditor inline field={field} value={list} onChange={onChange} />)
+  const names = [...document.querySelectorAll('.link-card-name')].map(x => x.textContent)
+  expect(names).toEqual(['свежее', 'среднее', 'старое'])
+  const wrap = name => screen.getByText(name).closest('.link-card-wrap')
+  document.elementFromPoint = () => wrap('свежее')
+  fireEvent.pointerDown(wrap('старое'), { button: 0, clientX: 10, clientY: 100 })
+  fireEvent.pointerMove(window, { clientX: 10, clientY: 10 })
+  fireEvent.pointerUp(window)
+  // на экране: старое, свежее, среднее → хранится наоборот
+  expect(onChange.mock.calls.at(-1)[0].map(v => v.name)).toEqual(['среднее', 'свежее', 'старое'])
+})

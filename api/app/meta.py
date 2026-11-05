@@ -49,5 +49,9 @@ def fields(table_id: int, user: dict = Depends(active_user)):
         # editable — с учётом роли: интерфейс по нему решает, давать ли правку;
         # link_table — куда ведёт ссылка (None — таблица скрыта от роли)
         # связи правятся, если видна связанная таблица (правка меняет и её обратное поле)
+        # link_events — связанные записи — события с датой (перемещения, рейсы): карточка показывает их свежими сверху
+        pgs = dict(c.execute(text("select id, pg_name from app_table")).all())
+        events = {col for col, t in targets.items() if t is not None and links.event_date(c, pgs[t], t)}
         return [{**r._asdict(), "editable": edit and (r.editable or (r.kind == links.LINK and targets.get(r.column_name) is not None)),
-                 **({"link_table": targets[r.column_name]} if r.column_name in targets else {})} for r in rows]
+                 **({"link_table": targets[r.column_name]} if r.column_name in targets else {}),
+                 **({"link_events": True} if r.column_name in events else {})} for r in rows]
