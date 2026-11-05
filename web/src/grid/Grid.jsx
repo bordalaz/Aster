@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ButtonRun } from '../card/ButtonField.jsx'
 import { CompactSelection, DataEditor, GridCellKind } from '@glideapps/glide-data-grid'
 import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
@@ -10,12 +10,27 @@ import { renderers, rownumHit, ROWNUM_W } from './renderers.js'
 import { fieldIcon, headerIcons, Icon } from '../ui/icons.jsx'
 import { linkNames, matchLinkPaste } from '../links/data.js'
 
+// Меню у курсора, как в Airtable: не влезает снизу — встаёт над курсором, справа — левее; всегда в пределах окна.
+function useFit(at) {
+  const ref = useRef(null)
+  const [pos, setPos] = useState({ left: at.x, top: at.y })
+  useLayoutEffect(() => {
+    const { width: w, height: h } = ref.current.getBoundingClientRect()
+    const W = window.innerWidth, H = window.innerHeight, m = 8
+    const left = at.x + w > W - m ? Math.max(m, at.x - w) : at.x
+    const top = at.y + h > H - m ? Math.max(m, Math.min(at.y - h, H - m - h)) : at.y
+    setPos({ left, top })
+  }, [at.x, at.y])
+  return [ref, pos]
+}
+
 function GroupMenu({ at, onClose, onToggle, onExpandAll, onCollapseAll }) {
   const run = fn => () => { fn(); onClose() }
+  const [ref, pos] = useFit(at)
   return (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={e => { if (e.button === 0) onClose() }} onContextMenu={e => e.preventDefault()} />
-      <div className="pop menu" role="menu" style={{ position: 'fixed', left: at.x, top: at.y, zIndex: 31 }}
+      <div ref={ref} className="pop menu" role="menu" style={{ position: 'fixed', ...pos, zIndex: 31 }}
         onKeyDown={e => { if (e.key === 'Escape') onClose() }}>
         <button role="menuitem" autoFocus onClick={run(onToggle)}>
           <Icon name={at.collapsed ? 'expand' : 'collapse'} />{at.collapsed ? 'Развернуть группу' : 'Свернуть группу'}
@@ -30,10 +45,11 @@ function GroupMenu({ at, onClose, onToggle, onExpandAll, onCollapseAll }) {
 // ПКМ по строке — меню записи, как в Airtable; по отмеченным строкам (больше одной) — действия над ними.
 function RowMenu({ at, onClose }) {
   const run = fn => () => { onClose(); fn() }
+  const [ref, pos] = useFit(at)
   return (
     <>
       <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={e => { if (e.button === 0) onClose() }} onContextMenu={e => { e.preventDefault(); onClose() }} />
-      <div className="pop menu" role="menu" aria-label="Действия с записью" style={{ position: 'fixed', left: at.x, top: at.y, zIndex: 31 }}
+      <div ref={ref} className="pop menu" role="menu" aria-label="Действия с записью" style={{ position: 'fixed', ...pos, zIndex: 31 }}
         onKeyDown={e => { if (e.key === 'Escape') onClose() }}>
         {at.items.map((it, i) => (it === '-' ? <hr key={i} />
           : <button key={it.label} role="menuitem" autoFocus={i === 0} className={it.danger ? 'danger' : undefined} onClick={run(it.run)}><Icon name={it.icon} />{it.label}</button>))}
@@ -82,7 +98,7 @@ function onText(cell, x) {
 // canReorder — можно двигать строки (вид без сортировки, правит тот, кто может менять вид); onReorder(ids) — новый порядок.
 // onInsert(row, 'above'|'below'|null), onDuplicate(row), onSend(rows, columns), onDelete(rows) — пункты меню записи.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd, collapseKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend, onDelete }) {
+  search = '', exportRef, onAdd, collapseKey, scrollKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend, onDelete }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -123,6 +139,18 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     if (collapseKey) try { localStorage.setItem(collapseKey, JSON.stringify([...collapsed])) } catch { /* приватный режим */ }
   }, [collapseKey, collapsed])
   const items = useMemo(() => groupRows(shownRows, groupFields, collapsed), [shownRows, groupFields, collapsed])
+  // Прокрутка вида помнится у пользователя в браузере, как в Airtable: вернулся (и после перезагрузки) — на том же месте.
+  const [scroll0] = useState(() => { try { return JSON.parse(localStorage.getItem(scrollKey)) ?? {} } catch { return {} } })
+  const gridBox = useRef(null)
+  useEffect(() => {
+    const el = scrollKey && gridBox.current?.querySelector('.dvn-scroller')
+    if (!el) return
+    let t = null
+    const save = () => { t = null; try { localStorage.setItem(scrollKey, JSON.stringify({ x: el.scrollLeft, y: el.scrollTop })) } catch { /* приватный режим */ } }
+    const on = () => { clearTimeout(t); t = setTimeout(save, 200) }
+    el.addEventListener('scroll', on, { passive: true })
+    return () => { el.removeEventListener('scroll', on); if (t) { clearTimeout(t); save() } }   // ушли сразу после прокрутки — тоже запомнить
+  }, [scrollKey])
   // Итоги как у Airtable по умолчанию: суммы только у числовых полей, остальное пусто; слева — число записей.
   // Итоги внизу — по настройке вида, как в Airtable; у «Все записи» (своего вида в Airtable нет) — суммы чисел.
   const totals = useMemo(() => cols.map(c => (config.summary ? summarize(c, shownRows, config.summary[c.column_name])
@@ -300,7 +328,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       <span data-testid="col-order" style={{ display: 'none' }}>{cols.map(c => c.column_name).join(',')}</span>
       <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
       {/* ПКМ ловим на контейнере: в Glide 6.0.3 onCellContextMenu для мыши не срабатывает (слушатель вешается до появления элемента) */}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}
+      <div ref={gridBox} style={{ flex: 1, minHeight: 0, position: 'relative' }}
         onPointerDownCapture={() => { downCell.current = selection.current?.cell ?? null }}
         onMouseDownCapture={e => {
           const [ci, ri] = hovered.current ?? []
@@ -346,6 +374,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
             onCollapseAll={() => setCollapsed(new Set(allGroupIds()))} />
         )}
         <DataEditor
+          scrollOffsetX={scroll0.x} scrollOffsetY={scroll0.y}
           theme={THEME}
           headerIcons={headerIcons}
           customRenderers={renderers}

@@ -246,7 +246,8 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             onDuplicate={fields.some(f => f.editable) ? duplicate : undefined}
             onSend={(rs, columns) => setSending({ rows: rs, columns })}
             onDelete={fields.some(f => f.editable) ? rs => (rs.length > 1 ? setAsking(rs) : remove(rs)) : undefined}
-            collapseKey={`aster.collapsed.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`} />}
+            collapseKey={`aster.collapsed.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`}
+            scrollKey={`aster.scroll.${user?.id ?? 0}.${tableId}.${current ?? 'all'}`} />}
         </div>
       </div>
       {asking && (
@@ -267,8 +268,6 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
           <button type="button" onClick={restore}>Отменить</button>
         </div>
       )}
-      {sending && <SendDialog tableId={tableId} table={title} rows={sending.rows} columns={sending.columns} fields={fields}
-        user={user} onClose={() => setSending(null)} />}
       {open && (() => {
         const record = rows.find(r => r.id === open.id) ?? open
         const i = order.indexOf(open.id)
@@ -291,9 +290,13 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             onClose={() => setOpen(null)}
             onOpenLink={openRecord}
             onChanged={refresh}
+            onSend={() => setSending({ rows: [record], columns: visibleColumns(fields, primaryField, config.columns).map(c => c.column_name) })}
+            onDelete={fields.some(f => f.editable) ? () => remove([record]) : undefined}
           />
         )
       })()}
+      {sending && <SendDialog tableId={tableId} table={title} rows={sending.rows} columns={sending.columns} fields={fields}
+        user={user} onClose={() => setSending(null)} />}
       {press && (() => {
         const row = rows.find(r => r.id === press.row.id) ?? press.row
         return <ButtonDialog field={press.field} row={row} tableId={tableId} fields={fields} primaryField={primaryField}

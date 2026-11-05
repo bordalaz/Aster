@@ -15,8 +15,16 @@ const IMMEDIATE = new Set(['checkbox', 'singleSelect', 'multipleSelects', 'date'
 // shown — колонки текущего вида по порядку (без него — все поля); onPrev/onNext — соседние записи сетки.
 // depth > 0 — карточка связанной записи поверх других (стопкой, ниже предыдущей); from — её таблица:
 // подпись «Запись из …» и линия от вкладки этой таблицы к карточке, как в Airtable.
-export default function Card({ tableId, record, fields, shown, primaryField, onSave, onClose, onPrev, onNext, onOpenLink, onChanged, depth = 0, from }) {
+// Печать — только эта карточка целиком (без прокрутки), остальное страницы прячет @media print.
+function printCard(el) {
+  el.classList.add('printing')
+  window.addEventListener('afterprint', () => el.classList.remove('printing'), { once: true })
+  window.print()
+}
+
+export default function Card({ tableId, record, fields, shown, primaryField, onSave, onClose, onPrev, onNext, onOpenLink, onChanged, onSend, onDelete, depth = 0, from }) {
   const [draft, setDraft] = useState({})
+  const [menu, setMenu] = useState(false)   // «⋯» в шапке, как в Airtable: отправить, печать, удалить
   const [error, setError] = useState('')
   const [showHidden, setShowHidden] = useState(false)
   const box = useRef(null)
@@ -91,7 +99,19 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
           <button className="quiet" aria-label="Предыдущая запись" disabled={!onPrev} onClick={onPrev}><Icon name="caretDown" size={14} style={{ transform: 'rotate(180deg)' }} /></button>
           <button className="quiet" aria-label="Следующая запись" disabled={!onNext} onClick={onNext}><Icon name="caretDown" size={14} /></button>
           <span className="card-head-title">{title}</span>
-          <button className="quiet" aria-label="Закрыть" onClick={onClose} style={{ marginLeft: 'auto' }}><Icon name="x" /></button>
+          <span style={{ marginLeft: 'auto', position: 'relative' }}>
+            <button className="quiet" aria-label="Ещё" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}><Icon name="dots" /></button>
+            {menu && <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setMenu(false)} />
+              <div className="pop menu" role="menu" aria-label="Действия с записью" style={{ right: 0, top: 'calc(100% + 4px)', zIndex: 31, minWidth: 180 }}
+                onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false) } }}>
+                {onSend && <button role="menuitem" autoFocus onClick={() => { setMenu(false); onSend() }}><Icon name="send" />Отправить запись…</button>}
+                <button role="menuitem" autoFocus={!onSend} onClick={() => { setMenu(false); printCard(box.current) }}><Icon name="printer" />Распечатать запись…</button>
+                {onDelete && <button role="menuitem" onClick={() => { setMenu(false); onDelete() }}><Icon name="trash" />Удалить запись</button>}
+              </div>
+            </>}
+          </span>
+          <button className="quiet" aria-label="Закрыть" onClick={onClose}><Icon name="x" /></button>
         </header>
         <div className="card-main">
         <div className="card-body">
