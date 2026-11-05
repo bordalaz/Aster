@@ -32,14 +32,18 @@ def _field_config(conn, key: str) -> dict:
 
 
 def _field_meta(conn, field_at: str):
+    memo = conn.info.get("aster_meta")   # compute_all грузит метаданные один раз на расчёт
+    if memo is not None:
+        return memo.get(field_at)
     return conn.execute(text(
         "select f.kind, f.column_name, f.options, t.pg_name, t.airtable_id as t_at "
         "from app_field f join app_table t on t.id = f.table_id where f.airtable_id = :f"
     ), {"f": field_at}).first()
 
 
-def _pairs(conn, link_fld: str) -> tuple[list, str]:
-    """[(owner_at, linked_at)] связи link_fld в порядке ячейки Airtable + airtable_id связанной таблицы."""
+def _pairs(conn, link_fld: str, owners=None, linked=None) -> tuple[list, str]:
+    """[(owner_at, linked_at)] связи link_fld в порядке ячейки Airtable + airtable_id связанной таблицы.
+    owners / linked — только пары этих записей (airtable_id) с той или другой стороны."""
     link = conn.execute(text(
         "select link_table, side from at_link_meta where field_id = :f"
     ), {"f": link_fld}).first()
@@ -49,11 +53,12 @@ def _pairs(conn, link_fld: str) -> tuple[list, str]:
     me, other, order = ("src", "dst", "pos") if link.side == "src" else ("dst", "src", "rpos")
     m = _field_meta(conn, link_fld)
     linked_at = _as_dict(m.options)["linkedTableId"]
+    where = " and ".join(w for w, v in (("o.airtable_id = any(:o)", owners), ("lk.airtable_id = any(:l)", linked)) if v is not None)
     rows = conn.execute(text(
         f"select o.airtable_id as owner_at, lk.airtable_id as linked_at from {link.link_table} p "
         f"join {m.pg_name} o on o.id = p.{me} join {table_name(linked_at)} lk on lk.id = p.{other} "
-        f"order by o.airtable_id, p.{order}"
-    )).all()
+        + (f"where {where} " if where else "") + f"order by o.airtable_id, p.{order}"
+    ), {"o": list(owners or ()), "l": list(linked or ())}).all()
     return [(r.owner_at, r.linked_at) for r in rows], linked_at
 
 
@@ -173,11 +178,18 @@ def _condition_fields(filt: dict) -> list:
     return [filt["operands"][0]]
 
 
-def _linked_values(conn, cfg: dict, src: dict | None = None, cache: dict | None = None) -> "OrderedDict[str, list]":
+def _owners(conn, tbl: str, only) -> list:
+    """airtable_id записей таблицы; only — только эти (и только существующие)."""
+    if only is None:
+        return list(conn.execute(text(f"select airtable_id from {tbl}")).scalars())
+    return list(conn.execute(text(f"select airtable_id from {tbl} where airtable_id = any(:o)"), {"o": list(only)}).scalars())
+
+
+def _linked_values(conn, cfg: dict, src: dict | None = None, cache: dict | None = None, only=None) -> "OrderedDict[str, list]":
     """{airtable_id owner-записи: [значения источника у связанных записей в порядке ячейки]}.
-    src — готовые значения источника {запись: значение} (по умолчанию — поле src_fld)."""
+    src — готовые значения источника {запись: значение} (по умолчанию — поле src_fld); only — только эти записи."""
     cache = Values() if cache is None else cache
-    pairs, _ = _pairs(conn, cfg["link_fld"])
+    pairs, _ = _pairs(conn, cfg["link_fld"], owners=only)
     if src is None:
         src = _field_values(conn, cfg["src_fld"], cache)
     filters = cfg["options"].get("filters")
@@ -196,7 +208,7 @@ def _linked_values(conn, cfg: dict, src: dict | None = None, cache: dict | None 
     for owner, linked in pairs:
         out.setdefault(owner, []).append(src.get(linked))
     # owner-записи без связей тоже должны присутствовать (агрегат пустого списка)
-    for (owner_at,) in conn.execute(text(f"select airtable_id from {cfg['owner_tbl']}")):
+    for owner_at in _owners(conn, cfg["owner_tbl"], only):
         out.setdefault(owner_at, [])
     return out
 
@@ -262,10 +274,10 @@ def _out(v):
     return _plain(v)
 
 
-def compute_field(conn, key: str, func: str, cache: dict | None = None) -> dict:
+def compute_field(conn, key: str, func: str, cache: dict | None = None, only=None) -> dict:
     """{airtable_id: вычисленное значение} для rollup-поля key с функцией func."""
     cfg = _field_config(conn, key)
-    per_owner = _linked_values(conn, cfg, cache=cache)
+    per_owner = _linked_values(conn, cfg, cache=cache, only=only)
     return {owner_at: _out(_aggregate(vals, func)) for owner_at, vals in per_owner.items()}
 
 
@@ -276,7 +288,7 @@ def _refs(node) -> set:
     return set().union(*(_refs(k) for k in kids)) if kids else set()
 
 
-def compute_formula(conn, key: str, today, cache: dict | None = None) -> dict:
+def compute_formula(conn, key: str, today, cache: dict | None = None, only=None) -> dict:
     """{airtable_id: значение} formula-поля key. Входы — как есть в базе (колонка, at_computed, связь):
     сверка каждой формулы изолирована, ошибка одной не тянется в зависящие от неё."""
     cfg = _field_config(conn, key)
@@ -285,7 +297,7 @@ def compute_formula(conn, key: str, today, cache: dict | None = None) -> dict:
     vals = {r: _field_values(conn, r, cache) for r in _refs(tree)}
     rtype = (cfg["options"].get("result") or {}).get("type")
     return {rec: to_api(evaluate(tree, lambda f, rec=rec: vals[f].get(rec), today), rtype)
-            for (rec,) in conn.execute(text(f"select airtable_id from {cfg['owner_tbl']}"))}
+            for rec in _owners(conn, cfg["owner_tbl"], only)}
 
 
 def _api(v):
@@ -295,7 +307,7 @@ def _api(v):
     return _plain(v)
 
 
-def compute_lookup(conn, key: str, cache: dict | None = None) -> dict:
+def compute_lookup(conn, key: str, cache: dict | None = None, only=None) -> dict:
     """{airtable_id: [значения]} lookup-поля: значения источника у связанных записей, расплющенные.
     Источник-связь API отдаёт id записей — их и возвращаем."""
     cfg = _field_config(conn, key)
@@ -305,22 +317,25 @@ def compute_lookup(conn, key: str, cache: dict | None = None) -> dict:
         for owner, linked in _pairs(conn, cfg["src_fld"])[0]:
             src.setdefault(owner, []).append(linked)
     out = {}
-    for owner, vals in _linked_values(conn, cfg, src, cache).items():
+    for owner, vals in _linked_values(conn, cfg, src, cache, only).items():
         flat = [x for v in vals for x in (v if isinstance(v, list) else [v])]
         out[owner] = [_api(x) for x in flat if x is not None]
     return out
 
 
-def compute_count(conn, key: str, cache: dict | None = None) -> dict:
+def compute_count(conn, key: str, cache: dict | None = None, only=None) -> dict:
     """{airtable_id: число связанных записей} count-поля (с фильтром, если задан)."""
     cfg = _field_config(conn, key)
-    return {owner: len(vals) for owner, vals in _linked_values(conn, cfg, src={}, cache=cache).items()}
+    return {owner: len(vals) for owner, vals in _linked_values(conn, cfg, src={}, cache=cache, only=only).items()}
 
 
 COMPUTED_KINDS = ("formula", "rollup", "multipleLookupValues", "count")
 
 
 def _primary_of(conn, table_at: str) -> str:
+    memo = conn.info.get("aster_primary")
+    if memo is not None:
+        return memo.get(table_at)
     return conn.execute(text(
         "select f.airtable_id from app_field f join app_table t on t.id = f.table_id "
         "where t.airtable_id = :t and f.column_name = t.primary_field"), {"t": table_at}).scalar()
@@ -347,43 +362,132 @@ def _deps(conn, opts: dict, kind: str) -> set:
     return out
 
 
-def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None, changed: set | None = None) -> dict:
+def compute_all(conn, today, aggs: dict | None = None, prev: dict | None = None, changed: set | None = None,
+                touched: dict | None = None, new: dict | None = None, prev_today=None) -> dict:
     """Все вычисляемые поля базы от сырых данных, по цепочке зависимостей (at_computed не читается).
     → {field_id: {airtable_id записи: значение в виде API}}. Битые и неописанные в aggs rollup — пустые.
     prev + changed (airtable_id изменённых сырых полей) — пересчёт только зависящих от них полей
     (прямо или по цепочке); остальные берутся из prev. Формулы с TODAY()/NOW() считаются всегда.
-    Вычисляемое поле в changed считается заново (новая запись в его таблице)."""
-    from graphlib import TopologicalSorter
+    Вычисляемое поле в changed считается заново (новая запись в его таблице).
+    prev + touched {поле: {записи}} (+ new {таблица: {новые записи}}) — пересчёт только задетых записей:
+    дальше по цепочке идут лишь записи, чьё значение изменилось. Формулы с TODAY()/NOW() — целиком,
+    только если сменился день (prev_today)."""
+    meta = {r.airtable_id: r for r in conn.execute(text(
+        "select f.airtable_id, f.kind, f.column_name, f.options, t.pg_name, t.airtable_id as t_at "
+        "from app_field f join app_table t on t.id = f.table_id where f.airtable_id is not null"))}
+    primary = dict(conn.execute(text(
+        "select t.airtable_id, f.airtable_id from app_table t join app_field f "
+        "on f.table_id = t.id and f.column_name = t.primary_field where t.airtable_id is not null")).all())
+    conn.info["aster_meta"], conn.info["aster_primary"] = meta, primary
+    try:
+        if prev is not None and touched is not None:
+            return _compute_records(conn, today, aggs, prev, touched, new or {}, prev_today)
+        return _compute_fields(conn, today, aggs, prev, changed)
+    finally:
+        conn.info.pop("aster_meta", None)
+        conn.info.pop("aster_primary", None)
 
-    from .rollup_aggs import AGG
-    aggs = AGG if aggs is None else aggs
+
+def _graph(conn):
     rows = conn.execute(text(
         "select f.airtable_id, f.kind, f.options, t.title || '.' || f.title as key "
         "from app_field f join app_table t on t.id = f.table_id where f.kind = any(:k)"),
         {"k": list(COMPUTED_KINDS)}).all()
     info = {r.airtable_id: r for r in rows}
     deps = {fid: _deps(conn, _as_dict(r.options), r.kind) for fid, r in info.items()}
+    return info, deps
+
+
+def _compute_one(conn, r, today, aggs, cache, only=None) -> dict:
+    if _as_dict(r.options).get("isValid") is False:
+        return {}
+    if r.kind == "formula":
+        return compute_formula(conn, r.key, today, cache, only)
+    if r.kind == "multipleLookupValues":
+        return compute_lookup(conn, r.key, cache, only)
+    if r.kind == "count":
+        return compute_count(conn, r.key, cache, only)
+    func = aggs.get(r.key)
+    return {} if func in (None, "INVALID") else compute_field(conn, r.key, func, cache, only)
+
+
+def _is_clock(r) -> bool:
+    return r.kind == "formula" and any(w in _as_dict(r.options).get("formula", "").upper() for w in ("TODAY(", "NOW("))
+
+
+def _compute_fields(conn, today, aggs, prev, changed) -> dict:
+    from graphlib import TopologicalSorter
+
+    from .rollup_aggs import AGG
+    aggs = AGG if aggs is None else aggs
+    info, deps = _graph(conn)
     graph = {fid: {d for d in ds if d in info} for fid, ds in deps.items()}
     cache = Values(computed={})
     dirty = None if prev is None or changed is None else set(changed)
     for fid in TopologicalSorter(graph).static_order():
         r = info[fid]
         if dirty is not None:
-            clock = r.kind == "formula" and any(w in _as_dict(r.options).get("formula", "").upper() for w in ("TODAY(", "NOW("))
-            if fid in prev and not clock and fid not in changed and not deps[fid] & dirty:
+            if fid in prev and not _is_clock(r) and fid not in changed and not deps[fid] & dirty:
                 cache.computed[fid] = prev[fid]
                 continue
             dirty.add(fid)
-        if _as_dict(r.options).get("isValid") is False:
-            out = {}
+        cache.computed[fid] = _compute_one(conn, r, today, aggs, cache)
+    return cache.computed
+
+
+def _compute_records(conn, today, aggs, prev, touched, new, prev_today) -> dict:
+    """Пересчёт по записям: у каждого вычисляемого поля — только записи, задетые правкой
+    (своей или по цепочке, через связи — у связанных записей)."""
+    from graphlib import TopologicalSorter
+
+    from .rollup_aggs import AGG
+    aggs = AGG if aggs is None else aggs
+    info, deps = _graph(conn)
+    graph = {fid: {d for d in ds if d in info} for fid, ds in deps.items()}
+    cache = Values(computed={})
+    dirty: dict = {}   # поле → записи, чьё значение изменилось
+
+    def recs(f) -> set:
+        if f in dirty:
+            return dirty[f]
+        m = _field_meta(conn, f)
+        dirty[f] = set()   # защита от цикла
+        if m is None:
+            return dirty[f]
+        out = set(touched.get(f, ())) | set(new.get(m.t_at, ()))
+        if m.kind == "multipleRecordLinks":   # ячейка связи — имена: сменилось имя у связанной записи
+            far = recs(_primary_of(conn, _as_dict(m.options)["linkedTableId"]))
+            if far:
+                out |= {o for o, _ in _pairs(conn, f, linked=far)[0]}
+        dirty[f] = out
+        return out
+
+    for fid in TopologicalSorter(graph).static_order():
+        r = info[fid]
+        m = _field_meta(conn, fid)
+        o = _as_dict(r.options)
+        if fid not in prev or (_is_clock(r) and today != prev_today):
+            only = None
         elif r.kind == "formula":
-            out = compute_formula(conn, r.key, today, cache)
-        elif r.kind == "multipleLookupValues":
-            out = compute_lookup(conn, r.key, cache)
-        elif r.kind == "count":
-            out = compute_count(conn, r.key, cache)
+            only = set(new.get(m.t_at, ())).union(*(recs(x) for x in _refs(parse(o["formula"]))))
         else:
-            func = aggs.get(r.key)
-            out = {} if func in (None, "INVALID") else compute_field(conn, r.key, func, cache)
-        cache.computed[fid] = out
+            link, src = o.get("recordLinkFieldId"), o.get("fieldIdInLinkedTable")
+            only = set(new.get(m.t_at, ())) | (recs(link) if link else set())
+            far = set().union(*(recs(x) for x in [src, *_condition_fields(o.get("filters"))] if x))
+            if far and link:
+                only |= {ow for ow, _ in _pairs(conn, link, linked=far)[0]}
+        if only is not None and not only:
+            cache.computed[fid] = prev[fid]
+            dirty[fid] = set()
+            continue
+        part = _compute_one(conn, r, today, aggs, cache, only)
+        if only is None:
+            cache.computed[fid] = part
+            old = prev.get(fid, {})
+            dirty[fid] = {k for k in set(part) | set(old) if part.get(k) != old.get(k)}
+        else:
+            merged = dict(prev[fid])
+            merged.update(part)
+            cache.computed[fid] = merged
+            dirty[fid] = {k for k in only if part.get(k) != prev[fid].get(k)}
     return cache.computed

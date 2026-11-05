@@ -449,17 +449,64 @@ def test_incremental_link_edit_and_new_record(tmp_path, monkeypatch):
     assert computed.values()["fldNcount00000000"] == {"recN1": 2}
     full_calls = []
     real = compute.compute_all
-    monkeypatch.setattr(computed, "compute_all", lambda *a, **k: (full_calls.append(k.get("changed")), real(*a, **k))[1])
+    monkeypatch.setattr(computed, "compute_all", lambda *a, **k: (full_calls.append(k.get("touched")), real(*a, **k))[1])
     with engine.begin() as c:
         tid, col = c.execute(text("select table_id, column_name from app_field where airtable_id = 'fldOnom0000000000'")).one()
         lt, side = c.execute(text("select link_table, side from at_link_meta where field_id = 'fldOnom0000000000'")).one()
         me = "src" if side == "src" else "dst"
         c.execute(text(f"delete from {lt} where {me} = 1"))          # INV-1 больше не связан с Кольцом
-        c.execute(text("insert into app_change (table_id, record_id, column_name) values (:t, 1, :c)"), {"t": tid, "c": col})
+        n1 = c.execute(text("select t.pg_name from app_table t where t.airtable_id = 'tblNNNNNNNNNNNNNN'")).scalar()
+        n1 = c.execute(text(f"select id from {n1} where airtable_id = 'recN1'")).scalar()
+        # в журнале связи — прежние связанные записи, как пишет правка (links.set_links)
+        c.execute(text("insert into app_change (table_id, record_id, column_name, old) values (:t, 1, :c, cast(:o as jsonb))"),
+                  {"t": tid, "c": col, "o": f'[{{"id": {n1}, "name": "Кольцо"}}]'})
         tbl = c.execute(text("select pg_name from app_table where id = :t"), {"t": tid}).scalar()
         c.execute(text(f"insert into {tbl} (airtable_id) values ('recO3')"))
     computed.invalidate(table=tid)
     computed.wait()
-    assert full_calls[-1] is not None                                   # не полный расчёт
+    assert full_calls[-1] is not None                                   # не полный расчёт — по записям
     assert computed.values()["fldNcount00000000"] == {"recN1": 1}
     assert computed.values()["fldOcount00000000"] == {"recO1": 0, "recO2": 1, "recO3": 0}   # новая — со значением
+
+
+def test_record_level_matches_full_after_link_move(tmp_path):
+    """Оборудование перевели на другую Номенклатуру: пересчёт только задетых записей (по цепочке через
+    обе стороны связи) даёт то же, что полный расчёт; незадетые записи берутся из prev."""
+    from datetime import date
+    from migrate.compute import compute_all
+    schema, records = _two_tables()
+    schema[0]["fields"] += [
+        {"id": "fldNcount00000000", "name": "Штук", "type": "count", "options": {"isValid": True, "recordLinkFieldId": "fldNequip00000000"}},
+        {"id": "fldNlabel00000000", "name": "Подпись", "type": "formula", "options": {
+            "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+            "formula": '{fldNnm00000000000} & ": " & {fldNcount00000000}'}}]
+    schema[1]["fields"].append({"id": "fldOname000000000", "name": "Имя", "type": "formula", "options": {
+        "isValid": True, "referencedFieldIds": [], "result": {"type": "singleLineText"},
+        "formula": '{fldOnom0000000000} & "_" & {fldOprice00000000}'}})
+    records["tblNNNNNNNNNNNNNN"].append({"id": "recN2", "createdTime": "2023-01-01T00:00:00.000Z",
+                                         "fields": {"fldNnm00000000000": "Втулка", "fldNprice00000000": 9}})
+    records["tblOOOOOOOOOOOOOO"].append({"id": "recO3", "createdTime": "2023-01-03T00:00:00.000Z",
+                                         "fields": {"fldOinv0000000000": "INV-3"}})
+    write_snapshot(tmp_path, schema, records)
+    from app.db import engine
+    aggs = {"Оборудование.ЦенаИзНом": "SUM"}
+    day = date(2026, 10, 31)
+    with engine.begin() as c:
+        apply_schema(c, schema)
+        load_snapshot(c, tmp_path)
+        prev = compute_all(c, day, aggs=aggs)
+        lt, side = c.execute(text("select link_table, side from at_link_meta where field_id = 'fldOnom0000000000'")).one()
+        me, other = ("src", "dst") if side == "src" else ("dst", "src")
+        npg = c.execute(text("select pg_name from app_table where airtable_id = 'tblNNNNNNNNNNNNNN'")).scalar()
+        opg = c.execute(text("select pg_name from app_table where airtable_id = 'tblOOOOOOOOOOOOOO'")).scalar()
+        n2 = c.execute(text(f"select id from {npg} where airtable_id = 'recN2'")).scalar()
+        o1 = c.execute(text(f"select id from {opg} where airtable_id = 'recO1'")).scalar()
+        c.execute(text(f"update {lt} set {other} = :n where {me} = :o"), {"n": n2, "o": o1})
+        prev["fldOname000000000"]["recO3"] = "из прошлого"   # recO3 правка не задела — не пересчитывается
+        out = compute_all(c, day, aggs=aggs, prev=prev, prev_today=day,
+                          touched={"fldOnom0000000000": {"recO1"}, "fldNequip00000000": {"recN1", "recN2"}})
+        full = compute_all(c, day, aggs=aggs)
+    assert out["fldNlabel00000000"] == full["fldNlabel00000000"] == {"recN1": "Кольцо: 1", "recN2": "Втулка: 1"}
+    assert out["fldOname000000000"]["recO1"] == full["fldOname000000000"]["recO1"] == "Втулка_9"
+    assert out["fldOprice00000000"] == full["fldOprice00000000"]
+    assert out["fldOname000000000"]["recO3"] == "из прошлого"
