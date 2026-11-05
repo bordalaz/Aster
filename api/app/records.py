@@ -42,8 +42,8 @@ def list_records(table_id: int, fresh: bool = False, ids: str | None = None, use
         only = [int(x) for x in ids.split(",")][:500] if ids else None
     except ValueError:
         raise HTTPException(422, "ids — числа через запятую")
-    if fresh:
-        computed.settle(20)
+    # и без fresh ждём короткий пересчёт по записям: другая вкладка сразу после правки — уже свежая
+    computed.settle(20 if fresh else 3, light=not fresh)
     with engine.connect() as c:
         table_title(c, table_id, user)
         t, fields = load_table(c, table_id)
