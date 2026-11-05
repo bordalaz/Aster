@@ -14,7 +14,8 @@ from sqlalchemy import text
 from .db import engine
 
 # ponytail: память одного процесса. Правка поля, связи, новая запись — пересчёт только задетых записей
-# (что изменилось — из журнала app_change); первый расчёт и удаление — полный (~35 с на ноутбуке-сервере).
+# (что изменилось — из журнала app_change; удаление передаёт задетые записи само); первый расчёт — полный
+# (~35 с на ноутбуке-сервере).
 # Несколько воркеров uvicorn — хранить значения в таблице.
 _lock = threading.Lock()
 _values: dict | None = None
@@ -24,6 +25,7 @@ _running = False   # идёт фоновый цикл пересчёта
 _seen = None       # последний app_change.id, учтённый в _values (None — следующий расчёт полный)
 _full = False      # запрошен полный пересчёт
 _tables: set = set()   # таблицы с новыми записями с прошлого расчёта
+_extra: dict = {}      # {поле: {airtable_id записей}} — задетые удалением (журнал их уже не покажет: записи нет)
 _day = None         # день (UTC), на который посчитаны _values: сменился — TODAY() считается заново
 _busy_full = False  # идёт полный пересчёт (~35 с): обычное чтение его не ждёт
 _threads: list[threading.Thread] = []
@@ -34,7 +36,7 @@ _seq = 0
 _log: deque = deque(maxlen=500)   # (номер, {airtable_id таблицы: {airtable_id записей}} | None — «всё»)
 
 
-def _compute(full: bool = True, tables: frozenset = frozenset()) -> tuple[dict, int, object, dict | None]:
+def _compute(full: bool = True, tables: frozenset = frozenset(), extra: dict | None = None) -> tuple[dict, int, object, dict | None]:
     """→ (значения, учтённый app_change.id, день расчёта, изменившиеся записи по таблицам | None — неизвестно). Не full и есть прошлый расчёт — только задетые правками
     записи (журнал app_change); не вышло разобрать журнал — только зависящие от правок поля.
     tables — таблицы, где появились новые записи."""
@@ -50,13 +52,15 @@ def _compute(full: bool = True, tables: frozenset = frozenset()) -> tuple[dict, 
             "where ch.id > :lo and ch.id <= :hi"), {"lo": _seen, "hi": hi}).all()
         got = _touched(c, rows, tables)
         if got is not None:
+            for f, recs in (extra or {}).items():
+                got[0].setdefault(f, set()).update(recs)
             report: dict = {}
             vals = compute_all(c, today, prev=_values, touched=got[0], new=got[1], prev_today=_day, report=report)
             return vals, hi, today, report
         changed = None
         new_in = set(tables) | {r.table_id for r in rows if r.column_name == "id"}
         if all(r.airtable_id or r.column_name == "id" for r in rows):   # неизвестные колонки — полный расчёт
-            changed = {r.airtable_id for r in rows if r.airtable_id}
+            changed = {r.airtable_id for r in rows if r.airtable_id} | set(extra or ())
             # связь правится с обеих сторон: итоги в связанной таблице считаются по её полю-связи
             changed |= set(c.execute(text(
                 "select o.field_id from at_link_meta m join at_link_meta o "
@@ -135,16 +139,18 @@ def values() -> dict:
     return _values
 
 
-def invalidate(full: bool = False, table: int | None = None) -> None:
+def invalidate(full: bool = False, table: int | None = None, touched: dict | None = None) -> None:
     """Данные изменились — пересчитать в фоне. Правки во время расчёта склеиваются в один следующий
     (вставка 100 ячеек — не 100 полных пересчётов). Устаревший расчёт не перетирает более свежий.
-    table — в ней появилась новая запись."""
+    table — в ней появилась новая запись. touched — {поле: {записи}}, задетые удалением."""
     global _next_gen, _running, _full
     with _lock:
         _next_gen += 1
         _full = _full or full
         if table is not None:
             _tables.add(table)
+        for f, recs in (touched or {}).items():
+            _extra.setdefault(f, set()).update(recs)
         if _running:
             return          # идущий цикл увидит новое поколение и посчитает ещё раз
         _running = True
@@ -160,9 +166,11 @@ def _refresh() -> None:
             gen, full, _full = _next_gen, _full, False
             tables = frozenset(_tables)
             _tables.clear()
+            extra = {f: set(r) for f, r in _extra.items()}
+            _extra.clear()
             _busy_full = full or _values is None
         try:
-            new, hi, day, changes = _compute(full, tables)
+            new, hi, day, changes = _compute(full, tables, extra)
         except Exception:
             with _lock:
                 _running = _busy_full = False
@@ -229,3 +237,4 @@ def reset() -> None:
     wait()
     _values, _seen, _full, _day = None, None, False, None
     _tables.clear()
+    _extra.clear()
