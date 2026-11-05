@@ -31,16 +31,17 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
   const [sending, setSending] = useState(null)   // {rows, columns} — окно «Отправить запись»
   const [asking, setAsking] = useState(null)     // строки — «Удалить N записей?»
   const [undo, setUndo] = useState(null)         // {trash: [...], n} — «Запись удалена · Отменить» на 10 с
-  const [views, setViews] = useState([])
-  const [current, setCurrent] = useState(null)   // id вида; null — «Все записи»
-  const [config, setConfig] = useState({})
-  const [side, setSide] = useState(false)      // список видов слева (☰), по умолчанию свёрнут, как у владельца в Airtable
-  const [search, setSearch] = useState('')
-  const exportRef = useRef(null)
-
   // Последний вид таблицы и его несохранённые настройки — у пользователя в браузере (как Airtable помнит вид).
   // ponytail: localStorage, на одном устройстве; на сервер — если понадобится между устройствами
   const KEY = `aster.view.${user?.id ?? 0}.${tableId}`
+  // сразу, до ответа сервера: строки из памяти показываются уже сгруппированными, без мигания «всей таблицы»
+  const [saved0] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY)) } catch { return null } })
+  const [views, setViews] = useState([])
+  const [current, setCurrent] = useState(saved0?.view ?? null)   // id вида; null — «Все записи»
+  const [config, setConfig] = useState(saved0?.config ?? {})
+  const [side, setSide] = useState(false)      // список видов слева (☰), по умолчанию свёрнут, как у владельца в Airtable
+  const [search, setSearch] = useState('')
+  const exportRef = useRef(null)
   const ready = useRef(false)
 
   // Перечитать виды и выбрать нужный (после сохранения/удаления); cfg — восстановить несохранённое.
