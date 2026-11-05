@@ -162,6 +162,15 @@ test('выбранный вид и его несохранённые настр�
   expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],2,[На складе],1')
 })
 
+test('вернулся в таблицу — строки сразу в своём виде, не ждут ответа со списком видов', async () => {
+  localStorage.clear()
+  localStorage.setItem('aster.view.1.1', JSON.stringify({ view: null, config: { group: ['f_fld00000000000004'] } }))
+  server.use(http.get('/api/tables/1/views', () => new Promise(() => {})))   // виды так и не пришли
+  render(<TableView tableId={1} primaryField={NAME} user={admin} />)
+  await screen.findByText('2 записи', { exact: false })
+  expect(screen.getByTestId('grid-items').textContent).toBe('[Брак],2,[На складе],1')
+})
+
 test('«+» добавляет запись и сразу открывает её карточку', async () => {
   setup()
   await screen.findByText('2 записи', { exact: false })
