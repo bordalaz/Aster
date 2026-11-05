@@ -4,8 +4,8 @@ import { Icon } from '../ui/icons.jsx'
 
 // Список вариантов прямо в ячейке, как в Airtable: поиск, плашки цвета варианта.
 // Один вариант — щелчок выбирает и закрывает; несколько — щелчок переключает.
-export default function SelectEditor({ value: cell, onChange, onFinishedEditing }) {
-  const [q, setQ] = useState('')
+export default function SelectEditor({ value: cell, onChange, onFinishedEditing, initialValue }) {
+  const [q, setQ] = useState(initialValue ?? '')   // начали печатать на ячейке — набранное сразу в поиске
   const { choices, multi, value } = cell.data
   const chosen = new Set(multi ? value ?? [] : value ? [value] : [])
   const shown = choices.filter(c => c.name.toLowerCase().includes(q.trim().toLowerCase()))

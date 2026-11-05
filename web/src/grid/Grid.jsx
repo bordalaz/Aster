@@ -98,7 +98,7 @@ function onText(cell, x) {
 // canReorder — можно двигать строки (вид без сортировки, правит тот, кто может менять вид); onReorder(ids) — новый порядок.
 // onInsert(row, 'above'|'below'|null), onDuplicate(row), onSend(rows, columns), onDelete(rows) — пункты меню записи.
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd, collapseKey, scrollKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend, onDelete }) {
+  search = '', exportRef, onAdd, onCreate, collapseKey, scrollKey, canReorder = false, onReorder, onInsert, onDuplicate, onSend, onDelete }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -126,7 +126,14 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     getRowId: r => String(r.id),
   })
   const view = table.getRowModel().rows
-  const shownRows = useMemo(() => view.map(r => r.original), [view])
+  // записи, созданные пустой строкой внизу, стоят внизу, как в Airtable, — даже если не проходят фильтр или сортировку
+  const [pinned, setPinned] = useState([])
+  const shownRows = useMemo(() => {
+    const shown = view.map(r => r.original)
+    if (!pinned.length) return shown
+    const p = new Set(pinned)
+    return [...shown.filter(r => !p.has(r.id)), ...pinned.map(id => rows.find(r => r.id === id)).filter(Boolean)]
+  }, [view, pinned, rows])
 
   // Группировка (R9) и строка итогов, закреплённая внизу.
   const groupFields = useMemo(() => groupCols(config.group).map(c => fields.find(f => f.column_name === c)).filter(Boolean),
@@ -138,7 +145,12 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   useEffect(() => {
     if (collapseKey) try { localStorage.setItem(collapseKey, JSON.stringify([...collapsed])) } catch { /* приватный режим */ }
   }, [collapseKey, collapsed])
-  const items = useMemo(() => groupRows(shownRows, groupFields, collapsed), [shownRows, groupFields, collapsed])
+  // пустая строка внизу (как в Airtable): щелчок по ячейке — новая запись, эта ячейка выделена, набор — сразу правка
+  const appendable = !!onCreate && !groupFields.length
+  const items = useMemo(() => {
+    const it = groupRows(shownRows, groupFields, collapsed)
+    return appendable ? [...it, { kind: 'append' }] : it
+  }, [shownRows, groupFields, collapsed, appendable])
   // Прокрутка вида помнится у пользователя в браузере, как в Airtable: вернулся (и после перезагрузки) — на том же месте.
   const [scroll0] = useState(() => { try { return JSON.parse(localStorage.getItem(scrollKey)) ?? {} } catch { return {} } })
   const gridBox = useRef(null)
@@ -212,6 +224,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
       return ci === 0 ? text('', false) : text(totals[ci - 1], false)
     }
     const it = items[ri]
+    if (it.kind === 'append') return ci === 0 ? { ...text('+', false), themeOverride: { textDark: '#616670', baseFontStyle: '16px' } } : text('', false)
     if (it.kind === 'group') {
       if (ci > 1) return text('', false)
       return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: it.key, span: [0, 1],
@@ -228,6 +241,28 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     return cell
   }, [cols, items, totals, groupFields, nums, config.color, fields, hoverRow, selection, checked, movable, drag])   // eslint-disable-line react-hooks/exhaustive-deps
   const rowAt = ri => (items[ri]?.kind === 'row' ? items[ri].row : null)
+  const gridRef = useRef(null)
+  const pendingCell = useRef(null)   // {id, ci} — выделить ячейку новой записи, когда она появится в сетке
+  const creating = useRef(false)
+  const createAt = async ci => {
+    if (creating.current) return
+    creating.current = true
+    try {
+      const row = await onCreate()
+      if (row) { pendingCell.current = { id: row.id, ci }; setPinned(p => [...p, row.id]) }
+    } finally { creating.current = false }
+  }
+  useEffect(() => {
+    const want = pendingCell.current
+    if (!want) return
+    const ri = items.findIndex(it => it.kind === 'row' && it.row.id === want.id)
+    if (ri < 0) return
+    pendingCell.current = null
+    setSelection({ columns: CompactSelection.empty(), rows: CompactSelection.empty(),
+      current: { cell: [want.ci, ri], range: { x: want.ci, y: ri, width: 1, height: 1 }, rangeStack: [] } })
+    gridRef.current?.scrollTo(want.ci, ri)
+    gridRef.current?.focus()
+  }, [items])
   const toggleCheck = id => setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const allChecked = shownRows.length > 0 && checkedShown.length === shownRows.length
 
@@ -326,7 +361,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--canvas)' }}>
       <span data-testid="col-order" style={{ display: 'none' }}>{cols.map(c => c.column_name).join(',')}</span>
-      <span data-testid="grid-items" style={{ display: 'none' }}>{items.map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
+      <span data-testid="grid-items" style={{ display: 'none' }}>{items.filter(i => i.kind !== 'append').map(i => (i.kind === 'group' ? `[${i.key}]` : i.row.id)).join(',')}</span>
       {/* ПКМ ловим на контейнере: в Glide 6.0.3 onCellContextMenu для мыши не срабатывает (слушатель вешается до появления элемента) */}
       <div ref={gridBox} style={{ flex: 1, minHeight: 0, position: 'relative' }}
         onPointerDownCapture={() => { downCell.current = selection.current?.cell ?? null }}
@@ -374,6 +409,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
             onCollapseAll={() => setCollapsed(new Set(allGroupIds()))} />
         )}
         <DataEditor
+          ref={gridRef}
           scrollOffsetX={scroll0.x} scrollOffsetY={scroll0.y}
           theme={THEME}
           headerIcons={headerIcons}
@@ -400,7 +436,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           }}
           onHeaderMenuClick={(ci, bounds) => setInfo({ text: cols[ci - 1]?.description, x: bounds.x + bounds.width - 260, y: bounds.y + bounds.height + 4 })}
           onCellClicked={([ci, ri], e) => {
-            if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
+            if (items[ri]?.kind === 'append') createAt(Math.max(ci, 1))
+            else if (ci <= 1 && items[ri]?.kind === 'group') toggleGroup(items[ri].id)
             else if (ci > 0 && cols[ci - 1]?.kind === 'button' && rowAt(ri)) runButton?.(cols[ci - 1], rowAt(ri))
             // карточка — по кнопке раскрытия у названия (как в Airtable), не по номеру строки
             else if (ci === 0 && rowAt(ri) && rownumHit(e.localEventX) === 'expand') onOpen(rowAt(ri), shownRows.map(r => r.id))

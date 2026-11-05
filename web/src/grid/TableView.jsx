@@ -16,7 +16,7 @@ import { moveRows, orderRows } from './layout.js'
 import SendDialog from './SendDialog.jsx'
 
 export default function TableView({ tableId, primaryField, user, title, openId, onOpened, onOpenLink }) {
-  const { fields, rows, loading, patch, patchMany, refresh, dropRows } = useRecords(tableId)
+  const { fields, rows, loading, patch, patchMany, refresh, dropRows, addRow } = useRecords(tableId)
   // закрыли карточку новой связанной записи — у связей могли смениться названия
   useEffect(() => {
     const on = () => refresh(false).catch(() => {})
@@ -100,6 +100,17 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
       const { id, updated_at } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
       setOpen({ id, updated_at })   // карточку — сразу; формулы досчитаются, пока сетка перечитывается
       await refresh()
+    } catch { setError('Не удалось добавить запись') }
+  }
+
+  // Пустая строка внизу сетки, как в Airtable: новая запись остаётся в сетке, правится прямо в ячейках.
+  async function createInline() {
+    setError('')
+    try {
+      const { id } = await api(`/api/tables/${tableId}/records`, { method: 'POST' })
+      const [row] = await api(`/api/tables/${tableId}/records?ids=${id}`)
+      if (row) addRow(row)
+      return row
     } catch { setError('Не удалось добавить запись') }
   }
 
@@ -241,6 +252,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             : <Grid key={current ?? 'all'} fields={fields} rows={rows} primaryField={primaryField} title={title} config={config}
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
             onAdd={fields.some(f => f.editable) ? addRecord : undefined}
+            onCreate={fields.some(f => f.editable) ? createInline : undefined}
             canReorder={canReorder} onReorder={saveOrder}
             onInsert={fields.some(f => f.editable) ? insertNear : undefined}
             onDuplicate={fields.some(f => f.editable) ? duplicate : undefined}
