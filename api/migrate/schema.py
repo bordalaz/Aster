@@ -90,6 +90,7 @@ def apply_schema(conn, schema: list[dict]) -> list[str]:
                 f"dst int not null references {dst_tbl} on delete cascade, "
                 "pos int, rpos int, primary key (src, dst))"
             ))
+            conn.execute(text(f"create index if not exists {lt}_dst on {lt} (dst)"))   # обратная сторона (миграция 0020)
         conn.execute(text(
             "insert into at_link_meta values (:f, :l, :s) "
             "on conflict (field_id) do update set link_table = excluded.link_table, side = excluded.side"

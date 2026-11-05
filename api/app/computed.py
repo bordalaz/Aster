@@ -1,8 +1,10 @@
 """Вычисляемые поля (formula/rollup/lookup/count) для API.
 Считаются движком migrate.compute по всей базе от сырых данных и держатся в памяти процесса.
 После записи — пересчёт в фоне; пока он идёт, отдаём прежние значения."""
+import os
 import threading
 import time
+from collections import deque
 from datetime import datetime, timezone
 
 from migrate.compute import compute_all
@@ -25,17 +27,22 @@ _tables: set = set()   # таблицы с новыми записями с пр
 _day = None         # день (UTC), на который посчитаны _values: сменился — TODAY() считается заново
 _busy_full = False  # идёт полный пересчёт (~35 с): обычное чтение его не ждёт
 _threads: list[threading.Thread] = []
+# Журнал «что изменилось» для сетки: после правки она перечитывает только эти записи, а не всю таблицу.
+# Метка — «запуск.номер»: другой запуск процесса или слишком старая метка — читать таблицу целиком.
+_BOOT = os.urandom(4).hex()
+_seq = 0
+_log: deque = deque(maxlen=500)   # (номер, {airtable_id таблицы: {airtable_id записей}} | None — «всё»)
 
 
-def _compute(full: bool = True, tables: frozenset = frozenset()) -> tuple[dict, int, object]:
-    """→ (значения, учтённый app_change.id, день расчёта). Не full и есть прошлый расчёт — только задетые правками
+def _compute(full: bool = True, tables: frozenset = frozenset()) -> tuple[dict, int, object, dict | None]:
+    """→ (значения, учтённый app_change.id, день расчёта, изменившиеся записи по таблицам | None — неизвестно). Не full и есть прошлый расчёт — только задетые правками
     записи (журнал app_change); не вышло разобрать журнал — только зависящие от правок поля.
     tables — таблицы, где появились новые записи."""
     today = datetime.now(timezone.utc).date()   # TODAY() — по UTC, как в Airtable
     with engine.connect() as c:
         hi = c.execute(text("select coalesce(max(id), 0) from app_change")).scalar()
         if full or _values is None or _seen is None:
-            return compute_all(c, today), hi, today
+            return compute_all(c, today), hi, today, None
         rows = c.execute(text(
             "select ch.table_id, ch.record_id, ch.column_name, ch.old, f.airtable_id, f.kind, t.pg_name, t.airtable_id as t_at "
             "from app_change ch join app_table t on t.id = ch.table_id left join app_field f "
@@ -43,7 +50,9 @@ def _compute(full: bool = True, tables: frozenset = frozenset()) -> tuple[dict, 
             "where ch.id > :lo and ch.id <= :hi"), {"lo": _seen, "hi": hi}).all()
         got = _touched(c, rows, tables)
         if got is not None:
-            return compute_all(c, today, prev=_values, touched=got[0], new=got[1], prev_today=_day), hi, today
+            report: dict = {}
+            vals = compute_all(c, today, prev=_values, touched=got[0], new=got[1], prev_today=_day, report=report)
+            return vals, hi, today, report
         changed = None
         new_in = set(tables) | {r.table_id for r in rows if r.column_name == "id"}
         if all(r.airtable_id or r.column_name == "id" for r in rows):   # неизвестные колонки — полный расчёт
@@ -55,7 +64,7 @@ def _compute(full: bool = True, tables: frozenset = frozenset()) -> tuple[dict, 
             # новая запись — все вычисляемые поля её таблицы (у неё ещё нет значений)
             changed |= set(c.execute(text("select airtable_id from app_field where table_id = any(:t) "
                                           "and airtable_id is not null"), {"t": list(new_in)}).scalars())
-        return compute_all(c, today, prev=_values, changed=changed), hi, today
+        return compute_all(c, today, prev=_values, changed=changed), hi, today, None
 
 
 def _touched(c, rows, tables) -> tuple[dict, dict] | None:
@@ -122,7 +131,7 @@ def values() -> dict:
     if _values is None:
         with _lock:
             if _values is None:
-                _values, _seen, _day = _compute()
+                _values, _seen, _day, _ = _compute()
     return _values
 
 
@@ -153,7 +162,7 @@ def _refresh() -> None:
             _tables.clear()
             _busy_full = full or _values is None
         try:
-            new, hi, day = _compute(full, tables)
+            new, hi, day, changes = _compute(full, tables)
         except Exception:
             with _lock:
                 _running = _busy_full = False
@@ -162,9 +171,42 @@ def _refresh() -> None:
             _busy_full = False
             if gen > _done_gen:
                 _values, _done_gen, _seen, _day = new, gen, hi, day
+                _note(changes)
             if _next_gen == gen:
                 _running = False
                 return
+
+
+def _note(changes: dict | None) -> None:
+    global _seq
+    _seq += 1
+    _log.append((_seq, changes))
+
+
+def token() -> str:
+    """Метка нынешнего состояния: с ней сетка потом спросит «что изменилось с тех пор»."""
+    return f"{_BOOT}.{_seq}"
+
+
+def changed_since(tok: str | None) -> dict | None:
+    """{airtable_id таблицы: {airtable_id записей}}, изменившиеся после метки; None — читать целиком
+    (метка чужого запуска или слишком старая, или был полный пересчёт)."""
+    boot, _, n = (tok or "").partition(".")
+    if boot != _BOOT or not n.isdigit():
+        return None
+    n = int(n)
+    with _lock:
+        if n > _seq or (n < _seq and (not _log or _log[0][0] > n + 1)):
+            return None
+        out: dict = {}
+        for s, ch in _log:
+            if s <= n:
+                continue
+            if ch is None:
+                return None
+            for t, recs in ch.items():
+                out.setdefault(t, set()).update(recs)
+        return out
 
 
 def settle(timeout: float, light: bool = False) -> None:

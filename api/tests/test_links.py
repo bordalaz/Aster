@@ -134,3 +134,30 @@ def test_links_to_events_by_date_and_manual_order(loaded_fixture):
     r = u.patch(f"/api/tables/{tb}/records/{b1}", json={"updated_at": rb()["updated_at"], "values": {trips: []}})
     r = u.patch(f"/api/tables/{tb}/records/{b1}", json={"updated_at": rb()["updated_at"], "values": {trips: [c1["id"]]}})
     assert got() == [b1, b2]
+
+
+def test_records_since_only_changed(loaded_fixture):
+    """После правки сетка перечитывает только изменившиеся записи (?since=метка), а не всю таблицу;
+    связь — с обеих сторон; чужая/старая метка — вся таблица."""
+    computed.reset()
+    t = loaded_fixture
+    with engine.connect() as c:
+        b, cc = ids(c, "tblBBBBBBBBBBBBBB"), ids(c, "tblCCCCCCCCCCCCCC")
+    u = as_user("adm", "admin")
+    tb, tc, trips = t["tblBBBBBBBBBBBBBB"], t["tblCCCCCCCCCCCCCC"], col("fldBtrips00000000")
+    first = u.get(f"/api/tables/{tb}/records?since=0").json()
+    assert first["full"] is True and len(first["rows"]) == len(b)
+    tok_b = first["token"]
+    tok_c = u.get(f"/api/tables/{tc}/records?since=0").json()["token"]
+    computed.wait()
+    b2 = {r["id"]: r for r in first["rows"]}[b["recB2000000000000"]]
+    r = u.patch(f"/api/tables/{tb}/records/{b2['id']}", json={"updated_at": b2["updated_at"], "values": {trips: [cc["recC2000000000000"]]}})
+    assert r.status_code == 200, r.text
+    got = u.get(f"/api/tables/{tb}/records?since={tok_b}&fresh=1").json()
+    assert got["full"] is False and [x["id"] for x in got["rows"]] == [b2["id"]]
+    assert got["rows"][0][trips][0]["id"] == cc["recC2000000000000"]
+    other = u.get(f"/api/tables/{tc}/records?since={tok_c}&fresh=1").json()
+    assert other["full"] is False and [x["id"] for x in other["rows"]] == [cc["recC2000000000000"]]   # обратная сторона
+    again = u.get(f"/api/tables/{tb}/records?since={got['token']}").json()
+    assert again["full"] is False and again["rows"] == []                                              # ничего нового
+    assert u.get(f"/api/tables/{tb}/records?since=чужой.5").json()["full"] is True

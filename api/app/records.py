@@ -31,16 +31,42 @@ def load_table(c, table_id: int):
              "where table_id = :t order by sort_order, id"),
         {"t": table_id},
     ).all()
-    # ponytail: отражение на каждый запрос (~мс); кешировать, если станет заметно
-    return Table(row.pg_name, MetaData(), autoload_with=c), fields
+    # отражение таблицы — ~0,25 с на ноутбуке-сервере: держим, пока у таблицы те же поля
+    key = (row.pg_name, tuple(f.column_name for f in fields))
+    t = _tables.get(row.pg_name)
+    if t is None or t[0] != key:
+        t = _tables[row.pg_name] = (key, Table(row.pg_name, MetaData(), autoload_with=c))
+    return t[1], fields
+
+
+_tables: dict = {}   # pg_name → ((pg_name, колонки полей), Table)
 
 
 # ponytail: отдаём все строки сразу (13,6 тыс. ≈ 3 МБ JSON) — сетке нужен весь набор; постранично — если упрёмся
 @router.get("/{table_id}/records")
-def get_records(table_id: int, fresh: bool = False, ids: str | None = None, user: dict = Depends(active_user)):
+def get_records(table_id: int, fresh: bool = False, ids: str | None = None, since: str | None = None,
+                user: dict = Depends(active_user)):
+    """since — метка прошлого чтения (0 — первое): ответ {token, full, rows} — только изменившиеся с тех пор
+    записи (full: false) или вся таблица (full: true). Без since — список строк, как раньше."""
+    if since is None:
+        out = list_records(table_id, fresh, ids, user)
+    else:
+        computed.settle(20 if fresh else 3, light=not fresh)
+        tok = computed.token()
+        changed = computed.changed_since(since)
+        with engine.connect() as c:
+            row = c.execute(text("select pg_name, airtable_id from app_table where id = :t"), {"t": table_id}).first()
+            if row is None:
+                raise HTTPException(404, "Нет такой таблицы")
+            got = None if changed is None or row.airtable_id is None else changed.get(row.airtable_id, set())
+            pg = list(c.execute(text(f"select id from {row.pg_name} where airtable_id = any(:a)"),
+                                {"a": list(got)}).scalars()) if got else []
+        if got is None or len(pg) > 500:   # ponytail: больше 500 изменившихся — проще прочитать всё
+            out = {"token": tok, "full": True, "rows": list_records(table_id, False, None, user)}
+        else:
+            out = {"token": tok, "full": False, "rows": list_records(table_id, False, ",".join(map(str, pg)), user) if pg else []}
     # ponytail: json.dumps сразу, без jsonable_encoder — на 10 МБ «Оборудования» это ~2 с на ноутбуке-сервере
-    return Response(json.dumps(list_records(table_id, fresh, ids, user), default=_plain, ensure_ascii=False),
-                    media_type="application/json")
+    return Response(json.dumps(out, default=_plain, ensure_ascii=False), media_type="application/json")
 
 
 def list_records(table_id: int, fresh: bool = False, ids: str | None = None, user: dict | None = None):
