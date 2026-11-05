@@ -155,13 +155,19 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const [scroll0] = useState(() => { try { return JSON.parse(localStorage.getItem(scrollKey)) ?? {} } catch { return {} } })
   const gridBox = useRef(null)
   useEffect(() => {
-    const el = scrollKey && gridBox.current?.querySelector('.dvn-scroller')
-    if (!el) return
-    let t = null
-    const save = () => { t = null; try { localStorage.setItem(scrollKey, JSON.stringify({ x: el.scrollLeft, y: el.scrollTop })) } catch { /* приватный режим */ } }
-    const on = () => { clearTimeout(t); t = setTimeout(save, 200) }
-    el.addEventListener('scroll', on, { passive: true })
-    return () => { el.removeEventListener('scroll', on); if (t) { clearTimeout(t); save() } }   // ушли сразу после прокрутки — тоже запомнить
+    const box = gridBox.current
+    if (!scrollKey || !box) return
+    // прокрутку ловим на контейнере (scroll не всплывает — в фазе захвата): прокручиваемый элемент Glide
+    // появляется не сразу, а запомнить надо всегда; последнее место держим сами — у снятого элемента оно 0
+    let t = null, last = null
+    const save = () => { t = null; try { localStorage.setItem(scrollKey, JSON.stringify(last)) } catch { /* приватный режим */ } }
+    const on = e => {
+      if (!e.target.classList?.contains('dvn-scroller')) return
+      last = { x: e.target.scrollLeft, y: e.target.scrollTop }
+      clearTimeout(t); t = setTimeout(save, 200)
+    }
+    box.addEventListener('scroll', on, { capture: true, passive: true })
+    return () => { box.removeEventListener('scroll', on, { capture: true }); if (t) { clearTimeout(t); save() } }   // ушли сразу после прокрутки — тоже запомнить
   }, [scrollKey])
   // Итоги как у Airtable по умолчанию: суммы только у числовых полей, остальное пусто; слева — число записей.
   // Итоги внизу — по настройке вида, как в Airtable; у «Все записи» (своего вида в Airtable нет) — суммы чисел.
