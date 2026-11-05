@@ -85,7 +85,7 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
   return (
     <div ref={box} className={depth ? 'card-backdrop card-stacked' : 'card-backdrop'} style={depth ? { paddingTop: 72 + depth * 28 } : undefined}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      {branch && <svg className="card-branch" aria-hidden="true"><path d={branch} /></svg>}
+      {branch && <svg className="card-branch" aria-hidden="true"><path d={branch.d} /><circle cx={branch.x} cy={branch.y} r="4" /></svg>}
       <div className="card" role="dialog" aria-modal="true" aria-label={title}>
         <header className="card-head">
           <button className="quiet" aria-label="Предыдущая запись" disabled={!onPrev} onClick={onPrev}><Icon name="caretDown" size={14} style={{ transform: 'rotate(180deg)' }} /></button>
@@ -119,7 +119,7 @@ export default function Card({ tableId, record, fields, shown, primaryField, onS
   )
 }
 
-// Линия-«веточка» от вкладки таблицы (если она видна) к шапке карточки: d для <path> или null.
+// Линия-«веточка» от вкладки таблицы (если она видна) к шапке карточки: {d для <path>, x, y начала} или null.
 function useBranch(box, tableId) {
   const [d, setD] = useState(null)
   useLayoutEffect(() => {
@@ -129,7 +129,7 @@ function useBranch(box, tableId) {
       const card = box.current?.querySelector('.card')?.getBoundingClientRect()
       if (!tab || !card || !tab.width) { setD(null); return }
       const x1 = tab.left + tab.width / 2, y1 = tab.bottom, x2 = card.left, y2 = card.top + 20
-      setD(`M${x1},${y1} C${x1},${y2} ${x1},${y2} ${x2},${y2}`)
+      setD({ d: `M${x1},${y1} C${x1},${y2} ${x1},${y2} ${x2},${y2}`, x: x1, y: y1 })
     }
     draw()
     window.addEventListener('resize', draw)
