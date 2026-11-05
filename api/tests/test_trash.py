@@ -84,3 +84,27 @@ def test_kept_one_year(loaded_fixture):
     with engine.begin() as c:
         c.execute(text("update app_trash set deleted_at = now() - interval '366 days'"))
     assert adm.get("/api/trash").json() == []          # старше года — стёрто
+
+
+def test_delete_recomputes_linked_only_and_matches_full(loaded_fixture):
+    """Удаление не гоняет полный пересчёт (~35 с): только связанные записи, доли секунды —
+    и результат тот же, что у полного расчёта; сетка узнаёт, какие строки перечитать."""
+    from datetime import datetime, timezone
+
+    from migrate.compute import compute_all
+    computed.reset()
+    t = loaded_fixture
+    a, b = setup(t)
+    adm = as_user("adm", "admin")
+    computed.values()
+    tok = adm.get(f"/api/tables/{t[B]}/records?since=0").json()["token"]
+    adm.post(f"/api/tables/{t[A]}/records/delete", json={"ids": [a["recA1000000000000"]]})
+    computed.wait()
+    assert computed._log[-1][1] is not None                       # не «всё»: пересчёт по записям
+    got = adm.get(f"/api/tables/{t[B]}/records?since={tok}").json()
+    assert got["full"] is False and b["recB1000000000000"] in [r["id"] for r in got["rows"]]   # связанная работа
+    with engine.connect() as c:
+        full = compute_all(c, datetime.now(timezone.utc).date())
+    live = computed.values()
+    for f, vals in full.items():
+        assert {k: v for k, v in live.get(f, {}).items() if k != "recA1000000000000"} == vals, f

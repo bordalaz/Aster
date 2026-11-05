@@ -44,6 +44,23 @@ def _link_columns(c, table_id: int) -> set[tuple[str, str]]:
         "where f.table_id = :t"), {"t": table_id})}
 
 
+def _partners(c, table_id: int, rec_ids: list[int]) -> dict:
+    """{обратное поле-связь: {airtable_id связанных записей}} — их итоги и подстановки задевает удаление.
+    Собирать до удаления: связи уходят каскадом."""
+    out: dict = {}
+    for lk in c.execute(text(
+            "select m.link_table, m.side, o.field_id as inv, lt.pg_name as other_pg "
+            "from at_link_meta m join app_field f on f.airtable_id = m.field_id "
+            "join at_link_meta o on o.link_table = m.link_table and o.field_id <> m.field_id "
+            "join app_field of on of.airtable_id = o.field_id join app_table lt on lt.id = of.table_id "
+            "where f.table_id = :t"), {"t": table_id}):
+        me, other = ("src", "dst") if lk.side == "src" else ("dst", "src")
+        out.setdefault(lk.inv, set()).update(c.execute(text(
+            f"select o.airtable_id from {lk.link_table} l join {lk.other_pg} o on o.id = l.{other} "
+            f"where l.{me} = any(:r) and o.airtable_id is not null"), {"r": rec_ids}).scalars())
+    return out
+
+
 def _fk_target(c, link_table: str, col: str) -> str:
     """Таблица данных, на которую ссылается колонка пары (src/dst)."""
     return c.execute(text(
@@ -77,6 +94,7 @@ def delete_records(table_id: int, body: Ids, user: dict = Depends(active_user)):
         _editable_table(c, table_id, user, f"удаление {len(body.ids)} зап.")
         t = _table(c, table_id)
         pairs = _link_columns(c, table_id)
+        touched = _partners(c, table_id, list(dict.fromkeys(body.ids)))
         out = []
         for rec_id in dict.fromkeys(body.ids):
             row = c.execute(text(f"select to_jsonb(x) from {t.pg_name} x where id = :i for update"), {"i": rec_id}).scalar()
@@ -97,7 +115,8 @@ def delete_records(table_id: int, body: Ids, user: dict = Depends(active_user)):
         _purge_old(c)
     if not out:
         raise HTTPException(404, "Нет таких записей")
-    computed.invalidate(full=True)   # записи нет — во всех формулах, итогах и подстановках
+    # записи нет: пересчитать связанные с ней (итоги, подстановки) — как после правки связи, доли секунды
+    computed.invalidate(touched=touched)
     log.info("в корзину: %s, таблица %s, записи %s", user["login"], table_id, body.ids)
     return {"trash": out}
 
@@ -132,7 +151,7 @@ def restore(body: Ids, user: dict = Depends(active_user)):
                            "values (:t, :r, 'id', null, to_jsonb(:r), :u)"), {"t": item.table_id, "r": item.record_id, "u": user["id"]})
             restored.append({"table_id": item.table_id, "record_id": item.record_id})
     if restored:
-        computed.invalidate(full=True)
+        computed.invalidate()   # журнал 'id' — как новая запись: её формулы и связанные с ней
     log.info("из корзины: %s → %s", user["login"], restored)
     return {"restored": restored}
 
