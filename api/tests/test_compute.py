@@ -461,7 +461,9 @@ def test_incremental_link_edit_and_new_record(tmp_path, monkeypatch):
         c.execute(text("insert into app_change (table_id, record_id, column_name, old) values (:t, 1, :c, cast(:o as jsonb))"),
                   {"t": tid, "c": col, "o": f'[{{"id": {n1}, "name": "Кольцо"}}]'})
         tbl = c.execute(text("select pg_name from app_table where id = :t"), {"t": tid}).scalar()
-        c.execute(text(f"insert into {tbl} (airtable_id) values ('recO3')"))
+        o3 = c.execute(text(f"insert into {tbl} (airtable_id) values ('recO3') returning id")).scalar()
+        # новая запись — в журнале 'id', как пишет create_record
+        c.execute(text("insert into app_change (table_id, record_id, column_name) values (:t, :r, 'id')"), {"t": tid, "r": o3})
     computed.invalidate(table=tid)
     computed.wait()
     assert full_calls[-1] is not None                                   # не полный расчёт — по записям
