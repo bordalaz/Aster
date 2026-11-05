@@ -135,3 +135,28 @@ test('связи-события (link_events) — свежие сверху; п�
   // на экране: старое, свежее, среднее → хранится наоборот
   expect(onChange.mock.calls.at(-1)[0].map(v => v.name)).toEqual(['среднее', 'свежее', 'старое'])
 })
+
+test('«По дате»: вопрос «Да / Нет», «Больше не спрашивать» помнится; расставляет по дате события (старые→новые)', async () => {
+  const { http, HttpResponse } = await import('msw')
+  const { server } = await import('../test/server.js')
+  server.use(http.get('/api/tables/1/records', () => HttpResponse.json([
+    { id: 1, dt: '2026-03-01' }, { id: 2, dt: '2026-01-01' }, { id: 3, dt: null }, { id: 4, dt: '2026-02-01' }])))
+  localStorage.removeItem('aster.ask.sortLinks')
+  const field = { kind: 'multipleRecordLinks', title: 'Перемещения', column_name: 'x', link_table: 1, editable: true, link_events: 'dt', options: { virtual: true } }
+  const list = [1, 2, 3, 4].map(id => ({ id, name: `П-${id}` }))
+  const onChange = vi.fn()
+  render(<FieldEditor inline field={field} value={list} onChange={onChange} />)
+  await userEvent.click(screen.getByRole('button', { name: 'По дате' }))
+  const ask = screen.getByRole('alertdialog', { name: 'Расставить по дате события?' })
+  expect(ask).toHaveTextContent('Местонахождение')
+  await userEvent.click(screen.getByRole('button', { name: 'Нет' }))
+  expect(onChange).not.toHaveBeenCalled()
+  await userEvent.click(screen.getByRole('button', { name: 'По дате' }))
+  await userEvent.click(screen.getByLabelText('Больше не спрашивать'))
+  await userEvent.click(screen.getByRole('button', { name: 'Да, расставить' }))
+  await vi.waitFor(() => expect(onChange).toHaveBeenCalled())
+  expect(onChange.mock.calls[0][0].map(v => v.id)).toEqual([2, 4, 1, 3])   // без даты — в конце
+  expect(localStorage.getItem('aster.ask.sortLinks')).toBe('off')
+  await userEvent.click(screen.getByRole('button', { name: 'По дате' }))   // больше не спрашивает
+  expect(screen.queryByRole('alertdialog')).toBeNull()
+})

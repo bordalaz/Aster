@@ -21,17 +21,52 @@ const SHOWN = 15
 function LinkField({ id, field, list, onChange, onOpenLink }) {
   const [adding, setAdding] = useState(false)
   const [all, setAll] = useState(false)
+  const [asking, setAsking] = useState(false)
+  const [sortErr, setSortErr] = useState('')
   const editable = field.editable && field.link_table && onChange
   const single = !!field.options?.prefersSingleRecordLink
   if (!list.length && !editable) return <div id={id} className="fld-ro">—</div>
   const rev = !!field.link_events
   const view = rev ? [...list].reverse() : list   // как видно в карточке
   const put = v => onChange(rev ? [...v].reverse() : v)   // обратно в хранимый порядок
-  return (
-    <div className="link-field">
-      {editable && (!single || !list.length) && (
+  // «По дате»: расставить по дате события — хранится старые→новые, без даты в конце; равные — как стояли
+  const sortByDate = async () => {
+    setAsking(false); setSortErr('')
+    try {
+      const dates = {}
+      for (let i = 0; i < list.length; i += 500) {   // сервер отдаёт до 500 записей за раз
+        const rows = await api(`/api/tables/${field.link_table}/records?ids=${list.slice(i, i + 500).map(v => v.id).join(',')}`)
+        for (const r of rows) dates[r.id] = r[field.link_events] ?? null
+      }
+      const at = new Map(list.map((v, i) => [v.id, i]))
+      const sorted = [...list].sort((x, y) => {
+        const a = dates[x.id], b = dates[y.id]
+        if ((a == null) !== (b == null)) return a == null ? 1 : -1
+        return a == null || a === b ? at.get(x.id) - at.get(y.id) : a < b ? -1 : 1
+      })
+      if (sorted.some((v, i) => v.id !== list[i].id)) onChange(sorted)
+    } catch { setSortErr('Не удалось расставить по дате') }
+  }
+  const askSort = () => (askOff(ASK_SORT) ? sortByDate() : setAsking(true))
+  const tools = editable && (
+    <div className="link-tools">
+      {(!single || !list.length) && (
         <button id={id} type="button" className="btn link-add" aria-label={`Добавить: ${field.title}`} onClick={() => setAdding(true)}><Icon name="plus" size={14} />Добавить</button>
       )}
+      {rev && list.length > 1 && (
+        <button type="button" className="btn link-add" title="Расставить плашки по дате события" onClick={askSort}><Icon name="sort" size={14} />По дате</button>
+      )}
+    </div>
+  )
+  return (
+    <div className="link-field">
+      {tools}
+      {sortErr && <div className="err" role="alert">{sortErr}</div>}
+      {asking && <Ask title="Расставить по дате события?" yes="Да, расставить" no="Нет" storeKey={ASK_SORT}
+        onYes={sortByDate} onNo={() => setAsking(false)}>
+        Плашки встанут по дате события: самые свежие — сверху. Поля, которые берут последнее событие
+        (например, «Местонахождение»), примут значение из верхней плашки.
+      </Ask>}
       {adding && <LinkAdd field={field} list={list} single={single} onChange={onChange} onClose={() => setAdding(false)} />}
       <LinkCards field={field} list={view} shown={view.slice(0, SHOWN)} onChange={editable ? put : undefined} onOpenLink={onOpenLink} />
       {list.length > SHOWN && (
@@ -46,8 +81,7 @@ function LinkField({ id, field, list, onChange, onOpenLink }) {
               <button className="quiet" aria-label="Закрыть" autoFocus onClick={() => setAll(false)} style={{ marginLeft: 'auto' }}><Icon name="x" /></button>
             </header>
             <div className="link-all-body link-field">
-              {editable && <button type="button" className="btn link-add" onClick={() => setAdding(true)}><Icon name="plus" size={14} />Добавить</button>}
-              {adding && <LinkAdd field={field} list={list} single={single} onChange={onChange} onClose={() => setAdding(false)} />}
+              {tools}
               <LinkCards field={field} list={view} shown={view} onChange={editable ? put : undefined} onOpenLink={onOpenLink} />
             </div>
           </div>
@@ -69,12 +103,16 @@ function LinkAdd({ field, list, single, onChange, onClose }) {
   </>
 }
 
-// Карточки связанных записей: поля мини-карточек — только показанных (не всех сотен); перетаскивание меняет порядок.
+// Карточки связанных записей: поля мини-карточек — только показанных (не всех сотен).
+// Перетаскивание, как в Airtable: карточка «поднимается» и едет за указателем, остальные плавно раздвигаются;
+// отпустили — встаёт на место. Указателем, не HTML5 drag (тот в Firefox не тянет за кнопку).
+const GAP = 6
 function LinkCards({ field, list, shown, onChange, onOpenLink }) {
   const [cols, setCols] = useState([])
   const [rows, setRows] = useState({})
-  const [drag, setDrag] = useState(null)   // id перетаскиваемой
-  const [over, setOver] = useState(null)   // id, над которой держат
+  const [drag, setDrag] = useState(null)   // {from, to, dy, h} — индексы в shown
+  const moved = useRef(false)
+  const box = useRef(null)
   const key = shown.map(v => v.id).join(',')
   useEffect(() => {
     if (!field.link_table || !key) return
@@ -84,52 +122,86 @@ function LinkCards({ field, list, shown, onChange, onOpenLink }) {
       .catch(() => {})   // нет данных — карточки только с названием
     return () => { live = false }
   }, [field.link_table, key])
-  const drop = (from, target) => {
-    if (from == null || target == null || from === target) return
-    const moved = list.find(v => v.id === from)
-    const rest = list.filter(v => v.id !== from)
-    const at = rest.findIndex(v => v.id === target)
-    rest.splice(list.findIndex(v => v.id === from) < list.findIndex(v => v.id === target) ? at + 1 : at, 0, moved)   // вниз — под цель, вверх — над ней
-    onChange(rest)
-  }
-  // перетаскивание указателем (не HTML5 drag: тот не тянет за кнопку в Firefox): сдвиг > 5 px — тащим, отпустили — на место цели
-  const moved = useRef(false)
-  const down = (e, id) => {
-    if (!onChange || e.button > 0) return   // только левая кнопка
-    const x0 = e.clientX, y0 = e.clientY
+
+  const down = (e, from) => {
+    if (!onChange || e.button > 0) return
+    const rects = [...box.current.children].map(el => el.getBoundingClientRect())
+    const y0 = e.clientY, x0 = e.clientX
     moved.current = false
-    let target = null
+    let cur = null
     const move = ev => {
       if (!moved.current && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return
-      if (!moved.current) { moved.current = true; setDrag(id); document.body.style.cursor = 'grabbing' }
-      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-link-id]')
-      target = el ? Number(el.dataset.linkId) : null
-      setOver(target)
+      if (!moved.current) { moved.current = true; document.body.style.cursor = 'grabbing' }
+      const dy = (ev.clientY ?? y0) - y0
+      const r = rects[from], mid = r.top + r.height / 2 + dy
+      // куда встанет: сколько других карточек выше её середины
+      let to = 0
+      rects.forEach((x, i) => { if (i !== from && x.top + x.height / 2 < mid) to++ })
+      cur = { from, to, dy, h: r.height + GAP }
+      setDrag(cur)
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       document.body.style.cursor = ''
-      if (moved.current) drop(id, target)
-      setDrag(null); setOver(null)
+      setDrag(null)
+      if (moved.current && cur && cur.to !== cur.from) {
+        const next = [...shown]
+        const [it] = next.splice(cur.from, 1)
+        next.splice(cur.to, 0, it)
+        onChange([...next, ...list.slice(shown.length)])   // shown — начало list; остальное как было
+      }
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
   }
+  const shift = i => {
+    if (!drag || i === drag.from) return 0
+    if (drag.from < drag.to && i > drag.from && i <= drag.to) return -drag.h
+    if (drag.to < drag.from && i >= drag.to && i < drag.from) return drag.h
+    return 0
+  }
   if (!shown.length) return null
   return (
-    <div className="link-cards">{shown.map(v => (
-      <div key={v.id} data-link-id={v.id} className={'link-card-wrap' + (onChange ? ' movable' : '') + (over === v.id && drag !== v.id ? ' drop' : '') + (drag === v.id ? ' dragging' : '')}
-        onPointerDown={e => down(e, v.id)}>
-        <button type="button" className="link-card" title={v.name}
-          onClick={() => { if (moved.current) { moved.current = false; return } onOpenLink?.(field.link_table, v.id) }}>
-          <span className="link-card-name">{v.name || `№${v.id}`}</span>
-          <MiniFields cols={cols} row={rows[v.id]} />
-        </button>
-        {onChange && <button type="button" className="link-card-x" aria-label={`Убрать ${v.name}`}
-          onPointerDown={e => e.stopPropagation()} onClick={() => onChange(list.filter(x => x.id !== v.id))}>×</button>}
+    <div className="link-cards" ref={box}>{shown.map((v, i) => {
+      const lifted = drag?.from === i
+      return (
+        <div key={v.id} data-link-id={v.id} className={'link-card-wrap' + (onChange ? ' movable' : '') + (lifted ? ' lifted' : '')}
+          style={drag ? { transform: `translateY(${lifted ? drag.dy : shift(i)}px)`, transition: lifted ? 'none' : undefined } : undefined}
+          onPointerDown={e => down(e, i)}>
+          <button type="button" className="link-card" title={v.name}
+            onClick={() => { if (moved.current) { moved.current = false; return } onOpenLink?.(field.link_table, v.id) }}>
+            <span className="link-card-name">{v.name || `№${v.id}`}</span>
+            <MiniFields cols={cols} row={rows[v.id]} />
+          </button>
+          {onChange && <button type="button" className="link-card-x" aria-label={`Убрать ${v.name}`}
+            onPointerDown={e => e.stopPropagation()} onClick={() => onChange(list.filter(x => x.id !== v.id))}>×</button>}
+        </div>
+      )
+    })}</div>
+  )
+}
+
+// Вопрос перед действием, как в хороших интерфейсах: «Да / Нет» и мелко «Больше не спрашивать».
+// Отказ от вопроса помнится в браузере (aster.ask.*); вернуть — «Сбросить настройки» в меню профиля.
+const ASK_SORT = 'aster.ask.sortLinks'
+const askOff = k => { try { return localStorage.getItem(k) === 'off' } catch { return false } }
+function Ask({ title, children, yes, no, storeKey, onYes, onNo }) {
+  const [quiet, setQuiet] = useState(false)
+  const ok = () => { if (quiet) try { localStorage.setItem(storeKey, 'off') } catch { /* приватный режим */ } onYes() }
+  return (
+    <div className="card-backdrop card-stacked" onMouseDown={e => { if (e.target === e.currentTarget) onNo() }}
+      onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onNo() } }}>
+      <div className="confirm" role="alertdialog" aria-modal="true" aria-label={title}>
+        <h2>{title}</h2>
+        <p>{children}</p>
+        <label className="ask-quiet"><input type="checkbox" checked={quiet} onChange={e => setQuiet(e.target.checked)} />Больше не спрашивать</label>
+        <div className="send-foot">
+          <button type="button" className="btn" onClick={onNo}>{no}</button>
+          <button type="button" className="btn primary" autoFocus onClick={ok}>{yes}</button>
+        </div>
       </div>
-    ))}</div>
+    </div>
   )
 }
 

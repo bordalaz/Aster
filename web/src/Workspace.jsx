@@ -13,6 +13,12 @@ import Calibration from './calibration/Calibration.jsx'
 import ChangePassword from './auth/ChangePassword.jsx'
 import { Icon } from './ui/icons.jsx'
 
+// «Сбросить настройки»: вернуть вопросы, скрытые галочкой «Больше не спрашивать» (aster.ask.* в браузере).
+function resetAsks() {
+  try { Object.keys(localStorage).filter(k => k.startsWith('aster.ask.')).forEach(k => localStorage.removeItem(k)) } catch { /* приватный режим */ }
+  window.dispatchEvent(new CustomEvent('aster:toast', { detail: 'Настройки сброшены: вопросы снова будут показываться' }))
+}
+
 // Профиль, как в Airtable: кружок с инициалом → имя, «Пользователи» (админы), «Сменить пароль», «Выйти».
 function ProfileMenu({ user, isAdmin, onUsers, onTrash, onSnapshots, onPassword, onLogout }) {
   const [open, setOpen] = useState(false)
@@ -37,6 +43,7 @@ function ProfileMenu({ user, isAdmin, onUsers, onTrash, onSnapshots, onPassword,
           {isAdmin && <button role="menuitem" onClick={go(onTrash)}><Icon name="trash" />Корзина</button>}
           {isAdmin && <button role="menuitem" onClick={go(onSnapshots)}><Icon name="snapshot" />Снимки</button>}
           <button role="menuitem" onClick={go(onPassword)}><Icon name="key" />Сменить пароль</button>
+          <button role="menuitem" title="Снова показывать вопросы, где отмечено «Больше не спрашивать»" onClick={go(resetAsks)}><Icon name="undo" />Сбросить настройки</button>
           <div className="sep" />
           <button role="menuitem" onClick={go(onLogout)}><Icon name="signOut" />Выйти</button>
         </div>
@@ -46,6 +53,18 @@ function ProfileMenu({ user, isAdmin, onUsers, onTrash, onSnapshots, onPassword,
 }
 
 // Оболочка как в Airtable: верхняя полоса базы с разделами, под ней вкладки таблиц.
+// Короткое сообщение внизу на 4 с (событие aster:toast)
+function Toast() {
+  const [msg, setMsg] = useState('')
+  useEffect(() => {
+    let t
+    const on = e => { setMsg(e.detail); clearTimeout(t); t = setTimeout(() => setMsg(''), 4000) }
+    window.addEventListener('aster:toast', on)
+    return () => { window.removeEventListener('aster:toast', on); clearTimeout(t) }
+  }, [])
+  return msg ? <div className="toast" role="status"><span>{msg}</span></div> : null
+}
+
 export default function Workspace({ user, onLogout }) {
   const [tables, setTables] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -114,6 +133,7 @@ export default function Workspace({ user, onLogout }) {
           primaryField={active.primary_field} openId={jump} onOpened={opened} onOpenLink={openLink} />}
       </main>
       <RecordHost />
+      <Toast />
     </div>
   )
 }

@@ -28,13 +28,15 @@ export function matchLinkPaste(field, text) {
   return field.options?.prefersSingleRecordLink && list.length > 1 ? undefined : list
 }
 
-// Поля мини-карточки, как в Airtable: первые 4 поля первого общего вида связанной таблицы (без первичного).
+// Поля мини-карточки, как в Airtable: первые 4 поля первого табличного вида связанной таблицы (без первичного).
 const meta = new Map()
 export const tableMeta = tableId => once(meta, tableId, () =>
   Promise.all([api('/api/tables'), api(`/api/tables/${tableId}/fields`), api(`/api/tables/${tableId}/views`)])
     .then(([tables, fields, views]) => {
       const primary = tables.find(t => t.id === tableId)?.primary_field
-      const order = views[0]?.config?.columns ?? fields.map(f => f.column_name)
+      // первый табличный вид (как в Airtable); у таймлайна/календаря колонок нет — мини-карточки были бы пустыми
+      const v = views.find(x => x.kind === 'grid' && x.config?.source === 'airtable') ?? views.find(x => x.kind === 'grid') ?? views[0]
+      const order = v?.config?.columns?.length ? v.config.columns : fields.map(f => f.column_name)
       return order.filter(c => c !== primary).map(c => fields.find(f => f.column_name === c)).filter(Boolean).slice(0, 4)
     }))
 

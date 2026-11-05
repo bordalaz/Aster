@@ -47,8 +47,9 @@ def _text(v) -> str:
     return str(v)
 
 
-def link_values(c, fields, user) -> list[tuple[str, dict | None]]:
-    """[(колонка, {наш id записи: [{id, name}]} или None — таблица скрыта)] для ссылочных полей."""
+def link_values(c, fields, user, only=None) -> list[tuple[str, dict | None]]:
+    """[(колонка, {наш id записи: [{id, name}]} или None — таблица скрыта)] для ссылочных полей.
+    only — только эти записи (мини-карточки): не читать пары всей таблицы."""
     names = Names(c, user)
     meta = dict(c.execute(text("select field_id, link_table || ':' || side from at_link_meta")).all())
     out = []
@@ -62,9 +63,11 @@ def link_values(c, fields, user) -> list[tuple[str, dict | None]]:
         lt, side = meta[f.airtable_id].split(":")
         mine, other, pos = ("src", "dst", "pos") if side == "src" else ("dst", "src", "rpos")
         title, _ = names.of(target)
-        vals: dict = {}
-        for m, o in c.execute(text(f"select {mine}, {other} from {lt} order by {mine}, {pos} nulls last, {other}")):
-            vals.setdefault(m, []).append({"id": o, "name": title.get(o, "")})
+        # список собирает база (array_agg): строка на запись, а не на пару — у оборудования их десятки тысяч
+        where = f" where {mine} = any(:o)" if only is not None else ""
+        vals = {m: [{"id": o, "name": title.get(o, "")} for o in os] for m, os in c.execute(text(
+            f"select {mine}, array_agg({other} order by {pos} nulls last, {other}) from {lt}{where} group by {mine}"),
+            {"o": list(only or ())})}
         out.append((f.column_name, vals))
     return out
 
