@@ -130,10 +130,6 @@ def _update(c, t, fields, table_id: int, record_id: int, body: PatchBody, user: 
     return {"id": row.id, "updated_at": row.updated_at}
 
 
-def _touches_links(fields, values: dict) -> bool:
-    return any(f.kind == links.LINK and f.column_name in values for f in fields)
-
-
 @router.post("/{table_id}/records")
 def create_record(table_id: int, user: dict = Depends(active_user)):
     """«+» внизу сетки, как в Airtable: пустая запись; поля дальше правятся обычной правкой."""
@@ -144,7 +140,7 @@ def create_record(table_id: int, user: dict = Depends(active_user)):
         row = c.execute(insert(t).values(**extra, updated_by=user["id"]).returning(t.c.id, t.c.updated_at)).first()
         c.execute(text("insert into app_change (table_id, record_id, column_name, old, new, user_id) "
                        "values (:t, :r, 'id', null, to_jsonb(:r), :u)"), {"t": table_id, "r": row.id, "u": user["id"]})
-    computed.invalidate(full=True)   # новая запись — во всех формулах таблицы и итогах по связям
+    computed.invalidate(table=table_id)   # новая запись: формулы её таблицы (журнал 'id' это тоже видит)
     return {"id": row.id, "updated_at": row.updated_at}
 
 
@@ -154,8 +150,8 @@ def patch_record(table_id: int, record_id: int, body: PatchBody, user: dict = De
         with engine.begin() as c:
             t, fields = _editable_table(c, table_id, user, f"запись {record_id}")
             res = _update(c, t, fields, table_id, record_id, body, user)
-        # после commit: зависящие от правки формулы и итоги пересчитаются; связи — во всех итогах по связям
-        computed.invalidate(full=_touches_links(fields, body.values))
+        # после commit: зависящие от правки формулы и итоги пересчитаются (связи — с обеих сторон)
+        computed.invalidate()
         return res
     except DBAPIError:
         # не отдаём текст ошибки БД наружу (раскрывает структуру) — деталь уходит в лог
@@ -178,7 +174,7 @@ def patch_records(table_id: int, body: BatchBody, user: dict = Depends(active_us
         with engine.begin() as c:
             t, fields = _editable_table(c, table_id, user, f"пакет из {len(body.items)}")
             res = [_update(c, t, fields, table_id, it.id, it, user, many=True) for it in body.items]
-        computed.invalidate(full=any(_touches_links(fields, it.values) for it in body.items))
+        computed.invalidate()
         return res
     except DBAPIError:
         log.warning("patch_records %s отклонён БД", table_id, exc_info=True)

@@ -11,8 +11,8 @@ from sqlalchemy import text
 
 from .db import engine
 
-# ponytail: память одного процесса. Правка поля — пересчёт только зависящих от него полей (что изменилось —
-# из журнала app_change); новая запись, форма, первый расчёт — полный (~6 с на 40 тыс. записей).
+# ponytail: память одного процесса. Правка поля, связи, новая запись — пересчёт только зависящих полей
+# (что изменилось — из журнала app_change); первый расчёт и удаление — полный (~35 с на ноутбуке-сервере).
 # Несколько воркеров uvicorn — хранить значения в таблице.
 _lock = threading.Lock()
 _values: dict | None = None
@@ -21,21 +21,31 @@ _next_gen = 0
 _running = False   # идёт фоновый цикл пересчёта
 _seen = None       # последний app_change.id, учтённый в _values (None — следующий расчёт полный)
 _full = False      # запрошен полный пересчёт
+_tables: set = set()   # таблицы с новыми записями с прошлого расчёта
 _threads: list[threading.Thread] = []
 
 
-def _compute(full: bool = True) -> tuple[dict, int]:
-    """→ (значения, учтённый app_change.id). Не full и есть прошлый расчёт — только зависящие от правок поля."""
+def _compute(full: bool = True, tables: frozenset = frozenset()) -> tuple[dict, int]:
+    """→ (значения, учтённый app_change.id). Не full и есть прошлый расчёт — только зависящие от правок поля.
+    tables — таблицы, где появились новые записи: их вычисляемые поля считаются целиком."""
     with engine.connect() as c:
         hi = c.execute(text("select coalesce(max(id), 0) from app_change")).scalar()
         changed = None
         if not full and _values is not None and _seen is not None:
             rows = c.execute(text(
-                "select ch.column_name, f.airtable_id from app_change ch left join app_field f "
+                "select ch.table_id, ch.column_name, f.airtable_id from app_change ch left join app_field f "
                 "on f.table_id = ch.table_id and f.column_name = ch.column_name "
                 "where ch.id > :lo and ch.id <= :hi"), {"lo": _seen, "hi": hi}).all()
-            if all(r.airtable_id for r in rows):   # 'id' (новая запись) и неизвестные колонки — полный расчёт
-                changed = {r.airtable_id for r in rows}
+            new_in = set(tables) | {r.table_id for r in rows if r.column_name == "id"}
+            if all(r.airtable_id or r.column_name == "id" for r in rows):   # неизвестные колонки — полный расчёт
+                changed = {r.airtable_id for r in rows if r.airtable_id}
+                # связь правится с обеих сторон: итоги в связанной таблице считаются по её полю-связи
+                changed |= set(c.execute(text(
+                    "select o.field_id from at_link_meta m join at_link_meta o "
+                    "on o.link_table = m.link_table where m.field_id = any(:f)"), {"f": list(changed)}).scalars())
+                # новая запись — все вычисляемые поля её таблицы (у неё ещё нет значений)
+                changed |= set(c.execute(text("select airtable_id from app_field where table_id = any(:t) "
+                                              "and airtable_id is not null"), {"t": list(new_in)}).scalars())
         # TODAY() — по UTC, как в Airtable; ponytail: значения с TODAY() обновятся при следующей записи
         return compute_all(c, datetime.now(timezone.utc).date(), prev=_values, changed=changed), hi
 
@@ -50,13 +60,16 @@ def values() -> dict:
     return _values
 
 
-def invalidate(full: bool = False) -> None:
+def invalidate(full: bool = False, table: int | None = None) -> None:
     """Данные изменились — пересчитать в фоне. Правки во время расчёта склеиваются в один следующий
-    (вставка 100 ячеек — не 100 полных пересчётов). Устаревший расчёт не перетирает более свежий."""
+    (вставка 100 ячеек — не 100 полных пересчётов). Устаревший расчёт не перетирает более свежий.
+    table — в ней появилась новая запись."""
     global _next_gen, _running, _full
     with _lock:
         _next_gen += 1
         _full = _full or full
+        if table is not None:
+            _tables.add(table)
         if _running:
             return          # идущий цикл увидит новое поколение и посчитает ещё раз
         _running = True
@@ -70,8 +83,10 @@ def _refresh() -> None:
     while True:
         with _lock:
             gen, full, _full = _next_gen, _full, False
+            tables = frozenset(_tables)
+            _tables.clear()
         try:
-            new, hi = _compute(full)
+            new, hi = _compute(full, tables)
         except Exception:
             with _lock:
                 _running = False
@@ -102,3 +117,4 @@ def reset() -> None:
     global _values, _seen, _full
     wait()
     _values, _seen, _full = None, None, False
+    _tables.clear()
