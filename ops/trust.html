@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Доверять серверу Aster</title>
+<style>
+  :root { --text: #1d1f25; --muted: #616670; --line: #e1e3e8; --accent: #166ee1; --soft: #f4f6f9; }
+  body { margin: 0; background: #fff; color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; }
+  p { margin: 8px 0; }
+  .lead { color: var(--muted); }
+  .get { display: inline-block; margin: 12px 0 4px; padding: 10px 16px; border-radius: 6px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
+  ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  code, .fp { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .fp { display: block; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; overflow-wrap: anywhere; }
+  pre { background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 13px; }
+  .note { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Доверять серверу Aster</h1>
+  <p class="lead">Сервер Aster в локальной сети шифрует связь своим сертификатом. Браузер его пока не знает
+    и пишет «Подключение не является приватным». Поставьте сертификат сервера в доверенные — один раз
+    на каждом компьютере и телефоне. После этого предупреждение пропадёт.</p>
+
+  <a class="get" href="/aster-ca.crt" download="aster-ca.crt">Скачать сертификат</a>
+  <p>Сверьте отпечаток (SHA-256) — в свойствах сертификата он должен быть таким же:</p>
+  <span class="fp">@FP@</span>
+
+  <h2>Windows (Chrome, Edge, Яндекс Браузер)</h2>
+  <ol>
+    <li>Скачайте сертификат и откройте файл <code>aster-ca.crt</code>.</li>
+    <li>Нажмите <b>Установить сертификат…</b> → <b>Текущий пользователь</b> → Далее.</li>
+    <li>Выберите <b>Поместить все сертификаты в следующее хранилище</b> → Обзор →
+      <b>Доверенные корневые центры сертификации</b> → Далее → Готово.</li>
+    <li>В предупреждении системы нажмите <b>Да</b>.</li>
+    <li>Закройте браузер полностью и откройте <a href="https://@HOST@">https://@HOST@</a>.</li>
+  </ol>
+  <p>Или одной командой в PowerShell (права администратора не нужны, система спросит подтверждение):</p>
+  <pre>iwr http://@HOST@/aster-ca.crt -OutFile $env:TEMP\aster-ca.crt; Import-Certificate -FilePath $env:TEMP\aster-ca.crt -CertStoreLocation Cert:\CurrentUser\Root</pre>
+  <p class="note">Firefox на Windows обычно берёт сертификаты из системы. Если всё равно предупреждает:
+    Настройки → Приватность и защита → Сертификаты → Просмотр сертификатов → Центры сертификации → Импортировать.</p>
+
+  <h2>Android</h2>
+  <ol>
+    <li>Скачайте сертификат на телефон.</li>
+    <li>Настройки → Безопасность → Шифрование и учётные данные → <b>Установить сертификат</b> →
+      <b>Сертификат ЦС</b> → выберите <code>aster-ca.crt</code>. (Названия пунктов зависят от телефона —
+      поищите в настройках «сертификат».)</li>
+  </ol>
+
+  <h2>iPhone, iPad</h2>
+  <ol>
+    <li>Откройте эту страницу в Safari и скачайте сертификат → <b>Разрешить</b>.</li>
+    <li>Настройки → <b>Профиль загружен</b> → Установить.</li>
+    <li>Настройки → Основные → Об этом устройстве → <b>Доверие сертификатам</b> → включите
+      «Caddy Local Authority».</li>
+  </ol>
+
+  <p class="note">Этот сертификат подтверждает только сервер Aster в вашей сети. Ставьте его, только если
+    скачали со страницы http://@HOST@/trust и отпечаток совпал.</p>
+</main>
+</body>
+</html>
