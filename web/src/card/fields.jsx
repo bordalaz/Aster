@@ -39,7 +39,7 @@ function LinkField({ id, field, list, onChange, onOpenLink }) {
           <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onMouseDown={() => setAdding(false)} />
           <div className="link-pop">
             <LinkSearch field={field} exclude={list.map(v => v.id)} onClose={() => setAdding(false)}
-              onPick={n => { setAdding(false); onChange([...list, { id: n.id, name: n.name }]) }}
+              onPick={n => { if (single) setAdding(false); onChange([...list, { id: n.id, name: n.name }]) }}   // несколько — поиск открыт для следующей
               onCreate={async q => { const n = await createLinked(field, q); setAdding(false); onChange([...list, n]); openRecord(field.link_table, n.id) }} />
           </div>
         </>

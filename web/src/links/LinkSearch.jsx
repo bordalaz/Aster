@@ -8,7 +8,7 @@ const LIMIT = 50
 const rowCache = new Map()   // таблица → {id: строка} — поля мини-карточек уже показанных записей
 
 // Выбор связанной записи, как в Airtable: поиск сверху, ниже мини-карточки (название и первые поля).
-// ↑↓ — по списку, Enter — выбрать, Esc — закрыть. exclude — уже выбранные (их в списке нет).
+// ↑↓ — по списку, Enter — выбрать (поиск очищается — можно искать следующую), Esc — закрыть. exclude — уже выбранные (их в списке нет).
 // onCreate(текст поиска) — «+» и «Создать запись», как «Create a new item» в Airtable.
 export default function LinkSearch({ field, exclude = [], initial = '', onPick, onClose, onCreate }) {
   const [names, setNames] = useState(null)
@@ -50,7 +50,7 @@ export default function LinkSearch({ field, exclude = [], initial = '', onPick, 
   const keyDown = e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setAt(i => Math.min(i + 1, found.length - 1)) }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setAt(i => Math.max(i - 1, 0)) }
-    else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (found[at]) onPick(found[at]) }
+    else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (found[at]) { onPick(found[at]); setQ('') } }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose() }
   }
   return (
@@ -63,7 +63,7 @@ export default function LinkSearch({ field, exclude = [], initial = '', onPick, 
       <ul role="listbox" aria-label={field.title}>
         {found.map((n, i) => (
           <li key={n.id} role="option" aria-selected={i === at} aria-label={n.name} onMouseEnter={() => setAt(i)}
-            onMouseDown={e => e.preventDefault()} onClick={() => onPick(n)}>
+            onMouseDown={e => e.preventDefault()} onClick={() => { onPick(n); setQ('') }}>
             <span className="link-card-name">{n.name || `№${n.id}`}</span>
             <MiniFields cols={cols} row={cache[n.id]} />
           </li>

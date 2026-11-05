@@ -71,5 +71,8 @@ export function useRecords(tableId, refreshMs = REFRESH_MS) {
   // удалённые — из сетки сразу, не дожидаясь пересчёта формул (как Airtable)
   const dropRows = useCallback(ids => setRows(rs => rs.filter(r => !ids.includes(r.id))), [])
 
-  return { fields, rows, loading, patch, patchMany, reload: load, refresh: refreshRows, dropRows }
+  // новая запись — в сетку сразу, не дожидаясь перечитывания всей таблицы
+  const addRow = useCallback(row => setRows(rs => (rs.some(r => r.id === row.id) ? rs : [...rs, row])), [])
+
+  return { fields, rows, loading, patch, patchMany, reload: load, refresh: refreshRows, dropRows, addRow }
 }

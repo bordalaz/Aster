@@ -28,3 +28,10 @@ test('несколько вариантов: щелчок переключает
   await userEvent.click(screen.getByRole('option', { name: 'Списан' }))
   expect(change.mock.calls[0][0].data.value).toEqual(['Брак', 'Списан'])
 })
+
+test('начали печатать на ячейке — набранное сразу в поиске, видны совпадающие варианты', () => {
+  render(<SelectEditor value={cell(null)} onChange={vi.fn()} onFinishedEditing={vi.fn()} initialValue="на" />)
+  expect(screen.getByPlaceholderText('Найти вариант')).toHaveValue('на')
+  expect(screen.getByRole('option', { name: 'На складе' })).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: 'Брак' })).toBeNull()
+})
