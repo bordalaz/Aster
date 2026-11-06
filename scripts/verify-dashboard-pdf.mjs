@@ -16,7 +16,7 @@ if (!tripTable) throw new Error('Рейсы APS table missing from snapshot sche
 const recordsDir = path.join(snapshot, 'records')
 const records = (await readFile(path.join(recordsDir, `${tripTable.id}.jsonl`), 'utf8'))
   .split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line))
-const fields = Object.fromEntries(tripTable.fields.map(field => [field.id, { title: field.name }]))
+const fields = Object.fromEntries(tripTable.fields.map(field => [field.id, { title: field.name, kind: field.type, options: field.options }]))
 const dateField = tripTable.fields.find(field => field.name === 'Начало')
 const years = records.map(row => Number(String(row.fields?.[dateField?.id] ?? '').slice(0, 4))).filter(Number.isFinite)
 const reportYear = Math.max(...years)

@@ -17,6 +17,8 @@ function Metric({ label, value, unit = '', onClick }) {
 }
 
 export default function TripsDashboard({ fields, rows = [], onOpen }) {
+  const durationColumns = new Set(Object.entries(fields || {}).filter(([, f]) => f.kind === 'duration' || f.options?.result?.type === 'duration').map(([key]) => key))
+  rows = useMemo(() => rows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, durationColumns.has(key) && numeric(value) !== null ? Number(value) / 3600 : value]))), [rows, fields])
   const col = title => field(fields, title)
   const started = col('Начало'), trip = col('ID_Рейса_APS'), status = col('Статус')
   const hours = col('Циркуляция, час'), npv = col('Время НПВ'), failure = col('Отказ ТС')
