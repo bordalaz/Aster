@@ -42,4 +42,11 @@ describe('TripsDashboard', () => {
     fireEvent.click(container.querySelector('.ops-legend button'))
     expect(container.querySelector('.ops-legend button')).toHaveAttribute('aria-pressed', 'true')
   })
+  it('opens the browser print dialog for PDF export', () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+    render(<TripsDashboard fields={fields} rows={rows} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Печать / PDF' }))
+    expect(print).toHaveBeenCalledOnce()
+    print.mockRestore()
+  })
 })
