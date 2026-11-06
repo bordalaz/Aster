@@ -16,6 +16,12 @@ const rows = [
 ]
 
 describe('TripsDashboard', () => {
+  it('converts duration seconds to hours without changing ordinary numeric hours', () => {
+    const durationFields = { ...fields, npv: { ...fields.npv, options: { result: { type: 'duration' } } } }
+    render(<TripsDashboard fields={durationFields} rows={[{ ...rows[0], npv: 5400, hours: 12 }]} />)
+    expect(within(screen.getByRole('button', { name: 'НПВ', exact: true })).getByText('1,5 ч')).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: 'Циркуляция', exact: true })).getByText('12 ч')).toBeInTheDocument()
+  })
   it('hides registry until requested, then filters it', () => {
     render(<TripsDashboard fields={fields} rows={rows} />)
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
