@@ -1,124 +1,65 @@
 import { useMemo, useState } from 'react'
 import './TripsDashboard.css'
 
-const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 })
+const number = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 })
 const statuses = ['В работе', 'Планируется', 'Закончен']
 const field = (fields, title) => Object.entries(fields || {}).find(([, item]) => item.title === title)?.[0]
 const raw = (row, column) => column ? row?.[column] : null
 const scalar = item => item && typeof item === 'object' ? item.name ?? item.title ?? item.id ?? '' : item
 const display = item => item === null || item === undefined || item === '' ? '—' : String(scalar(item))
-const dateValue = value => {
-  if (!value) return ''
-  const text = String(value)
-  const date = new Date(text)
-  return Number.isNaN(date.getTime()) ? text.slice(0, 10) : date.toISOString().slice(0, 10)
-}
+const dateValue = value => { if (!value) return ''; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : date.toISOString().slice(0, 10) }
 const list = value => (Array.isArray(value) ? value : value ? [value] : []).map(scalar).filter(x => x !== '').map(String)
 const uniqueOptions = (rows, column) => [...new Set(rows.flatMap(row => list(raw(row, column))))].sort((a, b) => a.localeCompare(b, 'ru'))
-const numeric = value => {
-  if (value === null || value === undefined || value === '') return null
-  const result = Number(value)
-  return Number.isFinite(result) ? result : null
-}
-const csvCell = value => `"${String(value ?? '').replaceAll('"', '""')}"`
+const numeric = value => value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? null : Number(value)
 
-function Metric({ label, children }) {
-  return <article className="ops-metric" aria-label={label}><span>{label}</span><strong>{children}</strong></article>
+function Metric({ label, value, unit = '', onClick }) {
+  return <button type="button" className="ops-metric" aria-label={label} onClick={onClick}><span>{label}</span><strong>{value}{unit && value !== '—' ? ` ${unit}` : ''}</strong><small>Подробности</small></button>
 }
 
 export default function TripsDashboard({ fields, rows = [], onOpen }) {
   const col = title => field(fields, title)
-  const started = col('Начало')
-  const trip = col('ID_Рейса_APS')
-  const status = col('Статус')
-  const hours = col('Циркуляция, час')
-  const npv = col('Время НПВ')
-  const failure = col('Отказ ТС')
-  const work = col('ID_Работа')
-  const engineer = col('ID_Инженеры')
-  const customer = col('Заказчик') || col('ID_Заказчик')
-  const note = col('Примечание')
+  const started = col('Начало'), trip = col('ID_Рейса_APS'), status = col('Статус')
+  const hours = col('Циркуляция, час'), npv = col('Время НПВ'), failure = col('Отказ ТС')
+  const customer = col('Заказчик') || col('ID_Заказчик'), engineer = col('ID_Инженеры')
   const year = new Date().getFullYear()
-  const [from, setFrom] = useState(`${year}-01-01`)
-  const [to, setTo] = useState(`${year}-12-31`)
-  const [statusFilter, setStatusFilter] = useState('')
-  const [customerFilter, setCustomerFilter] = useState('')
-  const [engineerFilter, setEngineerFilter] = useState('')
-  const [monthFilter, setMonthFilter] = useState('')
-  const [sort, setSort] = useState({ key: started || 'id', direction: 'desc' })
-
+  const [from, setFrom] = useState(`${year}-01-01`), [to, setTo] = useState(`${year}-12-31`)
+  const [statusFilter, setStatusFilter] = useState(''), [customerFilter, setCustomerFilter] = useState(''), [engineerFilter, setEngineerFilter] = useState(''), [monthFilter, setMonthFilter] = useState('')
+  const [showAll, setShowAll] = useState(false), [detail, setDetail] = useState('')
   const filtered = useMemo(() => rows.filter(row => {
     const date = dateValue(raw(row, started))
-    if (from && (!date || date < from)) return false
-    if (to && (!date || date > to)) return false
-    if (statusFilter && display(raw(row, status)) !== statusFilter) return false
-    if (customerFilter && !list(raw(row, customer)).includes(customerFilter)) return false
-    if (engineerFilter && !list(raw(row, engineer)).includes(engineerFilter)) return false
-    if (monthFilter && date.slice(0, 7) !== monthFilter) return false
-    return true
+    return (!from || (date && date >= from)) && (!to || (date && date <= to)) && (!statusFilter || display(raw(row, status)) === statusFilter) && (!customerFilter || list(raw(row, customer)).includes(customerFilter)) && (!engineerFilter || list(raw(row, engineer)).includes(engineerFilter)) && (!monthFilter || date.slice(0, 7) === monthFilter)
   }), [rows, started, from, to, statusFilter, customerFilter, engineerFilter, monthFilter, status, customer, engineer])
-
+  const counts = statuses.map(label => filtered.filter(row => display(raw(row, status)) === label).length)
+  const totalStatus = counts.reduce((a, b) => a + b, 0)
+  const shares = counts.map(n => totalStatus ? n / totalStatus * 100 : 0)
+  const donutStyle = { background: totalStatus ? `conic-gradient(#3158b7 0 ${shares[0]}%, #e5a63b ${shares[0]}% ${shares[0] + shares[1]}%, #3c9a68 ${shares[0] + shares[1]}% 100%)` : '#e8ebf1' }
   const monthly = useMemo(() => {
-    const counts = new Map()
-    rows.filter(row => {
-      const date = dateValue(raw(row, started))
-      return (!from || date >= from) && (!to || date <= to) && (!statusFilter || display(raw(row, status)) === statusFilter) && (!customerFilter || list(raw(row, customer)).includes(customerFilter)) && (!engineerFilter || list(raw(row, engineer)).includes(engineerFilter))
-    }).forEach(row => {
-      const month = dateValue(raw(row, started)).slice(0, 7)
-      if (month) counts.set(month, (counts.get(month) || 0) + 1)
-    })
-    return [...counts].sort(([a], [b]) => a.localeCompare(b))
+    const map = new Map()
+    rows.filter(row => { const d = dateValue(raw(row, started)); return (!from || (d && d >= from)) && (!to || (d && d <= to)) && (!statusFilter || display(raw(row, status)) === statusFilter) && (!customerFilter || list(raw(row, customer)).includes(customerFilter)) && (!engineerFilter || list(raw(row, engineer)).includes(engineerFilter)) }).forEach(row => { const m = dateValue(raw(row, started)).slice(0, 7); if (m) map.set(m, (map.get(m) || 0) + 1) })
+    return [...map].sort(([a], [b]) => a.localeCompare(b))
   }, [rows, started, from, to, statusFilter, customerFilter, engineerFilter, status, customer, engineer])
-  const maxMonth = Math.max(1, ...monthly.map(([, count]) => count))
-  const npvValues = filtered.map(row => numeric(raw(row, npv))).filter(value => value !== null)
-  const npvTotal = npvValues.length ? number.format(npvValues.reduce((total, value) => total + value, 0)) : 'Нет данных'
-  const activeRows = filtered.filter(row => display(raw(row, status)) === 'В работе')
-  const activeWorks = new Set(activeRows.flatMap(row => {
-    const value = raw(row, work)
-    return (Array.isArray(value) ? value : value ? [value] : []).map(item => item && typeof item === 'object' ? item.id : item).filter(item => item !== null && item !== undefined && item !== '')
-  }).map(String)).size
-  const failures = filtered.filter(row => Boolean(raw(row, failure))).length
-  const hourValues = filtered.map(row => numeric(raw(row, hours))).filter(value => value !== null)
-  const hoursTotal = hourValues.length ? `${number.format(hourValues.reduce((total, value) => total + value, 0))} ч` : 'Нет данных'
-  const sorted = [...filtered].sort((a, b) => {
-    const av = sort.key === 'date' ? dateValue(raw(a, started)) : sort.key === 'customer' ? list(raw(a, customer)).join(', ') : sort.key === 'engineer' ? list(raw(a, engineer)).join(', ') : raw(a, sort.key)
-    const bv = sort.key === 'date' ? dateValue(raw(b, started)) : sort.key === 'customer' ? list(raw(b, customer)).join(', ') : sort.key === 'engineer' ? list(raw(b, engineer)).join(', ') : raw(b, sort.key)
-    const an = numeric(av), bn = numeric(bv)
-    const result = an !== null && bn !== null ? an - bn : String(scalar(av) ?? '').localeCompare(String(scalar(bv) ?? ''), 'ru', { numeric: true })
-    return result * (sort.direction === 'asc' ? 1 : -1)
-  })
+  const maxMonth = Math.max(1, ...monthly.map(([, n]) => n))
+  const npvValues = filtered.map(row => numeric(raw(row, npv))).filter(v => v !== null)
+  const npvTotal = npvValues.length ? number.format(npvValues.reduce((a, b) => a + b, 0)) : '—'
+  const hourValues = filtered.map(row => numeric(raw(row, hours))).filter(v => v !== null)
+  const hoursTotal = hourValues.length ? number.format(hourValues.reduce((a, b) => a + b, 0)) : '—'
+  const failures = filtered.filter(row => raw(row, failure) === true || (raw(row, failure) && raw(row, failure) !== 'false')).length
+  const byNpv = (a, b) => (numeric(raw(b, npv)) ?? -Infinity) - (numeric(raw(a, npv)) ?? -Infinity)
+  const attention = [...filtered].filter(row => raw(row, failure) === true || (numeric(raw(row, npv)) ?? 0) > 0).sort((a, b) => byNpv(a, b) || String(raw(a, trip) ?? '').localeCompare(String(raw(b, trip) ?? ''), 'ru', { numeric: true })).slice(0, 5)
   const reset = () => { setFrom(`${year}-01-01`); setTo(`${year}-12-31`); setStatusFilter(''); setCustomerFilter(''); setEngineerFilter(''); setMonthFilter('') }
-  const toggleSort = (key, column) => setSort(current => ({ key: column || key, direction: current.key === (column || key) && current.direction === 'asc' ? 'desc' : 'asc' }))
-  const exportCsv = () => {
-    const columns = [['Рейс', trip], ['Дата', started], ['Статус', status], ['Заказчик', customer], ['Инженер', engineer], ['Циркуляция, час', hours], ['Время НПВ', npv], ['Отказ ТС', failure], ['Примечание', note]]
-    const content = '\uFEFF' + [columns.map(([title]) => csvCell(title)).join(';'), ...sorted.map(row => columns.map(([, key]) => csvCell(Array.isArray(raw(row, key)) ? list(raw(row, key)).join(', ') : display(raw(row, key)))).join(';'))].join('\r\n')
-    const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }))
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'reysy-aps.csv'; anchor.click(); URL.revokeObjectURL(url)
-  }
-  const sortLabel = key => sort.key === key ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''
-
+  const openDetail = key => setDetail(current => current === key ? '' : key)
+  const openTrip = row => onOpen?.(row.id)
+  const tripLabel = row => display(raw(row, trip))
+  const npvLabel = row => numeric(raw(row, npv)) === null ? '—' : `${number.format(numeric(raw(row, npv)))} ч`
+  const statusClass = value => value === statuses[0] ? 'active' : value === statuses[1] ? 'planned' : 'done'
   return <section className="ops-dashboard" aria-label="Аналитика рейсов APS">
-    <header className="ops-head"><div><h1>Рейсы APS</h1><p>Аналитика рейсов, работ и времени</p></div><button type="button" className="ops-export" onClick={exportCsv}>Экспорт CSV</button></header>
-    <section className="ops-filters" aria-label="Фильтры рейсов">
-      <label>С даты<input aria-label="С даты" type="date" value={from} onChange={event => { setFrom(event.target.value); setMonthFilter('') }} /></label>
-      <label>По дату<input aria-label="По дату" type="date" value={to} onChange={event => { setTo(event.target.value); setMonthFilter('') }} /></label>
-      <label>Статус<select aria-label="Статус" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="">Все статусы</option>{statuses.map(item => <option key={item}>{item}</option>)}</select></label>
-      <label>Заказчик<select aria-label="Заказчик" value={customerFilter} onChange={event => setCustomerFilter(event.target.value)}><option value="">Все заказчики</option>{uniqueOptions(rows, customer).map(item => <option key={item}>{item}</option>)}</select></label>
-      <label>Инженер<select aria-label="Инженер" value={engineerFilter} onChange={event => setEngineerFilter(event.target.value)}><option value="">Все инженеры</option>{uniqueOptions(rows, engineer).map(item => <option key={item}>{item}</option>)}</select></label>
-      <button type="button" className="ops-reset" onClick={reset}>Сбросить</button>
-    </section>
-    <div className="ops-metrics">
-      <Metric label="Всего рейсов">{number.format(filtered.length)}</Metric>
-      <Metric label="Активные работы">{number.format(activeWorks)}</Metric>
-      <Metric label="НПВ">{npvTotal}{npvValues.length ? ' ч' : ''}</Metric>
-      <Metric label="Отказы ТС">{number.format(failures)}</Metric>
-    </div>
-    <div className="ops-grid">
-      <article className="ops-card"><h2>Рейсы по месяцам</h2>{monthly.length ? <div className="ops-bars" role="group" aria-label="Рейсы по месяцам">{monthly.map(([month, count]) => <button type="button" key={month} aria-pressed={monthFilter === month} aria-label={`${month}: ${count} рейсов`} onClick={() => setMonthFilter(current => current === month ? '' : month)}><i style={{ height: `${Math.max(6, count / maxMonth * 100)}%` }} /><b>{count}</b><span>{new Intl.DateTimeFormat('ru-RU', { month: 'short', timeZone: 'UTC' }).format(new Date(`${month}-01T00:00:00Z`))}</span></button>)}</div> : <p className="dash-empty">Нет рейсов в выбранном периоде.</p>}</article>
-      <article className="ops-card"><h2>Состояние периода</h2><dl className="ops-summary"><div><dt>Циркуляция</dt><dd>{hoursTotal}</dd></div><div><dt>Рейсы с отказом ТС</dt><dd>{number.format(failures)}</dd></div><div><dt>В работе</dt><dd>{number.format(activeRows.length)}</dd></div><div><dt>Планируется</dt><dd>{number.format(filtered.filter(row => display(raw(row, status)) === 'Планируется').length)}</dd></div><div><dt>Закончен</dt><dd>{number.format(filtered.filter(row => display(raw(row, status)) === 'Закончен').length)}</dd></div></dl></article>
-    </div>
-    <article className="ops-card ops-risks"><div className="ops-table-head"><h2>Все рейсы <span>({number.format(filtered.length)})</span></h2>{monthFilter && <button type="button" onClick={() => setMonthFilter('')}>Очистить фильтр месяца</button>}</div>
-      {sorted.length ? <table><thead><tr><th><button onClick={() => toggleSort('trip', trip)}>Рейс{sortLabel(trip)}</button></th><th><button onClick={() => toggleSort('date', 'date')}>Дата{sortLabel('date')}</button></th><th><button onClick={() => toggleSort('status', status)}>Статус{sortLabel(status)}</button></th><th><button onClick={() => toggleSort('customer', 'customer')}>Заказчик{sortLabel('customer')}</button></th><th><button onClick={() => toggleSort('engineer', 'engineer')}>Инженер{sortLabel('engineer')}</button></th><th><button onClick={() => toggleSort('hours', hours)}>Циркуляция{sortLabel(hours)}</button></th><th><button onClick={() => toggleSort('npv', npv)}>НПВ{sortLabel(npv)}</button></th><th>Отказ ТС</th><th>Примечание</th><th>Открыть</th></tr></thead><tbody>{sorted.map((row, index) => <tr key={row.id ?? index}><td>{display(raw(row, trip))}</td><td>{dateValue(raw(row, started)) || '—'}</td><td><span className={`ops-status ops-status-${display(raw(row, status)) === 'В работе' ? 'active' : display(raw(row, status)) === 'Планируется' ? 'planned' : 'done'}`}>{display(raw(row, status))}</span></td><td>{list(raw(row, customer)).join(', ') || '—'}</td><td>{list(raw(row, engineer)).join(', ') || '—'}</td><td>{numeric(raw(row, hours)) === null ? '—' : `${number.format(numeric(raw(row, hours)))} ч`}</td><td>{numeric(raw(row, npv)) === null ? '—' : `${number.format(numeric(raw(row, npv)))} ч`}</td><td>{raw(row, failure) ? 'Да' : raw(row, failure) === false ? 'Нет' : '—'}</td><td>{display(raw(row, note))}</td><td>{onOpen && <button type="button" className="ops-open" onClick={() => onOpen(row.id)}>Открыть</button>}</td></tr>)}</tbody></table> : <p className="dash-empty">Нет рейсов по выбранным фильтрам.</p>}
-    </article>
+    <header className="ops-head"><div><h1>Рейсы APS</h1><p>Состояние рейсов, НПВ и циркуляция за выбранный период</p></div><span className="ops-total">{number.format(filtered.length)} записей</span></header>
+    <section className="ops-filters" aria-label="Фильтры"><label>С даты<input aria-label="С даты" type="date" value={from} onChange={e => { setFrom(e.target.value); setMonthFilter('') }} /></label><label>По дату<input aria-label="По дату" type="date" value={to} onChange={e => { setTo(e.target.value); setMonthFilter('') }} /></label><label>Статус<select aria-label="Статус" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Все статусы</option>{statuses.map(x => <option key={x}>{x}</option>)}</select></label><label>Заказчик<select aria-label="Заказчик" value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}><option value="">Все заказчики</option>{uniqueOptions(rows, customer).map(x => <option key={x}>{x}</option>)}</select></label><label>Инженер<select aria-label="Инженер" value={engineerFilter} onChange={e => setEngineerFilter(e.target.value)}><option value="">Все инженеры</option>{uniqueOptions(rows, engineer).map(x => <option key={x}>{x}</option>)}</select></label><button type="button" className="ops-reset" onClick={reset}>Сбросить</button></section>
+    <div className="ops-metrics"><Metric label="Всего рейсов" value={number.format(filtered.length)} onClick={() => openDetail('all')} /><Metric label="НПВ" value={npvTotal} unit="ч" onClick={() => openDetail('npv')} /><Metric label="Циркуляция" value={hoursTotal} unit="ч" onClick={() => openDetail('hours')} /><Metric label="Отказы ТС" value={number.format(failures)} onClick={() => openDetail('failure')} /></div>
+    {detail && <div className="ops-detail"><strong>{detail === 'all' ? 'Рейсы в фильтре' : detail === 'npv' ? 'Сумма значений НПВ, которые заполнены' : detail === 'hours' ? 'Сумма часов циркуляции, которые заполнены' : 'Рейсы с отказом ТС'}: {detail === 'all' ? filtered.length : detail === 'npv' ? `${npvTotal} ч` : detail === 'hours' ? `${hoursTotal} ч` : failures}</strong><span>{detail === 'npv' ? `Заполнено: ${npvValues.length} из ${filtered.length}` : detail === 'hours' ? `Заполнено: ${hourValues.length} из ${filtered.length}` : 'Числа рассчитаны по текущим фильтрам.'}</span></div>}
+    <div className="ops-grid ops-visuals"><article className="ops-card ops-status-card"><div><h2>Распределение по статусу</h2><p>Нажмите статус, чтобы фильтровать</p></div><div className="ops-status-layout"><div className="ops-donut" style={donutStyle} role="img" aria-label={`Статусы рейсов: ${totalStatus}`}><span><b>{number.format(totalStatus)}</b><small>рейсов</small></span></div><div className="ops-legend">{statuses.map((label, i) => <button type="button" key={label} aria-pressed={statusFilter === label} onClick={() => setStatusFilter(cur => cur === label ? '' : label)}><i className={`dot dot-${i}`} /><span>{label}</span><b>{number.format(counts[i])}</b><small>{number.format(shares[i])}%</small></button>)}</div></div></article><article className="ops-card ops-month-card"><div className="ops-card-title"><div><h2>Рейсы по месяцам</h2><p>Дата начала по фильтрам</p></div>{monthFilter && <button type="button" className="ops-clear-month" onClick={() => setMonthFilter('')}>Сбросить месяц</button>}</div>{monthly.length ? <div className="ops-bars" role="group" aria-label="Рейсы по месяцам">{monthly.map(([month, count]) => <button type="button" key={month} aria-pressed={monthFilter === month} aria-label={`${month}: ${count}`} onClick={() => setMonthFilter(cur => cur === month ? '' : month)}><b>{count}</b><i style={{ height: `${Math.max(4, count / maxMonth * 100)}%` }} /><span>{month}</span></button>)}</div> : <p className="dash-empty">Нет дат для динамики.</p>}</article></div>
+    <article className="ops-card ops-attention"><div className="ops-table-head"><div><h2>Рейсы, требующие внимания</h2><p>Рейсы с НПВ или зарегистрированным отказом ТС</p></div><span>{attention.length} / 5</span></div>{attention.length ? <div className="ops-attention-list">{attention.map((row, i) => <button type="button" className="ops-trip" key={row.id ?? i} onClick={() => openTrip(row)}><span className={`ops-status ops-status-${statusClass(display(raw(row, status)))}`}>{display(raw(row, status))}</span><strong>{tripLabel(row)}</strong><span>НПВ <b>{npvLabel(row)}</b></span><span>{raw(row, failure) === true ? 'Отказ ТС: да' : 'Отказ ТС: нет'}</span><span className="ops-trip-open">Открыть</span></button>)}</div> : <p className="dash-empty">рейсов для внимания нет.</p>}</article>
+    <div className="ops-all-head"><h2>Реестр рейсов <span>({number.format(filtered.length)})</span></h2><button type="button" className="ops-reset" aria-expanded={showAll} onClick={() => setShowAll(v => !v)}>{showAll ? 'Скрыть реестр' : 'Показать рейсы'}</button></div>
+    {showAll && <article className="ops-card ops-risks">{filtered.length ? <table><thead><tr><th>Рейс</th><th>Дата</th><th>Статус</th><th>НПВ</th><th>Циркуляция</th><th>Отказ ТС</th><th></th></tr></thead><tbody>{filtered.map((row, i) => <tr key={row.id ?? i} onClick={() => openTrip(row)}><td>{tripLabel(row)}</td><td>{dateValue(raw(row, started)) || '—'}</td><td>{display(raw(row, status))}</td><td>{npvLabel(row)}</td><td>{numeric(raw(row, hours)) === null ? '—' : `${number.format(numeric(raw(row, hours)))} ч`}</td><td>{raw(row, failure) === true ? 'Да' : raw(row, failure) === false ? 'Нет' : '—'}</td><td>{onOpen && <button type="button" className="ops-open" onClick={e => { e.stopPropagation(); openTrip(row) }}>Открыть</button>}</td></tr>)}</tbody></table> : <p className="dash-empty">рейсов нет.</p>}</article>}
   </section>
 }
