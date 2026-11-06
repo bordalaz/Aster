@@ -12,6 +12,7 @@ import { aggregate, applyConds, series } from './dash.js'
 import { BarChart, PieChart, Tile, colorsFor, fmt } from './charts.jsx'
 import TripsDashboard from './TripsDashboard.jsx'
 import ContractsDashboard from './ContractsDashboard.jsx'
+import PersonnelDashboard from './PersonnelDashboard.jsx'
 import { openRecord } from '../links/data.js'
 
 const UNIT = 48   // px на единицу высоты раскладки Airtable
@@ -70,6 +71,8 @@ function Page({ id }) {
   if (cfg.title === 'Рейсы APS' && tripEntry) return <TripsDashboard fields={tripEntry[1].fields} rows={tripEntry[1].rows} onOpen={recordId => openRecord(Number(tripEntry[0]), recordId)} />
   const contractEntry = Object.entries(data).find(([, t]) => Object.values(t.fields).some(f => f.title === 'Код_Договора'))
   if (cfg.title === 'Остатки на договорах' && contractEntry) return <ContractsDashboard fields={contractEntry[1].fields} rows={contractEntry[1].rows} onOpen={recordId => openRecord(Number(contractEntry[0]), recordId)} />
+  const personnelEntry = Object.entries(data).find(([, t]) => Object.values(t.fields).some(f => f.title === 'Рейтинг APS'))
+  if (cfg.title === 'Персонал APS' && personnelEntry) return <PersonnelDashboard fields={personnelEntry[1].fields} rows={personnelEntry[1].rows} onOpen={recordId => openRecord(Number(personnelEntry[0]), recordId)} />
   const rowsFor = el => {
     const t = data[el.table]
     return el.filter && conds[el.filter] ? applyConds(t.rows, t.fields, conds[el.filter]) : t.rows
