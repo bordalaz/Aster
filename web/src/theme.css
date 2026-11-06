@@ -139,6 +139,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* галочка как в Airtable: белый квадрат с рамкой, внутри зелёная ✓ */
 .fld-check { appearance: none; width: 22px; height: 22px; margin: 5px 0; border: 1px solid #c4c7cd; border-radius: 3px; background: #fff center / 16px no-repeat; cursor: pointer; }
 .fld-check:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%2320c933' d='M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E"); }
+.fld-check.thumb { border-color: transparent; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23a0a4ab' d='M5 6.6 7.5 1.5A2 2 0 0 1 9.5 3.5V5h3.87a1 1 0 0 1 1 1.13l-.75 6a1 1 0 0 1-1 .87H2.5a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1H5ZM5 6.6V13'/%3E%3C/svg%3E"); }
+.fld-check.thumb:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%2320c933' d='M14.49 5.01A1.5 1.5 0 0 0 13.37 4.5H10v-1A2.5 2.5 0 0 0 7.5 1a.5.5 0 0 0-.45.28L4.69 6H2a1 1 0 0 0-1 1v5.5a1 1 0 0 0 1 1h10.62a1.5 1.5 0 0 0 1.49-1.31l.75-6a1.5 1.5 0 0 0-.37-1.18ZM2 7h2.5v5.5H2V7Z'/%3E%3C/svg%3E"); }
 .fld-select { position: relative; display: flex; align-items: center; gap: 6px; }
 .fld-select select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
 .fld-multi { flex-wrap: wrap; min-height: 30px; }
@@ -547,3 +549,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .printing .card-main, .printing .card-body { overflow: visible; height: auto; max-height: none; }
   .printing .card-head button, .printing .card-side { display: none; }
 }
+/* перетаскивание отмеченных строк сетки: «призрак» у курсора, линия вставки, подсветка строки чужой группы */
+.drag-ghost { position: fixed; z-index: 40; pointer-events: none; display: flex; gap: 8px; align-items: center; max-width: 360px;
+  padding: 6px 10px; background: #fff; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
+  font-size: 13px; white-space: nowrap; overflow: hidden; transform: rotate(-1deg); animation: drag-in .12s ease-out; }
+.drag-ghost > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.drag-more { color: var(--muted); }
+.drag-to { color: #166ee1; font-weight: 500; }
+@keyframes drag-in { from { opacity: 0; transform: scale(.96); } }
+.drop-line { z-index: 39; pointer-events: none; background: #166ee1; border-radius: 1px; transition: top .08s ease-out; }
+.drop-box { z-index: 39; pointer-events: none; border: 2px solid #166ee1; border-radius: 3px; transition: top .08s ease-out; }
