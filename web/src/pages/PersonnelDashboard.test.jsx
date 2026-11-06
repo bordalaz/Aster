@@ -10,13 +10,13 @@ const rows = [
 ]
 
 describe('PersonnelDashboard', () => {
-  it('defaults to staff status and calculates participation totals, rating, and incident people', () => {
+  it('shows all staff and calculates participation totals, rating, and incident people', () => {
     render(<PersonnelDashboard fields={fields} rows={rows} />)
     const metrics = document.querySelector('.personnel-metrics')
     expect(within(metrics).getByText('20')).toBeInTheDocument()
     expect(within(metrics).getByText('8')).toBeInTheDocument()
     expect(within(metrics).getByText('1')).toBeInTheDocument()
-    expect(screen.getByLabelText('Статус')).toHaveValue('В штате')
+    expect(screen.queryByLabelText('Статус')).not.toBeInTheDocument()
   })
   it('preserves zero versus null and filters by search and minimum rating; reset restores defaults', () => {
     render(<PersonnelDashboard fields={fields} rows={rows} />)
