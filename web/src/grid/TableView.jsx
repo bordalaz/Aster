@@ -8,7 +8,7 @@ import CalendarView from './CalendarView.jsx'
 import TimelineView from './TimelineView.jsx'
 import ListView from './ListView.jsx'
 import Card from '../card/Card.jsx'
-import { openRecord } from '../links/data.js'
+import { linkNames, openRecord } from '../links/data.js'
 import { ButtonDialog, ButtonRun, openForm } from '../card/ButtonField.jsx'
 import ViewBar, { ViewsSide } from '../views/ViewBar.jsx'
 import { groupCols, visibleColumns } from './viewConfig.js'
@@ -132,6 +132,44 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
       setViews(vs => vs.map(v => (v.id === current ? { ...v, config: drop(v.config) } : v)))
     } catch { setError('Не удалось убрать сортировку') }
   }
+  // Оборудование, сгруппированное по Местонахождению: отмеченные строки перетащили в другую группу (куст/базу) →
+  // запись «Перемещения», как владелец заводил её руками: Откуда — прежняя группа, Куда — новая, Дата — сегодня,
+  // оборудование привязано; «Отправляем?» не трогаем (письмо — когда владелец допишет транспорт и причину).
+  // На каждую прежнюю группу — своя запись. Местонахождение пересчитается само (последнее «Куда»).
+  // ponytail: таблицы и поля — по названиям; переименуют в Aster — поправить здесь
+  const groupField = fields.find(f => f.column_name === groupCols(config.group)[0])
+  const canMove = title === 'Оборудование' && groupCols(config.group).length === 1 && groupField?.title === 'Местонахождение'
+  async function moveToGroup({ to, from }) {
+    setError('')
+    try {
+      const mt = (await api('/api/tables')).find(t => t.title === 'Перемещение')
+      const mf = await api(`/api/tables/${mt.id}/fields`)
+      const col = t => mf.find(f => f.title === t)
+      const places = await linkNames(col('Куда').link_table)
+      const idOf = name => places.find(p => p.name === name)?.id
+      if (!idOf(to)) { setError(`Нет куста/базы «${to}»`); return }
+      const d = new Date(), today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      let first = null
+      for (const g of from) {
+        const { id, updated_at } = await api(`/api/tables/${mt.id}/records`, { method: 'POST' })
+        try {
+          await api(`/api/tables/${mt.id}/records/${id}`, { method: 'PATCH', body: { updated_at, values: {
+            [col('Дата').column_name]: today,
+            [col('Откуда').column_name]: idOf(g.key) ? [idOf(g.key)] : [],
+            [col('Куда').column_name]: [idOf(to)],
+            [col('ID_Оборудования').column_name]: g.ids,
+          } } })
+        } catch (e) {   // пустую запись не оставляем
+          await api(`/api/tables/${mt.id}/records/delete`, { method: 'POST', body: { ids: [id] } }).catch(() => {})
+          throw e
+        }
+        first ??= id
+      }
+      openRecord(mt.id, first)   // карточка перемещения поверх — дописать транспорт, причину, отметить «Отправляем?»
+      await refresh()            // строки переедут в новую группу, когда сервер пересчитает Местонахождение
+    } catch { setError('Не удалось оформить перемещение') }
+  }
+
   async function saveOrder(order) {
     setError('')
     if (!view) return   // «Все записи»: порядок уже в config (Grid), config — в localStorage
@@ -268,7 +306,7 @@ export default function TableView({ tableId, primaryField, user, title, openId, 
             onConfigChange={setConfig} onEdit={onEdit} onEditMany={onEditMany} onOpen={openRow} search={search} exportRef={exportRef}
             onAdd={fields.some(f => f.editable) ? addRecord : undefined}
             onCreate={fields.some(f => f.editable) ? createInline : undefined}
-            canReorder={canReorder} onReorder={saveOrder} onUnsort={unsort}
+            canReorder={canReorder} onReorder={saveOrder} onUnsort={unsort} onMoveToGroup={canMove ? moveToGroup : undefined}
             onInsert={fields.some(f => f.editable) ? insertNear : undefined}
             onDuplicate={fields.some(f => f.editable) ? duplicate : undefined}
             onSend={(rs, columns) => setSending({ rows: rs, columns })}

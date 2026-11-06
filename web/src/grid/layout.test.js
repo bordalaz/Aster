@@ -90,6 +90,7 @@ describe('ячейка номера строки', () => {
     expect(rownumHit(6, { drag: true })).toBe('drag')
     expect(rownumHit(6)).toBe('number')            // отсортированный вид — ручки нет
     expect(rownumHit(20)).toBe('check')
+    expect(rownumHit(20, { drag: true })).toBe('drag')   // отмеченную строку тащат и за галочку
     expect(rownumHit(45)).toBe('expand')
     expect(rownumHit(ROWNUM_W - 4)).toBe('number')   // правый край — не кнопка
   })

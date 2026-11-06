@@ -171,7 +171,7 @@ export function toCell(field, value) {
   if (kind === 'checkbox' && !Array.isArray(value)) {
     const color = choiceColor(field.options?.color ?? 'greenBright').bg
     return { kind: GridCellKind.Custom, allowOverlay: false, readonly: !field.editable, copyData: value ? 'да' : '',
-      data: { kind: 'check', value: !!value, color } }
+      data: { kind: 'check', value: !!value, color, icon: field.options?.icon } }
   }
   if (SELECT.has(kind)) {   // плашки цвета варианта, как в Airtable; свои поля выбора правятся списком в ячейке
     const choices = choicesOf(field)
