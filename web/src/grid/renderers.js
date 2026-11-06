@@ -67,6 +67,8 @@ const pills = {
 }
 
 // Галочка как в Airtable: цветная ✓ без рамки; пусто — ничего. Клик переключает.
+// Лайк 16×16 (заливка), как значок thumbsUp у галочки в Airtable.
+export const THUMB_UP = 'M14.49 5.01A1.5 1.5 0 0 0 13.37 4.5H10v-1A2.5 2.5 0 0 0 7.5 1a.5.5 0 0 0-.45.28L4.69 6H2a1 1 0 0 0-1 1v5.5a1 1 0 0 0 1 1h10.62a1.5 1.5 0 0 0 1.49-1.31l.75-6a1.5 1.5 0 0 0-.37-1.18ZM2 7h2.5v5.5H2V7Z'
 const check = {
   kind: GridCellKind.Custom,
   isMatch: c => c.data?.kind === 'check',
@@ -74,6 +76,10 @@ const check = {
     if (!cell.data.value) return true
     const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2
     ctx.save()
+    if (cell.data.icon === 'thumbsUp') {   // «Отправляем?» в Перемещении — рука-лайк, как в Airtable
+      ctx.translate(cx - 8, cy - 8); ctx.fillStyle = cell.data.color; ctx.fill(new Path2D(THUMB_UP)); ctx.restore()
+      return true
+    }
     ctx.strokeStyle = cell.data.color; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
     ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx - 2, cy + 4); ctx.lineTo(cx + 6, cy - 5); ctx.stroke()
     ctx.restore()
@@ -122,10 +128,11 @@ const group = {
 // только без сортировки), галочка выбора вместо номера и кнопка раскрытия у названия; сразу за номером —
 // цветная полоса строки (colorConfig вида). Отмеченная строка держит галочку и без наведения.
 export const ROWNUM_W = 72
-const DRAG_W = 14, CHECK_X = 14, CHECK_W = 22, BAR_X = 37, EXPAND_X = 44, EXPAND_W = 24
-// Что под курсором в ячейке номера (localX — от левого края ячейки); ручка — только если строки можно двигать.
+const CHECK_X = 14, CHECK_W = 22, BAR_X = 37, EXPAND_X = 44, EXPAND_W = 24
+// Что под курсором в ячейке номера (localX — от левого края ячейки). Тащить можно только отмеченную строку:
+// у неё за ручку и за саму галочку (щелчок без движения — снять отметку), зона 36 px — легко попасть.
 export function rownumHit(localX, { drag = false } = {}) {
-  if (drag && localX < DRAG_W) return 'drag'
+  if (drag && localX < CHECK_X + CHECK_W) return 'drag'
   if (localX >= CHECK_X && localX < CHECK_X + CHECK_W) return 'check'
   if (localX >= EXPAND_X && localX < EXPAND_X + EXPAND_W) return 'expand'
   return 'number'
