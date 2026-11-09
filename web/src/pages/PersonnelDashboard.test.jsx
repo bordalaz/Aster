@@ -14,7 +14,9 @@ describe('PersonnelDashboard', () => {
     render(<PersonnelDashboard fields={fields} rows={rows} />)
     const metrics = document.querySelector('.personnel-metrics')
     expect(within(metrics).getByText('20')).toBeInTheDocument()
-    expect(within(metrics).getByText('8')).toBeInTheDocument()
+    // A real zero participates in the mean; an absent rating does not: (8 + 0) / 2.
+    const rating = within(metrics).getByText('Средний рейтинг APS').closest('article')
+    expect(within(rating).getByText('4')).toBeInTheDocument()
     expect(within(metrics).getByText('1')).toBeInTheDocument()
     expect(screen.queryByLabelText('Статус')).not.toBeInTheDocument()
   })
