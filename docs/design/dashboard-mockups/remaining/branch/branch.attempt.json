@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "workflowRevision": "branch-execute-v3",
+  "status": "succeeded",
+  "runKey": "branch:v1:img-e0b757f6a51ef1aedc171471e228edaf:-:23be075a33ad5056:site:branch-execute-v3",
+  "origin": "https://12ui.com",
+  "scope": "site",
+  "concept": "Создай три sibling desktop-экрана 1440px в том же визуальном языке Aster, русский язык, без декоративных иллюстраций. Каждый экран: один рабочий вопрос, правдоподобные данные, KPI, графики, таблица действий. Экран 1 «Ремонты ССК-Т»: воронка ремонтов, время на этапах, просроченные узлы, загрузка исполнителей и действие назначения. Экран 2 «НПВ по годам АПС»: динамика НПВ по годам, причины, сравнение год к году, точки перелома и перечень программ улучшений. Экран 3 «Журнал»: журнал полевых событий — фото, фильтры, работа/объект, важные записи, автор, время, теги; быстрый переход в связанную запись. Не создавать абстрактные или пустые страницы.",
+  "conceptSha256": "23be075a33ad5056427f3561ba6f49ad89c619a8e69e6da2544c565ecb0d4d8e",
+  "winner": {
+    "kind": "image",
+    "imagePath": "C:\\Users\\Denis\\AppData\\Local\\Temp\\12ui-aster-desktop-1440px-aps-bcAEF2\\candidates\\D.png",
+    "sha256": "e0b757f6a51ef1aedc171471e228edaf12dfa56fab01fc786e771d4df691b5a9",
+    "mediaType": "image/png",
+    "width": 1536,
+    "height": 1024
+  },
+  "generationCanvas": {
+    "provenance": "inherited-from-winner",
+    "winner": {
+      "width": 1536,
+      "height": 1024
+    }
+  },
+  "maxScreens": 3,
+  "generation": {
+    "engine": "api",
+    "reason": "Codex CLI could not run. Install Codex on PATH or pass --codex-bin with a working executable."
+  },
+  "convert": {
+    "output": "html",
+    "imageBackendExplicit": false,
+    "requestedEngine": "auto",
+    "selection": {
+      "engine": "api",
+      "reason": "Codex CLI could not run. Install Codex on PATH or pass --codex-bin with a working executable.",
+      "codexBin": "C:\\nvm4w\\nodejs\\codex.cmd",
+      "codexHome": "C:\\Users\\Denis\\.codex",
+      "quiet": false
+    },
+    "model": "standard"
+  },
+  "prototype": true,
+  "createdAt": "2026-11-06T07:46:21.389Z",
+  "runId": "crt-7e0e9aec3aa445a8a246040d2603d7cfba1b4392",
+  "completedAt": "2026-11-06T07:52:46.200Z",
+  "completionPath": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\branch.complete.json"
+}

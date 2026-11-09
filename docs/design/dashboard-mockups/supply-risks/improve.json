@@ -1,0 +1,58 @@
+{
+  "version": 2,
+  "scope": "page",
+  "createdAt": "2026-11-06T07:57:27.869Z",
+  "runDir": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\supply-risks",
+  "input": {
+    "kind": "image",
+    "value": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\h.png",
+    "sha256": "46f1def214410c9476a4ab90eba0a3a2f31a807f20eca62a76a5d51b6bb4f78b"
+  },
+  "concept": "Переработай экран «Готовность ЗИП» в управленческий дашборд «Риски обеспечения работ» для начальника службы, заместителя, менеджеров и ведущих инженеров. Не интерфейс кладовщика и не каталог запчастей. Главный ответ: какие работы и обязательства службы могут сорваться из-за материального обеспечения, когда, почему и какое управленческое решение требуется. Покажи: число работ под риском, прогноз по неделям, финансовый/сроковой эффект, причины риска (дефицит, задержка поставки, резерв под другую работу, нет подтверждённой замены), список критических работ с датой потребности, владельцем и статусом решения. Действия: открыть риск, назначить владельца, согласовать приоритет, эскалировать закупку. Оставь светлый индустриальный B2B стиль Aster, боковую навигацию, русский язык, реальные правдоподобные значения. Убери кнопку «Создать заявку» из главного сценария. Redesign this existing product interface. Its layout, composition, section order, and proportions are yours to rework: this should read as a new design of the same product, not a retouch of the one it has. Work inside its existing visual language: its palette, typography voice, and image treatment stay, and everything around them is sharpened - spacing rhythm, alignment, surfaces, control affordances, ink, and type rendering. Keep the product's logo, wordmark, and brand imagery as they are. Keep only the same product: its name and wordmark, and what it is. The brief decides how much of the page's other text and control copy survives; invent no product facts, features, prices, or data. These are conservation defaults, not a freeze: the brief above outranks them, and they outrank the page as it stands.",
+  "direction": "Переработай экран «Готовность ЗИП» в управленческий дашборд «Риски обеспечения работ» для начальника службы, заместителя, менеджеров и ведущих инженеров. Не интерфейс кладовщика и не каталог запчастей. Главный ответ: какие работы и обязательства службы могут сорваться из-за материального обеспечения, когда, почему и какое управленческое решение требуется. Покажи: число работ под риском, прогноз по неделям, финансовый/сроковой эффект, причины риска (дефицит, задержка поставки, резерв под другую работу, нет подтверждённой замены), список критических работ с датой потребности, владельцем и статусом решения. Действия: открыть риск, назначить владельца, согласовать приоритет, эскалировать закупку. Оставь светлый индустриальный B2B стиль Aster, боковую навигацию, русский язык, реальные правдоподобные значения. Убери кнопку «Создать заявку» из главного сценария.",
+  "candidates": 4,
+  "retain": {
+    "include": [
+      "assets",
+      "style"
+    ],
+    "exclude": [
+      "content",
+      "layout"
+    ]
+  },
+  "retainFlag": "style,assets",
+  "conversionModel": "standard",
+  "responsiveQuality": "standard",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fullPage": false,
+  "bootstrap": [],
+  "bootstrapSha256": [],
+  "kitIgnore": {
+    "state": "not-ignored",
+    "relativeOutDir": "docs/design/dashboard-mockups/supply-risks"
+  },
+  "planSourceConvert": false,
+  "pageLimit": 5,
+  "requestedPages": [],
+  "pageConcurrency": 3,
+  "referenceOrder": "current-first",
+  "pages": [],
+  "stages": {
+    "capture": {
+      "settledAt": "2026-11-06T07:57:28.055Z",
+      "replayCount": 0,
+      "priceCeilingUsd": 0,
+      "outcome": "settled"
+    }
+  },
+  "capture": {
+    "sourceImage": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\supply-risks\\source.png",
+    "sha256": "df780d296636a90ea331f0e4ef02b979a9c800ffb63bc8d9c1dd93bb2b354bce",
+    "width": 1536,
+    "height": 1024
+  }
+}

@@ -1,0 +1,510 @@
+{
+  "version": 1,
+  "status": "succeeded",
+  "runId": "crt-c24b0b0ed2b9820f8abed20506c52b738c211303",
+  "runKey": "branch:v1:img-e0b757f6a51ef1aedc171471e228edaf:-:7e470018e103b708:site:branch-execute-v3",
+  "workflowRevision": "branch-execute-v3",
+  "scope": "site",
+  "concept": "Создай восемь sibling desktop-экранов 1440px в том же визуальном языке Aster, русский язык, без декоративных иллюстраций. Каждый экран: один рабочий вопрос, реальные правдоподобные данные, KPI, релевантные диаграммы, таблица действий/деталей. Экран 1 «Остатки на договорах»: остаток бюджета и объёма, прогноз исчерпания, договоры в риске. Экран 2 «Затраты на аренду»: аренда по месяцам, поставщикам и работам, перерасход, ближайшие платежи. Экран 3 «Персонал APS»: инженеры на смене, загрузка, допуски/сертификаты, незакрытые смены. Экран 4 «НПВ APS»: причины НПВ, динамика, рейсы с наибольшими потерями. Экран 5 «По заказчикам»: статус работ, объём, риски по каждому заказчику. Экран 6 «Работы АПС»: портфель активных работ, этапы, план-факт, блокеры. Экран 7 «Инциденты по заказчикам»: частота, серьёзность, повторяющиеся причины, расследования. Экран 8 «Готовность ЗИП»: покрытие потребности на 30 дней, дефицит, резерв под работы, аналоги, поставки, действие «создать заявку». Не создавать абстрактные или пустые страницы.",
+  "conceptSha256": "7e470018e103b708843f66622762e01164d794b4d4f477d447460115b66855fe",
+  "origin": "https://12ui.com",
+  "outDir": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch",
+  "attemptPath": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\branch.attempt.json",
+  "planPath": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\branch.plan.json",
+  "startedAt": "2026-11-06T07:37:24.985Z",
+  "completedAt": "2026-11-06T07:46:49.990Z",
+  "screenCount": 8,
+  "succeededCount": 8,
+  "failedCount": 0,
+  "blockedCount": 0,
+  "pageCount": 9,
+  "logicalPageCount": 5,
+  "convertedPageCount": 9,
+  "winner": {
+    "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\winner.png",
+    "sha256": "e0b757f6a51ef1aedc171471e228edaf12dfa56fab01fc786e771d4df691b5a9",
+    "bytes": 1293433,
+    "width": 1536,
+    "height": 1024
+  },
+  "screens": [
+    {
+      "slot": "a",
+      "pageIndex": 1,
+      "pageId": "p1",
+      "viewportOrdinal": 1,
+      "status": "succeeded",
+      "direction": "Финансы: остатки на договорах и затраты на аренду",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\a.png",
+      "sha256": "6b4005ca55a60fb9ff3b4706793eb47a464d9a511105ff2475096d3724884f8f",
+      "bytes": 1412872,
+      "width": 1536,
+      "height": 1024,
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "b",
+      "pageIndex": 2,
+      "pageId": "p1-b",
+      "viewportOrdinal": 1,
+      "generationPageIndex": 1,
+      "generationViewportOrdinal": 2,
+      "status": "succeeded",
+      "direction": "Финансы: остатки на договорах и затраты на аренду (part 2)",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\b.png",
+      "sha256": "323b2095654a5fcc47338ff87ed242f8795b283f9473aa7cf11ece2f3d1247e6",
+      "bytes": 1456454,
+      "width": 1536,
+      "height": 1024,
+      "dependsOnSlot": "a",
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "c",
+      "pageIndex": 3,
+      "pageId": "p2-aps",
+      "viewportOrdinal": 1,
+      "generationPageIndex": 2,
+      "status": "succeeded",
+      "direction": "Выполнение: персонал APS и работы АПС",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\c.png",
+      "sha256": "80d453d3871f836017341de0a32ddc2f1147c144af2386b43e68f52a7d41a6e6",
+      "bytes": 1529139,
+      "width": 1536,
+      "height": 1024,
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "d",
+      "pageIndex": 4,
+      "pageId": "p2-aps-d",
+      "viewportOrdinal": 1,
+      "generationPageIndex": 2,
+      "generationViewportOrdinal": 2,
+      "status": "succeeded",
+      "direction": "Выполнение: персонал APS и работы АПС (part 2)",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\d.png",
+      "sha256": "63a88151087dbc250bdb2a8d9e6035b853c8b8dabec1f16bbb9257fb53336384",
+      "bytes": 1565965,
+      "width": 1536,
+      "height": 1024,
+      "dependsOnSlot": "c",
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "e",
+      "pageIndex": 5,
+      "pageId": "p3",
+      "viewportOrdinal": 1,
+      "generationPageIndex": 3,
+      "status": "succeeded",
+      "direction": "Заказчики: выполнение и инциденты",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\e.png",
+      "sha256": "8f2823c950d52cc2cf697bdf10793e800abc082c81467b3d6113fa22ecd71293",
+      "bytes": 1401178,
+      "width": 1536,
+      "height": 1024,
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "f",
+      "pageIndex": 6,
+      "pageId": "p3-f",
+      "viewportOrdinal": 1,
+      "generationPageIndex": 3,
+      "generationViewportOrdinal": 2,
+      "status": "succeeded",
+      "direction": "Заказчики: выполнение и инциденты (part 2)",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\f.png",
+      "sha256": "604114efe0c5e586ee297d65ba50ae17b10e50972c6c9c6f86dc5b644fb2d8ca",
+      "bytes": 1467058,
+      "width": 1536,
+      "height": 1024,
+      "dependsOnSlot": "e",
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "g",
+      "pageIndex": 7,
+      "pageId": "p4-aps",
+      "viewportOrdinal": 1,
+      "generationPageIndex": 4,
+      "status": "succeeded",
+      "direction": "Надёжность: НПВ APS и готовность ЗИП",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\g.png",
+      "sha256": "5f66211e95e688717358d5b737d6bfcdcd611fd22ab988dbe642b13001346d3f",
+      "bytes": 1389150,
+      "width": 1536,
+      "height": 1024,
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "h",
+      "pageIndex": 8,
+      "pageId": "p4-aps-h",
+      "viewportOrdinal": 1,
+      "generationPageIndex": 4,
+      "generationViewportOrdinal": 2,
+      "status": "succeeded",
+      "direction": "Надёжность: НПВ APS и готовность ЗИП (part 2)",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\screens\\h.png",
+      "sha256": "46f1def214410c9476a4ab90eba0a3a2f31a807f20eca62a76a5d51b6bb4f78b",
+      "bytes": 1446281,
+      "width": 1536,
+      "height": 1024,
+      "dependsOnSlot": "g",
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    }
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "id": "p0",
+      "kind": "source",
+      "title": "Рейсы сегодня",
+      "slots": [],
+      "startsFromWinner": true,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "94665972-507d-4fe1-b25f-698ddbc41db1",
+        "idempotencyKey": "branch-package:v1:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:0:01529fde9a5cfc66ecaea51ec5f82106:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "ec1136d1-a126-4f5b-b121-fa1e27058285",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p0.html",
+        "sha256": "98a8e954fbb939cc9fbf604d366431bf418b638dbcf907def86eeb16fec17a09",
+        "bytes": 701327,
+        "viewports": [
+          {
+            "id": "winner",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "0386f81a-8c91-4d70-bbff-64a09d184e29",
+            "sha256": "e0b757f6a51ef1aedc171471e228edaf12dfa56fab01fc786e771d4df691b5a9",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "id": "p1",
+      "kind": "additional",
+      "title": "Финансы: остатки на договорах и затраты на аренду",
+      "slots": [
+        "a"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 1,
+      "sourcePageId": "p1",
+      "sourceViewportOrdinal": 1,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "4c9dea5e-775a-43e5-8817-411dd14018db",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:f64551fcd6f07823:1:209045d59bac370dac78:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "d5bec3b4-c64b-45f4-b993-78a803833c9d",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p1.html",
+        "sha256": "01bc79e3b1bd556473e287a0b6efd2ed2c99f2ab0d67f2a8c636f7271414d5d4",
+        "bytes": 865885,
+        "viewports": [
+          {
+            "id": "a",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "9963cda7-fedc-4ed9-a872-ebbfbd512566",
+            "sha256": "6b4005ca55a60fb9ff3b4706793eb47a464d9a511105ff2475096d3724884f8f",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "id": "p1-b",
+      "kind": "additional",
+      "title": "Финансы: остатки на договорах и затраты на аренду (part 2)",
+      "slots": [
+        "b"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 1,
+      "sourcePageId": "p1",
+      "sourceViewportOrdinal": 2,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "2486d4bc-1400-4170-a0e3-de8c70a54ad6",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:b84c49b0c265327e:1:96ab7f74c985c07992b9:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "c8932b0e-cb94-40a7-ad30-5a05dd3577f8",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p1-b.html",
+        "sha256": "fdd51f7635069c917a784fa6c5c6b507dabb033ed79c526624883b9075ad0374",
+        "bytes": 1403846,
+        "viewports": [
+          {
+            "id": "b",
+            "ordinal": 2,
+            "status": "succeeded",
+            "conversionId": "607a0927-f4f1-4346-9d49-488fa46d70a4",
+            "sha256": "323b2095654a5fcc47338ff87ed242f8795b283f9473aa7cf11ece2f3d1247e6",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "id": "p2-aps",
+      "kind": "additional",
+      "title": "Выполнение: персонал APS и работы АПС",
+      "slots": [
+        "c"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 2,
+      "sourcePageId": "p2-aps",
+      "sourceViewportOrdinal": 1,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "201dc4e1-d591-4ce7-97b6-43fd44d7b79d",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:4d73d0acfc2d859a:2:4ea1b9877dd8732118fa:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "59816c6a-5f62-43df-a2a0-c50d3ea9d746",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p2-aps.html",
+        "sha256": "42f391275414487c55e1438012d13d9f1e6d1dc3bdb231ae055405d9417dbd2d",
+        "bytes": 828712,
+        "viewports": [
+          {
+            "id": "c",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "f3b24fc7-02ab-481a-bab8-ae3470ef888d",
+            "sha256": "80d453d3871f836017341de0a32ddc2f1147c144af2386b43e68f52a7d41a6e6",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "id": "p2-aps-d",
+      "kind": "additional",
+      "title": "Выполнение: персонал APS и работы АПС (part 2)",
+      "slots": [
+        "d"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 2,
+      "sourcePageId": "p2-aps",
+      "sourceViewportOrdinal": 2,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "8bd7e224-7b80-43a7-9e92-7c57e40ab868",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:5d6ec2c77550b3a9:2:6ec0fddf838cc140e9d4:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "a0db7618-5fbb-438e-83d8-2a307ac1bf3c",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p2-aps-d.html",
+        "sha256": "769d077fa0da8c79c57b3d5ea93ab95a5347df1fc25a922f1de8c9109bdc3c9c",
+        "bytes": 751566,
+        "viewports": [
+          {
+            "id": "d",
+            "ordinal": 2,
+            "status": "succeeded",
+            "conversionId": "f5abc1b3-105a-4496-9ce0-bf91cf26b3b5",
+            "sha256": "63a88151087dbc250bdb2a8d9e6035b853c8b8dabec1f16bbb9257fb53336384",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 5,
+      "id": "p3",
+      "kind": "additional",
+      "title": "Заказчики: выполнение и инциденты",
+      "slots": [
+        "e"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 3,
+      "sourcePageId": "p3",
+      "sourceViewportOrdinal": 1,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "17d062ff-69e1-4e19-9293-6190e601f7aa",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:43bb00d0ce7790a5:3:eda53e2eddf339c99ce5:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "43c2802b-7f29-4327-a27f-e4dadd202a08",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p3.html",
+        "sha256": "6a8a272f9d4ba088449f301e32baab3c718a6605be5cff5b773fd823e82857fa",
+        "bytes": 936387,
+        "viewports": [
+          {
+            "id": "e",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "98ab7eef-fb41-409f-a701-f2d45b9ce227",
+            "sha256": "8f2823c950d52cc2cf697bdf10793e800abc082c81467b3d6113fa22ecd71293",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 6,
+      "id": "p3-f",
+      "kind": "additional",
+      "title": "Заказчики: выполнение и инциденты (part 2)",
+      "slots": [
+        "f"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 3,
+      "sourcePageId": "p3",
+      "sourceViewportOrdinal": 2,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "53b8d56f-7dcb-478a-acf4-9c31840d859c",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:4989de8827191c40:3:2f7ba92389f29755941e:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "eaddb417-a0ed-4e11-bee3-3dcdb5e03190",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p3-f.html",
+        "sha256": "789532b2cbaf530dc7de16bd048842fcd28e625c7b1966dbe0a9362007dcd78f",
+        "bytes": 1096567,
+        "viewports": [
+          {
+            "id": "f",
+            "ordinal": 2,
+            "status": "succeeded",
+            "conversionId": "9f0fcc13-2ce9-43fa-8981-ea050a725298",
+            "sha256": "604114efe0c5e586ee297d65ba50ae17b10e50972c6c9c6f86dc5b644fb2d8ca",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 7,
+      "id": "p4-aps",
+      "kind": "additional",
+      "title": "Надёжность: НПВ APS и готовность ЗИП",
+      "slots": [
+        "g"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 4,
+      "sourcePageId": "p4-aps",
+      "sourceViewportOrdinal": 1,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "fc21fbed-fc60-4c3a-9138-05d462e527ee",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:9a4731fe740710d9:4:073d0557dfe900db018b:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "9a842f85-0c43-4322-b763-c477ef54644c",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p4-aps.html",
+        "sha256": "bf7c3032ea8caaf089bd46d140331227eafd6ab865522d1058986528256e886d",
+        "bytes": 851338,
+        "viewports": [
+          {
+            "id": "g",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "e058e866-3bb4-4551-8a4c-df1f4a46d2bc",
+            "sha256": "5f66211e95e688717358d5b737d6bfcdcd611fd22ab988dbe642b13001346d3f",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 8,
+      "id": "p4-aps-h",
+      "kind": "additional",
+      "title": "Надёжность: НПВ APS и готовность ЗИП (part 2)",
+      "slots": [
+        "h"
+      ],
+      "startsFromWinner": false,
+      "sourcePageIndex": 4,
+      "sourcePageId": "p4-aps",
+      "sourceViewportOrdinal": 2,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "fa0e2215-3a54-4373-8854-2ef9844afc35",
+        "idempotencyKey": "branch-package:v2:crt-c24b0b0ed2b9820f8abed20506c52b738c211303:1595939e162924ed:4:9314d926600bd7d6a311:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "7de710ad-356a-48b2-96a8-d3cadf3a683c",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\pages\\p4-aps-h.html",
+        "sha256": "2b7cd31a13ce62827631cd8d5a67566d647182e4263505c314fbf84f5ea6da98",
+        "bytes": 595988,
+        "viewports": [
+          {
+            "id": "h",
+            "ordinal": 2,
+            "status": "succeeded",
+            "conversionId": "d0c6f10f-20dd-46e9-a442-e73cc3e1030d",
+            "sha256": "46f1def214410c9476a4ab90eba0a3a2f31a807f20eca62a76a5d51b6bb4f78b",
+            "bought": true
+          }
+        ]
+      }
+    }
+  ]
+}

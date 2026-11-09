@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "workflowRevision": "branch-execute-v3",
+  "status": "claiming",
+  "runKey": "branch:v1:img-e0b757f6a51ef1aedc171471e228edaf:-:c56abd1cacd10e7b:site:branch-execute-v3",
+  "origin": "https://12ui.com",
+  "scope": "site",
+  "concept": "Создай 11 sibling desktop-экранов 1440px в том же визуальном языке Aster, русский язык, без декоративных иллюстраций. Каждый экран обязан ясно отвечать на один рабочий вопрос и иметь реальные правдоподобные данные, KPI, релевантные диаграммы, таблицу действий/деталей. Экраны: 1) «Остатки на договорах» — остаток бюджета и объёма по договорам, прогноз исчерпания, договоры в риске. 2) «Затраты на аренду» — аренда по месяцам, поставщикам и работам, перерасход и ближайшие платежи. 3) «Персонал APS» — инженеры на смене, загрузка, допуски/сертификаты с истекающим сроком, незакрытые смены. 4) «НПВ APS» — непроизводительное время: причины, динамика, рейсы с наибольшими потерями. 5) «По заказчикам» — статус работ, объём и риски по каждому заказчику. 6) «Работы АПС» — портфель активных работ, этапы, план-факт, блокеры. 7) «Инциденты по заказчикам» — частота, серьёзность, повторяющиеся причины, очередь расследований. 8) «Готовность ЗИП» — не каталог: покрытие потребности на ближайшие 30 дней, дефицитные позиции, резерв под конкретные работы, аналоги/замены, ожидаемые поставки и одно понятное действие «создать заявку». 9) «Ремонты ССК-Т» — воронка ремонтов, время на этапах, просроченные узлы, загрузка исполнителей. 10) «НПВ по годам АПС» — долгосрочная динамика, вклад причин, изменение показателей год к году. 11) «Журнал» — журнал полевых событий с фото, фильтрами, географией/работой, важными записями. Не создавать абстрактные «интерфейсы» или пустые страницы. Экран «Рейсы APS» уже существует и остаётся общей главной страницей.",
+  "conceptSha256": "c56abd1cacd10e7b27f7365540b8f0265ba774a3c358dd02031d3ed973352963",
+  "winner": {
+    "kind": "image",
+    "imagePath": "C:\\Users\\Denis\\AppData\\Local\\Temp\\12ui-aster-desktop-1440px-aps-bcAEF2\\candidates\\D.png",
+    "sha256": "e0b757f6a51ef1aedc171471e228edaf12dfa56fab01fc786e771d4df691b5a9",
+    "mediaType": "image/png",
+    "width": 1536,
+    "height": 1024
+  },
+  "generationCanvas": {
+    "provenance": "inherited-from-winner",
+    "winner": {
+      "width": 1536,
+      "height": 1024
+    }
+  },
+  "maxScreens": 11,
+  "generation": {
+    "engine": "api",
+    "reason": "Codex CLI could not run. Install Codex on PATH or pass --codex-bin with a working executable."
+  },
+  "convert": {
+    "output": "html",
+    "imageBackendExplicit": false,
+    "requestedEngine": "auto",
+    "selection": {
+      "engine": "api",
+      "reason": "Codex CLI could not run. Install Codex on PATH or pass --codex-bin with a working executable.",
+      "codexBin": "C:\\nvm4w\\nodejs\\codex.cmd",
+      "codexHome": "C:\\Users\\Denis\\.codex",
+      "quiet": false
+    },
+    "model": "standard"
+  },
+  "prototype": true,
+  "createdAt": "2026-11-06T07:34:31.448Z",
+  "setupFailure": {
+    "terminal": false,
+    "message": "maxScreens must be an integer from 1 to 8.",
+    "occurredAt": "2026-11-06T07:34:36.217Z",
+    "status": 400,
+    "code": "invalid_max_screens",
+    "diagnostic": {
+      "body": "{\"error\":\"invalid_max_screens\",\"code\":\"invalid_max_screens\",\"message\":\"maxScreens must be an integer from 1 to 8.\",\"retryable\":false,\"retry\":\"none\",\"charged\":false}",
+      "bodyTruncated": false,
+      "headers": {
+        "content-type": "application/json",
+        "cf-ray": "a5626a972aa103b2-MIA"
+      },
+      "failureKind": "http",
+      "errorCode": "invalid_max_screens"
+    }
+  }
+}

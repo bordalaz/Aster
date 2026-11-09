@@ -18,12 +18,13 @@ describe('PersonnelDashboard', () => {
     expect(within(metrics).getByText('1')).toBeInTheDocument()
     expect(screen.queryByLabelText('Статус')).not.toBeInTheDocument()
   })
-  it('preserves zero versus null and filters by search and minimum rating; reset restores defaults', () => {
+  it('preserves zero versus null and filters by search; reset restores defaults', () => {
     render(<PersonnelDashboard fields={fields} rows={rows} />)
     fireEvent.change(screen.getByLabelText('Поиск по ФИО'), { target: { value: 'Анна' } })
-    fireEvent.change(screen.getByLabelText('Рейтинг APS от'), { target: { value: '9' } })
-    expect(screen.getByText('0 сотрудников')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Сбросить' }))
+    expect(screen.getByText('1 сотрудников')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Поиск по ФИО'), { target: { value: 'НесуществующееИмя' } })
+    expect(screen.getByText('Сотрудники по запросу «НесуществующееИмя» не найдены. Проверьте написание ФИО.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Сбросить поиск' }))
     fireEvent.click(screen.getByRole('button', { name: 'Показать сотрудников' }))
     const table = within(screen.getByRole('table'))
     expect(table.getAllByText('0').length).toBeGreaterThan(0)

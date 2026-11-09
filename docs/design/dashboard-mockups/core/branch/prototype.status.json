@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "pipelineRevision": "prototype-v8",
+  "runId": "crt-c24b0b0ed2b9820f8abed20506c52b738c211303",
+  "inputDigest": "21ed2d099cd2cec36567e00df6739e5caca45df185b8727123c87bcf8499e54a",
+  "attempt": 1,
+  "startedAt": "2026-11-06T07:46:50.194Z",
+  "updatedAt": "2026-11-06T07:46:50.799Z",
+  "status": "failed",
+  "error": {
+    "name": "Error",
+    "message": "Prototype inventory cannot start because Chromium is not installed in the managed 12ui browser directory at C:\\Users\\Denis\\AppData\\Local\\12ui\\cache\\ms-playwright.\nInstall the matching browser for this environment, then retry:\n\n  set \"PLAYWRIGHT_BROWSERS_PATH=C:\\Users\\Denis\\AppData\\Local\\12ui\\cache\\ms-playwright\" && \"C:\\nvm4w\\nodejs\\node.exe\" \"C:\\Users\\Denis\\AppData\\Local\\12ui\\versions\\0.2.134\\node_modules\\playwright\\cli.js\" install --only-shell chromium\n\nDetailed stage diagnostics remain in E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\.prototype-work\\inventory.log.",
+    "stack": "Error: Prototype inventory cannot start because Chromium is not installed in the managed 12ui browser directory at C:\\Users\\Denis\\AppData\\Local\\12ui\\cache\\ms-playwright.\nInstall the matching browser for this environment, then retry:\n\n  set \"PLAYWRIGHT_BROWSERS_PATH=C:\\Users\\Denis\\AppData\\Local\\12ui\\cache\\ms-playwright\" && \"C:\\nvm4w\\nodejs\\node.exe\" \"C:\\Users\\Denis\\AppData\\Local\\12ui\\versions\\0.2.134\\node_modules\\playwright\\cli.js\" install --only-shell chromium\n\nDetailed stage diagnostics remain in E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\.prototype-work\\inventory.log.\n    at runPrototypeStage (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/prototype-process.js:25:19)\n    at async runPrototypePipeline (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/prototype-runner.js:96:21)\n    at async runBranchCommand (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/cli-branch-command.js:583:11)\n    at async dispatch (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/cli-run.js:120:9)\n    at async runWithPendingAuthRedemption (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/cli-pending-auth.js:169:16)\n    at async withRunJournal (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/run-journal.js:589:24)\n    at async runRouted (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/cli-run.js:295:5)\n    at async withBuildReport (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/workspace-build-report.js:127:9)\n    at async runParsed (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/cli-run.js:276:5)\n    at async runCli (file:///C:/Users/Denis/AppData/Local/12ui/versions/0.2.134/node_modules/@12ui/design/dist/cli-run.js:247:9)"
+  }
+}

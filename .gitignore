@@ -9,3 +9,7 @@ web/dist/
 .strix.env
 strix_runs/
 backups/
+/node_modules/
+web/.vite/
+/output/
+/strix_runs_console.log

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "workflowRevision": "branch-execute-v3",
+  "status": "succeeded",
+  "runKey": "branch:v1:img-e0b757f6a51ef1aedc171471e228edaf:-:7e470018e103b708:site:branch-execute-v3",
+  "origin": "https://12ui.com",
+  "scope": "site",
+  "concept": "Создай восемь sibling desktop-экранов 1440px в том же визуальном языке Aster, русский язык, без декоративных иллюстраций. Каждый экран: один рабочий вопрос, реальные правдоподобные данные, KPI, релевантные диаграммы, таблица действий/деталей. Экран 1 «Остатки на договорах»: остаток бюджета и объёма, прогноз исчерпания, договоры в риске. Экран 2 «Затраты на аренду»: аренда по месяцам, поставщикам и работам, перерасход, ближайшие платежи. Экран 3 «Персонал APS»: инженеры на смене, загрузка, допуски/сертификаты, незакрытые смены. Экран 4 «НПВ APS»: причины НПВ, динамика, рейсы с наибольшими потерями. Экран 5 «По заказчикам»: статус работ, объём, риски по каждому заказчику. Экран 6 «Работы АПС»: портфель активных работ, этапы, план-факт, блокеры. Экран 7 «Инциденты по заказчикам»: частота, серьёзность, повторяющиеся причины, расследования. Экран 8 «Готовность ЗИП»: покрытие потребности на 30 дней, дефицит, резерв под работы, аналоги, поставки, действие «создать заявку». Не создавать абстрактные или пустые страницы.",
+  "conceptSha256": "7e470018e103b708843f66622762e01164d794b4d4f477d447460115b66855fe",
+  "winner": {
+    "kind": "image",
+    "imagePath": "C:\\Users\\Denis\\AppData\\Local\\Temp\\12ui-aster-desktop-1440px-aps-bcAEF2\\candidates\\D.png",
+    "sha256": "e0b757f6a51ef1aedc171471e228edaf12dfa56fab01fc786e771d4df691b5a9",
+    "mediaType": "image/png",
+    "width": 1536,
+    "height": 1024
+  },
+  "generationCanvas": {
+    "provenance": "inherited-from-winner",
+    "winner": {
+      "width": 1536,
+      "height": 1024
+    }
+  },
+  "maxScreens": 8,
+  "generation": {
+    "engine": "api",
+    "reason": "Codex CLI could not run. Install Codex on PATH or pass --codex-bin with a working executable."
+  },
+  "convert": {
+    "output": "html",
+    "imageBackendExplicit": false,
+    "requestedEngine": "auto",
+    "selection": {
+      "engine": "api",
+      "reason": "Codex CLI could not run. Install Codex on PATH or pass --codex-bin with a working executable.",
+      "codexBin": "C:\\nvm4w\\nodejs\\codex.cmd",
+      "codexHome": "C:\\Users\\Denis\\.codex",
+      "quiet": false
+    },
+    "model": "standard"
+  },
+  "prototype": true,
+  "createdAt": "2026-11-06T07:37:24.985Z",
+  "runId": "crt-c24b0b0ed2b9820f8abed20506c52b738c211303",
+  "completedAt": "2026-11-06T07:46:49.990Z",
+  "completionPath": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\core\\branch\\branch.complete.json"
+}
