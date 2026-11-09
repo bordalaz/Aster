@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "runId": "crt-7e0e9aec3aa445a8a246040d2603d7cfba1b4392",
+  "phase": "terminal",
+  "startedAt": "2026-11-06T07:46:21.389Z",
+  "updatedAt": "2026-11-06T07:52:46.200Z",
+  "screens": [
+    {
+      "slot": "a",
+      "status": "succeeded",
+      "pageIndex": 1,
+      "viewportOrdinal": 1
+    },
+    {
+      "slot": "b",
+      "status": "succeeded",
+      "pageIndex": 2,
+      "viewportOrdinal": 1
+    },
+    {
+      "slot": "c",
+      "status": "succeeded",
+      "pageIndex": 3,
+      "viewportOrdinal": 1
+    }
+  ],
+  "pageCount": 4,
+  "logicalPageCount": 4,
+  "packages": [
+    {
+      "pageId": "p0",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:49:32.009Z"
+    },
+    {
+      "pageId": "p3",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:50:14.427Z"
+    },
+    {
+      "pageId": "p1",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:49:53.846Z"
+    },
+    {
+      "pageId": "p2",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:52:43.441Z"
+    }
+  ]
+}

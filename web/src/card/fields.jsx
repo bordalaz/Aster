@@ -239,7 +239,7 @@ export default function FieldEditor({ field, value, onChange, onOpenLink, inline
     return wrap(<div id={id} className="fld-ro">{displayValue(field, value)}</div>)
   }
   if (field.kind === 'checkbox') {
-    return wrap(<input id={id} type="checkbox" className="fld-check" checked={!!value} onChange={e => onChange(e.target.checked)} aria-label={field.title} />)
+    return wrap(<input id={id} type="checkbox" className={field.options?.icon === 'thumbsUp' ? 'fld-check thumb' : 'fld-check'} checked={!!value} onChange={e => onChange(e.target.checked)} aria-label={field.title} />)
   }
   if (field.kind === 'singleSelect') {
     const choices = field.options?.choices ?? []

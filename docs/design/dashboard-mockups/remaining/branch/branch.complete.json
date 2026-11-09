@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "status": "succeeded",
+  "runId": "crt-7e0e9aec3aa445a8a246040d2603d7cfba1b4392",
+  "runKey": "branch:v1:img-e0b757f6a51ef1aedc171471e228edaf:-:23be075a33ad5056:site:branch-execute-v3",
+  "workflowRevision": "branch-execute-v3",
+  "scope": "site",
+  "concept": "Создай три sibling desktop-экрана 1440px в том же визуальном языке Aster, русский язык, без декоративных иллюстраций. Каждый экран: один рабочий вопрос, правдоподобные данные, KPI, графики, таблица действий. Экран 1 «Ремонты ССК-Т»: воронка ремонтов, время на этапах, просроченные узлы, загрузка исполнителей и действие назначения. Экран 2 «НПВ по годам АПС»: динамика НПВ по годам, причины, сравнение год к году, точки перелома и перечень программ улучшений. Экран 3 «Журнал»: журнал полевых событий — фото, фильтры, работа/объект, важные записи, автор, время, теги; быстрый переход в связанную запись. Не создавать абстрактные или пустые страницы.",
+  "conceptSha256": "23be075a33ad5056427f3561ba6f49ad89c619a8e69e6da2544c565ecb0d4d8e",
+  "origin": "https://12ui.com",
+  "outDir": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch",
+  "attemptPath": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\branch.attempt.json",
+  "planPath": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\branch.plan.json",
+  "startedAt": "2026-11-06T07:46:21.389Z",
+  "completedAt": "2026-11-06T07:52:46.200Z",
+  "screenCount": 3,
+  "succeededCount": 3,
+  "failedCount": 0,
+  "blockedCount": 0,
+  "pageCount": 4,
+  "logicalPageCount": 4,
+  "convertedPageCount": 4,
+  "winner": {
+    "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\screens\\winner.png",
+    "sha256": "e0b757f6a51ef1aedc171471e228edaf12dfa56fab01fc786e771d4df691b5a9",
+    "bytes": 1293433,
+    "width": 1536,
+    "height": 1024
+  },
+  "screens": [
+    {
+      "slot": "a",
+      "pageIndex": 1,
+      "pageId": "p1",
+      "viewportOrdinal": 1,
+      "status": "succeeded",
+      "direction": "Ремонты ССК-Т",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\screens\\a.png",
+      "sha256": "fc57e4fa465611f86225e00d47a45f72ce3b4d4b11ef301e8a27a6813453544f",
+      "bytes": 1393887,
+      "width": 1536,
+      "height": 1024,
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "b",
+      "pageIndex": 2,
+      "pageId": "p2",
+      "viewportOrdinal": 1,
+      "status": "succeeded",
+      "direction": "НПВ по годам АПС",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\screens\\b.png",
+      "sha256": "bdd4d89d5c7668a0639d5b2723de1a53df5e7cfd8cfd82521509e613e61262b1",
+      "bytes": 1476097,
+      "width": 1536,
+      "height": 1024,
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    },
+    {
+      "slot": "c",
+      "pageIndex": 3,
+      "pageId": "p3",
+      "viewportOrdinal": 1,
+      "status": "succeeded",
+      "direction": "Журнал",
+      "path": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\screens\\c.png",
+      "sha256": "a18e0e91c0ad7c073ba54c47ce88a7a7f34c7f554b10d856c095fdbe08e80266",
+      "bytes": 1447543,
+      "width": 1536,
+      "height": 1024,
+      "canvasDecision": {
+        "provenance": "inherited-from-winner",
+        "sourceCanvas": {
+          "width": 1536,
+          "height": 1024
+        }
+      }
+    }
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "id": "p0",
+      "kind": "source",
+      "title": "Рейсы сегодня",
+      "slots": [],
+      "startsFromWinner": true,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "9bade815-9607-4b90-82cd-2f279e3fcdf0",
+        "idempotencyKey": "branch-package:v1:crt-7e0e9aec3aa445a8a246040d2603d7cfba1b4392:0:01529fde9a5cfc66ecaea51ec5f82106:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "5a909901-84e4-4286-b542-3d94a9a0d0e4",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\pages\\p0.html",
+        "sha256": "a525c39fadb5d47d8a3c80ada75034e1fb46629ca1df7b876b80c4e843dab5ee",
+        "bytes": 741965,
+        "viewports": [
+          {
+            "id": "winner",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "96129e65-7794-4a53-b2c4-e892e6a2898d",
+            "sha256": "e0b757f6a51ef1aedc171471e228edaf12dfa56fab01fc786e771d4df691b5a9",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "id": "p1",
+      "kind": "additional",
+      "title": "Ремонты ССК-Т",
+      "slots": [
+        "a"
+      ],
+      "startsFromWinner": false,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "72313272-eda1-465f-a134-1611ea682920",
+        "idempotencyKey": "branch-package:v1:crt-7e0e9aec3aa445a8a246040d2603d7cfba1b4392:1:d2031b79b890798f680fef2637cb7af9:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "14097e30-8ba4-4d40-8d49-75cb3af38790",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\pages\\p1.html",
+        "sha256": "5465205d6c7e8021880d91d060de6f4339690bbab901fe3e18970637a572f0cc",
+        "bytes": 1199600,
+        "viewports": [
+          {
+            "id": "a",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "4c1367df-e4fb-49e8-9e87-303fbfbad9f0",
+            "sha256": "fc57e4fa465611f86225e00d47a45f72ce3b4d4b11ef301e8a27a6813453544f",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "id": "p2",
+      "kind": "additional",
+      "title": "НПВ по годам АПС",
+      "slots": [
+        "b"
+      ],
+      "startsFromWinner": false,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "abf4b0a1-3ed9-4c53-8f13-132ff2728fb7",
+        "idempotencyKey": "branch-package:v1:crt-7e0e9aec3aa445a8a246040d2603d7cfba1b4392:2:c3f30291cb0618b620335695f564a4f4:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "beecbc2b-1eec-4d3e-bb82-0d359843b148",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\pages\\p2.html",
+        "sha256": "a6307152c44e850f8d1910ec4d56ce654c92c53f88ea7d6829d379c867d37037",
+        "bytes": 1235178,
+        "viewports": [
+          {
+            "id": "b",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "b8e090eb-6cc5-40f8-aa19-8ab6e1cd562e",
+            "sha256": "bdd4d89d5c7668a0639d5b2723de1a53df5e7cfd8cfd82521509e613e61262b1",
+            "bought": true
+          }
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "id": "p3",
+      "kind": "additional",
+      "title": "Журнал",
+      "slots": [
+        "c"
+      ],
+      "startsFromWinner": false,
+      "conversion": {
+        "status": "succeeded",
+        "packageId": "8bd02c9a-27e8-45dc-af61-a6ddb4130899",
+        "idempotencyKey": "branch-package:v1:crt-7e0e9aec3aa445a8a246040d2603d7cfba1b4392:3:89d308f8c2683749fa920f5b7732a02d:html:standard:default",
+        "output": "html",
+        "canonicalWidth": 1536,
+        "conversionId": "aa84a221-34f2-4777-abe6-15ab7a3deef2",
+        "outFile": "E:\\ideas\\BD\\docs\\design\\dashboard-mockups\\remaining\\branch\\pages\\p3.html",
+        "sha256": "0b7525773cb02ecc0b2ed977a1dfd035945967f5912f3933ecdc99ae4773ecfc",
+        "bytes": 1103002,
+        "viewports": [
+          {
+            "id": "c",
+            "ordinal": 1,
+            "status": "succeeded",
+            "conversionId": "3cbe1f8d-e764-43c1-917c-be571890c43a",
+            "sha256": "a18e0e91c0ad7c073ba54c47ce88a7a7f34c7f554b10d856c095fdbe08e80266",
+            "bought": true
+          }
+        ]
+      }
+    }
+  ]
+}

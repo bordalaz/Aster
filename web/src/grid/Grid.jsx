@@ -98,8 +98,10 @@ function onText(cell, x) {
 
 // canReorder — можно двигать строки (вид без сортировки, правит тот, кто может менять вид); onReorder(ids) — новый порядок.
 // onInsert(row, 'above'|'below'|null), onDuplicate(row), onSend(rows, columns), onDelete(rows) — пункты меню записи.
+// onMoveToGroup({to, from: [{key, ids}]}) — отмеченные строки перетащили в другую группу (Оборудование → перемещение).
 export default function Grid({ fields, rows, primaryField, title = 'таблица', config: outer, onConfigChange, onEdit, onEditMany, onOpen,
-  search = '', exportRef, onAdd, onCreate, collapseKey, scrollKey, canReorder = false, onReorder, onUnsort, onInsert, onDuplicate, onSend, onDelete }) {
+  search = '', exportRef, onAdd, onCreate, collapseKey, scrollKey, canReorder = false, onReorder, onUnsort, onInsert, onDuplicate, onSend, onDelete,
+  onMoveToGroup }) {
   const [inner, setInner] = useState({})
   const config = outer ?? inner
   const setConfig = onConfigChange ?? setInner
@@ -181,10 +183,12 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const [hoverRow, setHoverRow] = useState(null)      // строка под курсором — кнопка раскрытия, как в Airtable
   const [selection, setSelection] = useState({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
   const downCell = useRef(null)                       // выделенная ячейка до щелчка: второй щелчок по названию — карточка
-  const hoverX = useRef(0)                            // x курсора внутри ячейки — ручка/галочка/раскрытие в колонке номера
   const [checked, setChecked] = useState(() => new Set())   // отмеченные галочками записи (id)
   const [rowMenu, setRowMenu] = useState(null)        // {x, y, items}
-  const [drag, setDrag] = useState(null)              // {ids, from, group} — строки, которые тащат за ручку
+  const [drag, setDrag] = useState(null)              // {ids, from, groupOfId} — отмеченные строки, которые тащат
+  const press = useRef(null)                          // {ri, id, x, y} — нажали на ручку/галочку отмеченной строки, ещё не сдвинули
+  const [pointer, setPointer] = useState(null)        // {x, y} курсора во время перетаскивания — «призрак» строк
+  const [askMove, setAskMove] = useState(null)        // {to, from: [{key, ids}]} — «Оформить перемещение?»
   const [info, setInfo] = useState(null)             // описание поля по ⓘ в заголовке
   const allGroupIds = () => groupRows(shownRows, groupFields, new Set()).filter(i => i.kind === 'group').map(i => i.id)
   const toggleGroup = key => setCollapsed(prev => {
@@ -210,17 +214,18 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     width: widths[c.column_name] ?? (c.column_name === primaryField ? 260 : 160),
   }))], [cols, widths, primaryField])
   const nums = useMemo(() => { let n = 0; return items.map(i => (i.kind === 'row' ? ++n : null)) }, [items])
-  // группа каждой строки: двигать можно только внутри своей группы (куста), как в Airtable
-  const groupOf = useMemo(() => {
-    const path = []
-    return items.map(it => {
-      if (it.kind === 'group') { path.length = it.depth; path.push(it.id); return null }
+  // группа каждой строки и заголовка (путь id групп); keyOf — значение поля группы по пути
+  const [groupOf, keyOf] = useMemo(() => {
+    const path = [], keys = {}
+    const of = items.map(it => {
+      if (it.kind === 'group') { path.length = it.depth; path.push(it.id); keys[path.join('|')] = it.key }
       return path.join('|')
     })
+    return [of, keys]
   }, [items])
   const movable = canReorder && !config.sort?.length && !search
   // ручка ⋮⋮ видна и при сортировке: потянул — вопрос «убрать сортировку и двигать вручную?»
-  const grabbable = canReorder && !search && (movable || !!onUnsort)
+  const grabbable = !search && ((canReorder && (movable || !!onUnsort)) || (!!onMoveToGroup && groupFields.length === 1))
   const [askUnsort, setAskUnsort] = useState(false)
   const shownIds = useMemo(() => new Set(shownRows.map(r => r.id)), [shownRows])
   const checkedShown = [...checked].filter(id => shownIds.has(id))
@@ -243,7 +248,8 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
     }
     if (ci === 0) return { kind: GridCellKind.Custom, allowOverlay: false, readonly: true, copyData: String(nums[ri]),
       data: { kind: 'rownum', n: String(nums[ri]), color: rowColor(config.color, fields, it.row), hover: ri === hoverRow && !drag,
-        checked: checked.has(it.row.id), drag: grabbable } }
+        checked: checked.has(it.row.id), drag: grabbable && checked.has(it.row.id) },
+      cursor: grabbable && checked.has(it.row.id) && ri === hoverRow ? 'grab' : undefined }
     const field = fieldAt(ci)
     const cell = toCell(field, it.row[field.column_name])
     // название в выделенной ячейке — синяя ссылка на карточку, как в Airtable
@@ -276,23 +282,92 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
   const toggleCheck = id => setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const allChecked = shownRows.length > 0 && checkedShown.length === shownRows.length
 
-  // Перетаскивание за ручку: цель — строка под курсором в той же группе; отмеченные галочками едут вместе.
-  const dropTarget = drag && rowAt(hoverRow) && !drag.ids.includes(rowAt(hoverRow).id) && groupOf[hoverRow] === drag.group ? hoverRow : null
+  // Перетаскивание отмеченных строк (без отметки строку не утащить): в своей группе — порядок строк;
+  // в другую группу (одна группировка, onMoveToGroup) — вопрос «Оформить перемещение?».
+  const target = (() => {
+    if (!drag || hoverRow == null || !items[hoverRow] || items[hoverRow].kind === 'append') return null
+    const it = items[hoverRow], group = groupOf[hoverRow]
+    if (it.kind === 'row' && drag.ids.includes(it.row.id)) return null
+    if (drag.ids.every(id => drag.groupOfId[id] === group)) {
+      return it.kind === 'row' ? { ri: hoverRow, kind: 'reorder', after: hoverRow > drag.from } : null
+    }
+    const key = keyOf[group]
+    if (onMoveToGroup && groupFields.length === 1 && key != null && key !== '') return { ri: hoverRow, kind: 'move', key }
+    return null
+  })()
+  const dropTarget = target?.ri ?? null
+  const lastY = useRef(null)
+  // Мышь — слушатели окна один раз, обработчики берутся из последней отрисовки (live): иначе быстрое
+  // «нажал-потащил-отпустил» теряет отпускание между отрисовками и перетаскивание зависает.
+  const finish = () => {
+    if (!target) return
+    if (target.kind === 'move') {
+      const by = new Map()
+      for (const id of drag.ids) {
+        const k = keyOf[drag.groupOfId[id]] ?? ''
+        if (k !== target.key) by.set(k, [...(by.get(k) ?? []), id])
+      }
+      if (by.size) setAskMove({ to: target.key, from: [...by].map(([key, ids]) => ({ key, ids })) })
+      return
+    }
+    if (!movable) { setAskUnsort(true); return }
+    const all = orderRows(rows, config.rowOrder).map(r => r.id)
+    const next = moveRows(all, drag.ids, rowAt(target.ri).id, target.after)
+    patchConfig({ rowOrder: next })
+    onReorder?.(next)
+  }
+  const dragging = useRef(false)   // сразу, без ожидания отрисовки: отпускание может прийти раньше неё
+  const live = useRef({})
+  live.current = {
+    // нажали на ручку/галочку отмеченной строки: сдвинули на 4 px — тащим все отмеченные
+    move: e => {
+      lastY.current = e.clientY
+      const p = press.current
+      if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) {
+        press.current = null
+        const ids = items.filter(it => it.kind === 'row' && checked.has(it.row.id)).map(it => it.row.id)
+        const groupOfId = Object.fromEntries(items.flatMap((it, i) => (it.kind === 'row' ? [[it.row.id, groupOf[i]]] : [])))
+        dragging.current = true
+        setDrag({ ids, from: p.ri, groupOfId })
+      }
+      if (p || dragging.current) setPointer({ x: e.clientX, y: e.clientY })
+    },
+    // отпустили на месте — снять отметку; после перетаскивания — порядок или «Оформить перемещение?»
+    up: () => {
+      const p = press.current
+      press.current = null
+      if (p) { toggleCheck(p.id); return }
+      if (dragging.current) { dragging.current = false; setDrag(null); setPointer(null); if (drag) finish() }
+    },
+  }
+  useEffect(() => {
+    const move = e => live.current.move(e), up = e => live.current.up(e)
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up) }
+  }, [])
   useEffect(() => {
     if (!drag) return
     document.body.style.cursor = 'grabbing'
-    const up = () => {
-      document.body.style.cursor = ''
-      setDrag(null)
-      if (dropTarget == null) return
-      const all = orderRows(rows, config.rowOrder).map(r => r.id)
-      const next = moveRows(all, drag.ids, rowAt(dropTarget).id, dropTarget > drag.from)
-      patchConfig({ rowOrder: next })
-      onReorder?.(next)
-    }
-    window.addEventListener('pointerup', up)
-    return () => { window.removeEventListener('pointerup', up); document.body.style.cursor = '' }
-  }, [drag, dropTarget, rows, config.rowOrder])   // eslint-disable-line react-hooks/exhaustive-deps
+    // у края сетки — прокрутка, чтобы дотащить до далёкой группы
+    const tick = setInterval(() => {
+      const box = gridBox.current?.getBoundingClientRect(), y = lastY.current
+      const sc = gridBox.current?.querySelector('.dvn-scroller')
+      if (!box || !sc || y == null) return
+      if (y < box.top + 48) sc.scrollTop -= 14
+      else if (y > box.bottom - 48) sc.scrollTop += 14
+    }, 16)
+    return () => { clearInterval(tick); document.body.style.cursor = '' }
+  }, [drag])
+  // линия вставки / подсветка строки-цели в чужой группе — поверх холста сетки
+  const marker = (() => {
+    if (!target) return null
+    const b = gridRef.current?.getBounds(0, target.ri), box = gridBox.current?.getBoundingClientRect()
+    if (!b || !box) return null
+    if (target.kind === 'move') return { left: b.x, top: b.y, width: box.right - b.x, height: b.height, box: true }
+    return { left: b.x, top: target.after ? b.y + b.height - 1 : b.y - 1, width: box.right - b.x, height: 2 }
+  })()
+  const primaryText = r => { const f = cols[0]; return f && r ? String(displayValue(f, r[f.column_name]) ?? '') : '' }
 
   // меню записи по ПКМ: несколько отмеченных — действия над ними; иначе — над строкой под курсором
   const menuFor = row => {
@@ -379,14 +454,10 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           const [ci, ri] = hovered.current ?? []
           // ручка ⋮⋮ — начать перетаскивание; Glide этот щелчок не видит (иначе он начнёт выделять ячейки).
           // Именно mousedown, не pointerdown: отмена pointerdown гасит и mousemove, по которым Glide ведёт курсор.
-          if (e.button === 0 && ci === 0 && rowAt(ri) && rownumHit(hoverX.current, { drag: grabbable }) === 'drag') {
+          const x = e.clientX - (gridBox.current?.getBoundingClientRect().left ?? 0)   // колонка номера всегда слева
+          if (e.button === 0 && ci === 0 && rowAt(ri) && checked.has(rowAt(ri).id) && rownumHit(x, { drag: grabbable }) === 'drag') {
             e.preventDefault(); e.stopPropagation()
-            if (!movable) { setAskUnsort(true); return }
-            const id = rowAt(ri).id
-            const ids = checked.has(id)
-              ? items.filter((it, i) => it.kind === 'row' && checked.has(it.row.id) && groupOf[i] === groupOf[ri]).map(it => it.row.id)
-              : [id]
-            setDrag({ ids, from: ri, group: groupOf[ri] })
+            press.current = { ri, id: rowAt(ri).id, x: e.clientX, y: e.clientY }
           }
         }} onContextMenu={e => {
         const [ci, ri] = hovered.current ?? []
@@ -418,6 +489,24 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           В виде включена сортировка — строки стоят по ней, вручную их не переставить. Убрать сортировку и
           расставлять строки вручную? Сейчас они останутся на своих местах.
         </Ask>}
+        {askMove && <Ask title="Оформить перемещение?" yes="Да" no="Нет"
+          onNo={() => setAskMove(null)}
+          onYes={() => { const m = askMove; setAskMove(null); setChecked(new Set()); onMoveToGroup(m) }}>
+          {askMove.from.map(g => (
+            <span key={g.key} style={{ display: 'block' }}>
+              {(g.key || '(пусто)') + ' → ' + askMove.to + ', ' + new Date().toLocaleDateString('ru-RU') + ' — ' + g.ids.length + ' шт.'}
+            </span>
+          ))}
+          <b style={{ display: 'block', marginTop: 10 }}>Не забудь отметить «Отправляем?»!</b>
+        </Ask>}
+        {drag && pointer && (
+          <div className="drag-ghost" style={{ left: pointer.x + 14, top: pointer.y + 10 }}>
+            <span>{primaryText(rows.find(r => r.id === drag.ids[0]))}</span>
+            {drag.ids.length > 1 && <span className="drag-more">+ ещё {drag.ids.length - 1}</span>}
+            {target?.kind === 'move' && <span className="drag-to">→ {target.key}</span>}
+          </div>
+        )}
+        {marker && <div className={marker.box ? 'drop-box' : 'drop-line'} style={{ position: 'fixed', left: marker.left, top: marker.top, width: marker.width, height: marker.height }} />}
         {info?.text && (
           <>
             <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setInfo(null)} />
@@ -442,7 +531,7 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           freezeTrailingRows={1}
           getCellContent={getCellContent}
           getRowThemeOverride={ri => (ri === items.length ? { bgCell: '#ffffff', textDark: '#616670' }
-            : ri === dropTarget ? { bgCell: '#e8f0fe' }                                 // сюда встанут строки
+            : ri === dropTarget && target?.kind === 'move' ? { bgCell: '#e8f0fe' }       // сюда переедут строки
             : drag?.ids.includes(rowAt(ri)?.id) ? { bgCell: '#f5f6f8', textDark: '#a0a4ab' }
             : rowAt(ri) && checked.has(rowAt(ri).id) ? { bgCell: '#f1f5ff' } : undefined)}
           onCellEdited={onCellEdited}
@@ -451,7 +540,6 @@ export default function Grid({ fields, rows, primaryField, title = 'таблиц
           onPaste   // диапазон из Excel раскладывается по ячейкам (без флага Glide кладёт всё в одну)
           onItemHovered={a => {
             hovered.current = a.kind === 'cell' ? a.location : null
-            hoverX.current = a.kind === 'cell' ? a.localEventX : 0
             const r = a.kind === 'cell' ? a.location[1] : null
             setHoverRow(h => (h === r ? h : r))
           }}

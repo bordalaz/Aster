@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "runId": "crt-c24b0b0ed2b9820f8abed20506c52b738c211303",
+  "phase": "terminal",
+  "startedAt": "2026-11-06T07:37:24.985Z",
+  "updatedAt": "2026-11-06T07:46:49.990Z",
+  "screens": [
+    {
+      "slot": "a",
+      "status": "succeeded",
+      "pageIndex": 1,
+      "viewportOrdinal": 1
+    },
+    {
+      "slot": "b",
+      "status": "succeeded",
+      "pageIndex": 2,
+      "viewportOrdinal": 1,
+      "generationPageIndex": 1,
+      "generationViewportOrdinal": 2
+    },
+    {
+      "slot": "c",
+      "status": "succeeded",
+      "pageIndex": 3,
+      "viewportOrdinal": 1,
+      "generationPageIndex": 2
+    },
+    {
+      "slot": "d",
+      "status": "succeeded",
+      "pageIndex": 4,
+      "viewportOrdinal": 1,
+      "generationPageIndex": 2,
+      "generationViewportOrdinal": 2
+    },
+    {
+      "slot": "e",
+      "status": "succeeded",
+      "pageIndex": 5,
+      "viewportOrdinal": 1,
+      "generationPageIndex": 3
+    },
+    {
+      "slot": "f",
+      "status": "succeeded",
+      "pageIndex": 6,
+      "viewportOrdinal": 1,
+      "generationPageIndex": 3,
+      "generationViewportOrdinal": 2
+    },
+    {
+      "slot": "g",
+      "status": "succeeded",
+      "pageIndex": 7,
+      "viewportOrdinal": 1,
+      "generationPageIndex": 4
+    },
+    {
+      "slot": "h",
+      "status": "succeeded",
+      "pageIndex": 8,
+      "viewportOrdinal": 1,
+      "generationPageIndex": 4,
+      "generationViewportOrdinal": 2
+    }
+  ],
+  "pageCount": 9,
+  "logicalPageCount": 5,
+  "packages": [
+    {
+      "pageId": "p0",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:40:49.159Z"
+    },
+    {
+      "pageId": "p1",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:41:13.570Z"
+    },
+    {
+      "pageId": "p2-aps",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:41:05.316Z"
+    },
+    {
+      "pageId": "p3",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:43:16.753Z"
+    },
+    {
+      "pageId": "p4-aps",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:43:49.722Z"
+    },
+    {
+      "pageId": "p3-f",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:44:07.972Z"
+    },
+    {
+      "pageId": "p2-aps-d",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:45:57.262Z"
+    },
+    {
+      "pageId": "p4-aps-h",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:46:47.386Z"
+    },
+    {
+      "pageId": "p1-b",
+      "stage": "succeeded",
+      "updatedAt": "2026-11-06T07:46:28.736Z"
+    }
+  ]
+}
