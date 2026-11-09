@@ -5,9 +5,45 @@ const fmt = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 })
 const field = (fields, title) => Object.entries(fields || {}).find(([, f]) => f.title === title)?.[0]
 const value = (row, col) => col ? row?.[col] : null
 const numeric = v => v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v)
-const scalar = v => v && typeof v === 'object' ? v.name ?? v.title ?? v.id ?? '' : v
+const scalar = v => v && typeof v === 'object' && !Array.isArray(v) ? (v.name ?? v.title ?? v.id ?? '') : v
 const text = v => v === null || v === undefined || v === '' ? '—' : String(scalar(v))
 const list = v => (Array.isArray(v) ? v : v ? [v] : []).map(scalar).filter(x => x !== '').map(String)
+const label = v => {
+  if (v === null || v === undefined || v === '') return '—'
+  if (Array.isArray(v)) {
+    const items = v.map(label).filter(x => x !== '—' && x !== '')
+    return items.length ? items.join(', ') : '—'
+  }
+  if (typeof v === 'object') return String(v.name ?? v.title ?? v.id ?? '—')
+  return String(v)
+}
+const parseSafeId = v => {
+  if (typeof v === 'boolean' || v === null || v === undefined) return null
+  const num = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v.trim()) : NaN
+  return Number.isSafeInteger(num) && num > 0 ? num : null
+}
+export const linkTargets = v => {
+  if (v === null || v === undefined || v === '') return []
+  const items = Array.isArray(v) ? v : [v]
+  const result = []
+  for (const item of items) {
+    if (item === null || item === undefined || item === '' || typeof item === 'boolean') continue
+    if (typeof item === 'object') {
+      const id = parseSafeId(item.id)
+      if (id !== null) {
+        const rawTitle = item.name ?? item.title
+        const title = rawTitle !== null && rawTitle !== undefined && String(rawTitle).trim() !== '' ? String(rawTitle).trim() : String(id)
+        result.push({ id, title })
+      }
+    } else {
+      const id = parseSafeId(item)
+      if (id !== null) {
+        result.push({ id, title: String(item) })
+      }
+    }
+  }
+  return result
+}
 const date = v => { if (!v) return ''; const d = new Date(String(v)); return Number.isNaN(d.getTime()) ? String(v).slice(0, 10) : d.toISOString().slice(0, 10) }
 const options = (rows, col) => [...new Set(rows.flatMap(r => list(value(r, col))))].sort((a, b) => a.localeCompare(b, 'ru'))
 const money = v => v === null ? '—' : `${fmt.format(v)} ₽`
@@ -89,11 +125,14 @@ export default function ContractsDashboard({ fields = {}, rows = [], onOpen }) {
         {top.length ? <div className="contracts-bars" role="group" aria-label="Остатки по документам">{top.map(item => <button type="button" key={item.key} onClick={() => item.rows[0] && open(item.rows[0])} title={`${item.key}: ${money(item.remaining)}`}><span className="contracts-bar-label">{item.key}</span><span className="contracts-bar-track"><i className={item.remaining < 0 ? 'negative' : ''} style={{ width: `${Math.max(2, Math.abs(item.remaining) / max * 100)}%` }} /></span><b>{money(item.remaining)}</b></button>)}</div> : <p className="contracts-empty">Нет заполненных остатков для диаграммы.</p>}
       </article>
       <article className="contracts-card contracts-expiry"><div className="contracts-card-head"><div><h2>Контроль сроков</h2><p>Просроченные сгруппированы по договору, дата — ближайший срок документов группы</p></div></div><div className="contracts-expiry-count"><strong>{data.soonCount}</strong><span>документов истекают в ближайшие 30 дней</span></div>
-        <h3>Просроченные документы</h3>{data.overdue.length ? <div className="contracts-overdue">{data.overdue.map(x => <button type="button" key={x.key} onClick={() => open(x.rows[0])}><strong>{x.key}</strong><span>{x.expiration}</span><small>{text(value(x.rows[0], c.contractor))}</small></button>)}</div> : <p className="contracts-empty">Просроченных сроков нет.</p>}
+        <h3>Просроченные документы</h3>{data.overdue.length ? <div className="contracts-overdue">{data.overdue.map(x => <button type="button" key={x.key} onClick={() => open(x.rows[0])}><strong>{x.key}</strong><span>{x.expiration}</span><small>{label(value(x.rows[0], c.contractor))}</small></button>)}</div> : <p className="contracts-empty">Просроченных сроков нет.</p>}
       </article>
     </div>
     <div className="contracts-register-head"><div><h2>Реестр документов</h2><span>{fmt.format(filtered.length)} записей</span></div><button type="button" className="contracts-reset" aria-expanded={showTable} onClick={() => setShowTable(x => !x)}>{showTable ? 'Скрыть реестр' : 'Показать реестр'}</button></div>
-    {showTable && <article className="contracts-card contracts-table-wrap">{filtered.length ? <table><thead><tr><th>№ договора</th><th>Тип</th><th>Статус</th><th>Подрядчик</th><th>Счет</th><th>Предмет договора</th><th>Лимит, ₽</th><th>Остаток, ₽</th><th>Срок действия</th><th>Родительский договор</th></tr></thead><tbody>{filtered.map((r, i) => <tr key={r.id ?? i}><td><button type="button" className="contracts-link" onClick={() => open(r)}>{text(value(r, c.number))}</button><small>{text(value(r, c.code))}</small></td><td>{text(value(r, c.type))}</td><td>{text(value(r, c.status))}</td><td>{text(value(r, c.contractor))}</td><td>{text(value(r, c.account))}</td><td>{text(value(r, c.subject))}</td><td>{money(numeric(value(r, c.limit)))}</td><td>{money(numeric(value(r, c.remaining)))}</td><td>{date(value(r, c.expiration)) || '—'}</td><td>{value(r, c.parent) ? <button className="contracts-link" type="button" onClick={() => onOpen?.(Number(scalar(value(r, c.parent))))}>{text(value(r, c.parent))}</button> : '—'}</td></tr>)}</tbody></table> : <p className="contracts-empty">Нет документов по выбранным фильтрам.</p>}</article>}
+    {showTable && <article className="contracts-card contracts-table-wrap">{filtered.length ? <table><thead><tr><th>№ договора</th><th>Тип</th><th>Статус</th><th>Подрядчик</th><th>Счет</th><th>Предмет договора</th><th>Лимит, ₽</th><th>Остаток, ₽</th><th>Срок действия</th><th>Родительский договор</th></tr></thead><tbody>{filtered.map((r, i) => {
+      const parents = linkTargets(value(r, c.parent))
+      return <tr key={r.id ?? i}><td><button type="button" className="contracts-link" onClick={() => open(r)}>{text(value(r, c.number))}</button><small>{text(value(r, c.code))}</small></td><td>{text(value(r, c.type))}</td><td>{text(value(r, c.status))}</td><td>{label(value(r, c.contractor))}</td><td>{text(value(r, c.account))}</td><td>{text(value(r, c.subject))}</td><td>{money(numeric(value(r, c.limit)))}</td><td>{money(numeric(value(r, c.remaining)))}</td><td>{date(value(r, c.expiration)) || '—'}</td><td>{parents.length ? parents.map((target, idx) => <span key={target.id}>{idx > 0 && ', '}<button className="contracts-link" type="button" onClick={() => onOpen?.(target.id)}>{target.title}</button></span>) : '—'}</td></tr>
+    })}</tbody></table> : <p className="contracts-empty">Нет документов по выбранным фильтрам.</p>}</article>}
     {!filtered.length && <p className="contracts-empty contracts-no-results">Нет документов по выбранным фильтрам.</p>}
   </section>
 }
